@@ -39,6 +39,7 @@ func Run(t *testing.T, o Options) {
 	t.Run("answers", func(t *testing.T) { t.Parallel(); answers(t, o) })
 	t.Run("refreshes racing writes", func(t *testing.T) { t.Parallel(); racing(t, o) })
 	t.Run("a missed entity stays", func(t *testing.T) { t.Parallel(); missed(t, o) })
+	t.Run("a stale refresh keeps a write", func(t *testing.T) { t.Parallel(); stale(t, o) })
 	t.Run("broken", func(t *testing.T) { t.Parallel(); broken(t, o) })
 }
 
@@ -260,19 +261,39 @@ func racing(t *testing.T, o Options) {
 		versions[i] = v
 	}
 	readers := []*kernel.Board{open(t, ds, opener(t), counter), open(t, ds, opener(t), counter)}
+	writer := open(t, ds, opener(t), counter)
 	rctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		for c := uint64(2); rctx.Err() == nil; c++ {
+		// the writer writes through its view, as a command does, and reads
+		// its own writes in one snapshot: listed fresh once, never again
+		for rctx.Err() == nil {
+			sctx := writer.Snapshot(ctx)
+			if _, err := counter.List(sctx, writer, kernel.Query{}); err != nil {
+				t.Error(err)
+				return
+			}
 			for i := range n {
-				data, _ := pack.Encode(pack.Pack{Clock: c, Ops: []kernel.Op{op("tick", int64(c), struct{}{})}})
-				v, err := ds.Add(ctx, "counter", ids[i], data, versions[i])
+				e, err := counter.Do(sctx, writer, kernel.ID(ids[i]), func(cur kernel.Entity[count]) ([]kernel.Op, error) {
+					return []kernel.Op{op("tick", int64(cur.Clock+1), struct{}{})}, nil
+				})
 				if err != nil {
 					t.Error(err)
 					return
 				}
-				versions[i] = v
+				versions[i] = string(e.Version)
+			}
+			ls, err := counter.List(sctx, writer, kernel.Query{})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			for _, l := range ls {
+				if i := slices.Index(ids, string(l.ID)); string(l.Version) != versions[i] {
+					t.Errorf("the writer reads %s at %s after writing %s: a refresh took its write back", l.ID, l.Version, versions[i])
+					return
+				}
 			}
 		}
 	})
@@ -327,6 +348,72 @@ func (m *missing) Heads(ctx context.Context, kinds ...string) ([]store.Head, err
 	hs, err := m.Store.Heads(ctx, kinds...)
 	id, _ := m.miss.Load().(string)
 	return slices.DeleteFunc(hs, func(h store.Head) bool { return h.ID == id }), err
+}
+
+// hooked is a datastore that runs a hook once, right after its next
+// listing: another process's write, between a refresh's listing and its
+// reading the view.
+type hooked struct {
+	*mem.Store
+	hook atomic.Pointer[func()]
+}
+
+func (h *hooked) Heads(ctx context.Context, kinds ...string) ([]store.Head, error) {
+	hs, err := h.Store.Heads(ctx, kinds...)
+	if f := h.hook.Swap(nil); f != nil {
+		(*f)()
+	}
+	return hs, err
+}
+
+// stale: a refresh whose listing is older than another process's write
+// through the same view leaves that write: the writer reads it in its
+// snapshot, and no refresh takes a row back to an older version.
+func stale(t *testing.T, o Options) {
+	ds := &hooked{Store: mem.New(t.TempDir())}
+	opener := o.Open(t)
+	a, b := open(t, ds, opener(t), counter), open(t, ds, opener(t), counter)
+	e, err := counter.Create(ctx, a, "", op("tick", 1, struct{}{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := counter.List(ctx, a, kernel.Query{}); err != nil {
+		t.Fatal(err)
+	}
+	sctx := b.Snapshot(ctx)
+	if _, err := counter.List(sctx, b, kernel.Query{}); err != nil {
+		t.Fatal(err)
+	}
+	var wrote kernel.Version
+	hook := func() {
+		w, err := counter.Do(sctx, b, e.ID, func(cur kernel.Entity[count]) ([]kernel.Op, error) {
+			return []kernel.Op{op("tick", 2, struct{}{})}, nil
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		wrote = w.Version
+	}
+	ds.hook.Store(&hook)
+	data, _ := pack.Encode(pack.Pack{Clock: 1, Ops: []kernel.Op{op("tick", 1, struct{}{})}})
+	if _, err := ds.Add(ctx, "counter", fmt.Sprintf("%040x", 1), data, ""); err != nil {
+		t.Fatal(err) // another entity: a's next listing differs from its mark
+	}
+	if _, err := counter.List(ctx, a, kernel.Query{}); err != nil { // lists, then b writes
+		t.Fatal(err)
+	}
+	if wrote == "" {
+		t.Fatal("the hook didn't run")
+	}
+	ls, err := counter.List(sctx, b, kernel.Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range ls {
+		if l.ID == e.ID && (l.Version != wrote || l.Row.N != 2) {
+			t.Fatalf("the writer reads %s at %s, N=%d, after writing %s, N=2: a stale refresh took it back", l.ID, l.Version, l.Row.N, wrote)
+		}
+	}
 }
 
 // missed: a listing that misses an entity costs a read, never the row.

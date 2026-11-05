@@ -122,23 +122,47 @@ func (b *Board) fresh(ctx context.Context, search bool, names ...string) error {
 			return fmt.Errorf("kernel: no kind %q on this board", n)
 		}
 	}
-	heads, err := b.ds.Heads(ctx, names...)
-	if err != nil {
-		return fmt.Errorf("listing the board: %w", err)
-	}
-	for _, n := range names {
-		var listing []Head
-		for _, h := range heads {
-			if h.Kind == n {
-				listing = append(listing, Head{ID(h.ID), Version(h.Version)})
+	// Each kind's mark is read before the listing: a view read after it
+	// may hold a write made since, which the listing would take back
+	// (another process's write-through). A kind whose view moved meanwhile
+	// is listed again.
+	for try := 1; len(names) > 0; try++ {
+		marks := make(map[string]Mark, len(names))
+		for _, n := range names {
+			m, err := b.view.Mark(ctx, n)
+			if err != nil {
+				return err
+			}
+			marks[n] = m
+		}
+		heads, err := b.ds.Heads(ctx, names...)
+		if err != nil {
+			return fmt.Errorf("listing the board: %w", err)
+		}
+		var again []string
+		for _, n := range names {
+			var listing []Head
+			for _, h := range heads {
+				if h.Kind == n {
+					listing = append(listing, Head{ID(h.ID), Version(h.Version)})
+				}
+			}
+			moved, err := b.freshKind(ctx, b.kinds[n], listing, marks[n], search)
+			if err != nil {
+				return err
+			}
+			if moved {
+				again = append(again, n)
+			} else if snap != nil {
+				snap.fresh[n] = true
 			}
 		}
-		if err := b.freshKind(ctx, b.kinds[n], listing, search); err != nil {
-			return err
+		if try == tries {
+			// writers keep the view moving, and their writes through it
+			// with it: the next query lists again
+			return nil
 		}
-		if snap != nil {
-			snap.fresh[n] = true
-		}
+		names = again
 	}
 	return nil
 }
@@ -146,22 +170,32 @@ func (b *Board) fresh(ctx context.Context, search bool, names ...string) error {
 // freshKind brings one kind's rows to listing: equal to the mark, nothing
 // to do; else the entities new or moved are loaded and folded, and one
 // missing from the listing is dropped only once a point read says it is
-// gone (a listing that missed it costs a read, never a lost issue).
-func (b *Board) freshKind(ctx context.Context, k kindSpec, listing []Head, search bool) error {
+// gone (a listing that missed it costs a read, never a lost issue). before
+// is the kind's mark as read before the listing: when the view moved
+// since, nothing is written and moved says to list again.
+func (b *Board) freshKind(ctx context.Context, k kindSpec, listing []Head, before Mark, search bool) (moved bool, err error) {
 	b.freshening.Lock()
 	defer b.freshening.Unlock()
 	mark, err := b.view.Mark(ctx, k.name)
 	if err != nil {
-		return err
+		return false, err
 	}
 	reset := mark.Rev != k.rev
 	if !reset && mark.Sum == Sum(listing) {
-		return nil
+		return false, nil
+	}
+	if mark != before {
+		return true, nil
 	}
 	var base []Head
 	if !reset {
 		if base, err = b.view.Heads(ctx, k.name); err != nil {
-			return err
+			return false, err
+		}
+		if mark, err = b.view.Mark(ctx, k.name); err != nil {
+			return false, err
+		} else if mark != before {
+			return true, nil // a write between the two reads: base may be newer than the listing
 		}
 	}
 	bases := make(map[ID]Version, len(base))
@@ -182,7 +216,7 @@ func (b *Board) freshKind(ctx context.Context, k kindSpec, listing []Head, searc
 		}
 	}
 	search = search || mark.Search && !reset
-	return b.stream(ctx, k, Write{Rev: k.rev, Reset: reset, Search: search}, refs, func(r store.Ref, packs [][]byte, err error) (Put, *Head) {
+	return false, b.stream(ctx, k, Write{Rev: k.rev, Reset: reset, Search: search}, refs, func(r store.Ref, packs [][]byte, err error) (Put, *Head) {
 		id, base := ID(r.ID), bases[ID(r.ID)]
 		if errors.Is(err, store.ErrNotFound) && !listed[id] {
 			return Put{}, &Head{id, base}
