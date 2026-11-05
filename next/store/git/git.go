@@ -135,7 +135,7 @@ func gitDirAt(gitDir string) (*Store, bool) {
 
 // Caps: a version is a commit, which names its packs for good; the
 // counter is refs/board/seq.
-func (s *Store) Caps() store.Caps { return store.Caps{Pinned: true, Counter: s, Put: s} }
+func (s *Store) Caps() store.Caps { return store.Caps{Pinned: true, Counter: s, Put: s, Remote: s} }
 
 // Folder is <common dir>/board, shared by every worktree.
 func (s *Store) Folder() string { return filepath.Join(s.commonDir, "board") }

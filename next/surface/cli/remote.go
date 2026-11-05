@@ -1,0 +1,92 @@
+package cli
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
+
+// A git remote's board, as v1's git board fetch, pull and push.
+
+func remoteArg(args []string) string {
+	if len(args) == 1 {
+		return args[0]
+	}
+	return "origin"
+}
+
+func newFetch() *cobra.Command {
+	return &cobra.Command{
+		Use:   "fetch [remote]",
+		Short: "Fetch the remote's board and say what waits, changing nothing here",
+		Long: `Fetch the remote's issues and people (origin by default) into their
+copies here, refs/board-remotes/<remote>/, and say what a pull would
+receive and a push would send. Nothing of this clone's board changes:
+git board pull merges them.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := open(cmd, false)
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			remote := remoteArg(args)
+			is, ps, err := b.Fetch(cmd.Context(), remote)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s: issues %d to receive, %d to send; people %d to receive, %d to send\n",
+				remote, is.Receive, is.Send, ps.Receive, ps.Send)
+			return nil
+		},
+	}
+}
+
+func newPull() *cobra.Command {
+	return &cobra.Command{
+		Use:   "pull [remote]",
+		Short: "Pull the remote's board: fetch, then merge",
+		Long: `Pull the remote's issues and people (origin by default): fetch them,
+then merge them into this clone's, every clone's operations kept. It is
+git board sync's first step, alone: no forge.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := open(cmd, false)
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			remote := remoteArg(args)
+			if err := b.Pull(cmd.Context(), remote); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "pulled from "+remote)
+			return nil
+		},
+	}
+}
+
+func newPush() *cobra.Command {
+	return &cobra.Command{
+		Use:   "push [remote]",
+		Short: "Push this clone's board to the remote",
+		Long: `Push this clone's issues and people to the remote (origin by default).
+The push isn't forced: when the remote holds changes this clone doesn't
+have, it refuses, and git board pull merges them first. It is git board
+sync's last step, alone.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := open(cmd, false)
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			remote := remoteArg(args)
+			if err := b.Push(cmd.Context(), remote); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "pushed to "+remote)
+			return nil
+		},
+	}
+}

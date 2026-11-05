@@ -19,6 +19,7 @@ import (
 	v1fake "github.com/guilbep/git-board/core/forge/fake"
 	"github.com/guilbep/git-board/core/gitstore"
 	v1issue "github.com/guilbep/git-board/core/issue"
+	"github.com/guilbep/git-board/core/oplog"
 	v1people "github.com/guilbep/git-board/core/people"
 	"github.com/guilbep/git-board/core/syncer"
 	"github.com/guilbep/git-board/next/domain/issues"
@@ -366,5 +367,141 @@ func TestSyncCross(t *testing.T) {
 	}
 	if fi, _ := f.Get("3"); fi.Status != "closed" || len(fi.Comments) != 1 {
 		t.Errorf("L2 on the forge = %+v", fi)
+	}
+}
+
+// v1 and v2 pull and push one board between two clones, each merging the
+// other's offline writes: both read every merge the same.
+func TestRemoteCross(t *testing.T) {
+	t.Parallel()
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	if out, err := exec.Command("git", "init", "-q", "--bare", origin).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	clone := func() string {
+		dir := filepath.Join(t.TempDir(), "clone")
+		if out, err := exec.Command("git", "clone", "-q", origin, dir).CombinedOutput(); err != nil {
+			t.Fatalf("git clone: %v\n%s", err, out)
+		}
+		return dir
+	}
+	a, err := gitstore.Open(clone()) // v1's clone
+	if err != nil {
+		t.Fatal(err)
+	}
+	bDir := clone() // v2's
+	ctx := t.Context()
+	g, err := git.Open(ctx, bDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	kinds := []string{"issue", "person", "sync", "release"}
+	v2pull := func() {
+		t.Helper()
+		if _, err := g.Fetch(ctx, "origin", kinds...); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := g.Merge(ctx, "origin", kinds...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v1pull := func() {
+		t.Helper()
+		if err := a.Fetch(ctx, "origin"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := oplog.MergeFetched(ctx, a, "origin"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v2board := func() *kernel.Board {
+		t.Helper()
+		v, err := view.Open(ctx, filepath.Join(t.TempDir(), "view.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		gg, err := git.Open(ctx, bDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kb, err := kernel.Open(ctx, gg, v, issues.Kind, people2.Kind)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { kb.Close() })
+		return kb
+	}
+	same := func(id string) {
+		t.Helper()
+		one, err := v1issue.Load(a, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		two, err := issuesync.LoadIssue(v2board(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c1, c2 []string
+		for _, c := range one.Comments {
+			c1 = append(c1, c.Body)
+		}
+		for _, c := range two.Comments {
+			c2 = append(c2, c.Body)
+		}
+		if one.Title != two.Title || !reflect.DeepEqual(c1, c2) || !reflect.DeepEqual(one.Labels, two.Labels) {
+			t.Errorf("v1 reads %q %q %q, v2 %q %q %q", one.Title, c1, one.Labels, two.Title, c2, two.Labels)
+		}
+	}
+
+	is, err := v1issue.Create(ctx, a, v1issue.NewCreate("a", "Made by v1", "b"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Push(ctx, "origin"); err != nil {
+		t.Fatal(err)
+	}
+	v2pull()
+	same(is.ID)
+
+	// both write offline; v1 pushes first, v2 merges and pushes the merge
+	if _, err := v1issue.Do(ctx, a, is.ID, v1issue.NewComment("a", "from v1")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := issuesync.DoIssue(ctx, v2board(), is.ID, issuesync.SetTitle("b", "Retitled by v2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Push(ctx, "origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Push(ctx, "origin", kinds...); err == nil {
+		t.Fatal("v2 pushed over v1's")
+	}
+	v2pull()
+	if err := g.Push(ctx, "origin", kinds...); err != nil {
+		t.Fatal(err)
+	}
+	v1pull()
+	same(is.ID)
+
+	// again, v2 first: v1 merges
+	if _, err := issuesync.DoIssue(ctx, v2board(), is.ID, issuesync.ChangeLabels("b", []string{"bug"}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v1issue.Do(ctx, a, is.ID, v1issue.NewComment("a", "v1 again")); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Push(ctx, "origin", kinds...); err != nil {
+		t.Fatal(err)
+	}
+	v1pull()
+	if err := a.Push(ctx, "origin"); err != nil {
+		t.Fatal(err)
+	}
+	v2pull()
+	same(is.ID)
+	one, _ := v1issue.Load(a, is.ID)
+	if one.Title != "Retitled by v2" || len(one.Comments) != 2 || !slices.Contains(one.Labels, "bug") {
+		t.Errorf("after both merges: %+v", one)
 	}
 }

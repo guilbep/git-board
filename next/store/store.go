@@ -87,9 +87,14 @@ type Locker interface {
 // Remote fetches, merges and pushes the kinds' entities (storage.md,
 // Fetch and push).
 type Remote interface {
+	// Fetch brings the remote's entities to their copies here, and
+	// answers the copies' heads: nothing local changes.
 	Fetch(ctx context.Context, remote string, kinds ...string) ([]Head, error)
+	// Merge joins each copy with its local entity, and says how many
+	// moved.
+	Merge(ctx context.Context, remote string, kinds ...string) (int, error)
+	// Push sends the local entities, never forced.
 	Push(ctx context.Context, remote string, kinds ...string) error
-	Drop(ctx context.Context, kinds ...string) error
 }
 
 var (
