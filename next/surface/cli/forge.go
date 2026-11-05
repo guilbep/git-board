@@ -31,6 +31,7 @@ gets no issue created without --allow-create.`),
 		newForgeWay(app.WaySync, "Take the forges' changes, then send this clone's",
 			`Take the forges' changes, then send this clone's: the forge step of git
 board sync, alone. Creations wait for consent as push says.`),
+		newForgeStatus(), newForgeLogin(),
 	)
 	return cmd
 }

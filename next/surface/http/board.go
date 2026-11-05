@@ -59,6 +59,10 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/sync", s.startSync)
 	Route(mux, "POST /api/remotes/{name}/{action}", remote)
 	Route(mux, "POST /api/numbers", numbers)
+	Route(mux, "POST /api/forges", s.addForge)
+	Route(mux, "PATCH /api/forges/{name}", s.patchForge)
+	Route(mux, "DELETE /api/forges/{name}", s.removeForge)
+	Route(mux, "GET /api/forges/credentials", credentials)
 
 	Route(mux, "GET /api/github-project", s.projectStatus)
 	Route(mux, "POST /api/github-project/{action}", s.projectAction)
@@ -89,6 +93,9 @@ type boardRes struct {
 	Version      string   `json:"version"`
 	Datastore    storeRes `json:"datastore"`
 	Experimental []string `json:"experimental"`
+	// FirstPull: this clone opened with no board, and the server pulled
+	// origin's, or couldn't (docs/prd/clone-shows-board.md)
+	FirstPull *app.FirstPull `json:"first_pull,omitempty"`
 }
 
 type storeRes struct {
@@ -102,7 +109,7 @@ func (s *Server) boardInfo(ctx context.Context, _ none) (boardRes, error) {
 	if exp == nil {
 		exp = []string{}
 	}
-	return boardRes{GitDir: s.gitDir, Dir: b.Dir, Version: s.version, Experimental: exp,
+	return boardRes{GitDir: s.gitDir, Dir: b.Dir, Version: s.version, Experimental: exp, FirstPull: s.firstPulled(),
 		Datastore: storeRes{Name: b.DatastoreName(), Where: app.Where(b.Kernel.Store())}}, nil
 }
 

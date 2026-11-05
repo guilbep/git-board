@@ -1,8 +1,8 @@
 <!-- Add a forge no git remote names, in two steps: the forge, GitHub or
-     GitLab; the project (its address, a short name, sync both ways or
-     not). Saved as its [forges.<name>] table (PATCH /api/config); the token
-     goes to git's credential helper, never the file (ADR 0010): the dialog
-     says how. -->
+     GitLab; the project (its address, a short name, a token, sync both
+     ways or not). POST /api/forges writes its [forges.<name>] table and
+     gives the token to git's credential helper, never the file (ADR
+     0010). -->
 <template>
   <q-dialog v-model="open">
     <section class="af" aria-labelledby="af-title">
@@ -50,7 +50,11 @@
             <input v-model="sync" type="checkbox" :disabled="!!added" />
             <span><b>Sync both ways</b><br /><span class="gb-hint">Off, the forge is kept but stays out of the Sync, until you switch it on.</span></span>
           </label>
-          <p class="gb-hint">The token: {{ forge.name }} needs {{ forge.token }}, kept by git's credential helper (<code>git credential approve</code>), or in <code>{{ draft.target === 'gitlab' ? 'GITLAB_TOKEN' : 'GH_TOKEN' }}</code>; never in the file.</p>
+          <div>
+            <label class="af-legend" for="af-token">A token <span class="gb-hint af-inline">optional</span></label>
+            <input id="af-token" v-model="draft.token" class="epfl-input" type="password" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" :disabled="!!added" />
+            <p class="gb-hint">{{ forge.name }} needs {{ forge.token }}. It goes to git's credential helper (<code>git credential approve</code>), never to the file. Empty: one already there, or in <code>{{ draft.target === 'gitlab' ? 'GITLAB_TOKEN' : 'GITHUB_TOKEN' }}</code>; <code>git board forge login</code> stores one later.</p>
+          </div>
           <p v-if="added" class="epfl-alert epfl-alert-success" role="status"><b>{{ added }}</b> is added to <code>.git-board.toml</code>.</p>
           <p v-else-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
         </div>
@@ -68,9 +72,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
-import { message, patchConfig, type SyncForge } from '@/api';
-import { canGoOn, forges, forgeSteps, guessForge, tableOf, type ForgeDraft } from '@/addforge';
-import { configModel, loadConfigModel, takeFile } from '@/configmodel';
+import { addForge, message, type SyncForge } from '@/api';
+import { canGoOn, forges, forgeSteps, guessForge, type ForgeDraft } from '@/addforge';
 import GbIcon from '@/components/GbIcon.vue';
 
 const open = defineModel<boolean>({ required: true });
@@ -78,7 +81,7 @@ defineProps<{ found: SyncForge[] }>();
 const emit = defineEmits<{ added: [name: string]; guide: [] }>();
 
 const step = ref(0);
-const draft = reactive<ForgeDraft>({ target: 'github', url: '', name: '' });
+const draft = reactive<ForgeDraft>({ target: 'github', url: '', name: '', token: '' });
 const sync = ref(true);
 const busy = ref(false);
 const error = ref('');
@@ -88,7 +91,7 @@ const forge = computed(() => forges.find((f) => f.target === draft.target) ?? fo
 // a fresh dialog each time it opens
 watch(open, (o) => {
   if (!o) return;
-  Object.assign(draft, { target: 'github', url: '', name: '' });
+  Object.assign(draft, { target: 'github', url: '', name: '', token: '' });
   Object.assign(step, { value: 0 });
   sync.value = true;
   error.value = '';
@@ -108,10 +111,8 @@ async function next() {
   busy.value = true;
   error.value = '';
   try {
-    await loadConfigModel();
-    const m = configModel.value;
-    const { name, table } = tableOf(draft, m?.forges.map((f) => f.name) ?? [], sync.value);
-    takeFile(await patchConfig({ [`forges.${name}`]: table }, m?.hash ?? ''));
+    const { name } = await addForge({ kind: draft.target, url: draft.url.trim(), name: draft.name.trim(), token: draft.token, sync: sync.value });
+    draft.token = ''; // not kept in the page
     added.value = name;
     emit('added', name);
   } catch (e) {

@@ -38,6 +38,9 @@ type Server struct {
 	relMu   sync.Mutex     // the release runner's fetches and writes (releases.go)
 	jobMu   sync.Mutex
 	job     *Job // the release job running, or the last one
+
+	firstMu sync.Mutex
+	first   *app.FirstPull // what the first open of a fresh clone pulled (firstpull.go)
 }
 
 // Options say what a Server serves.

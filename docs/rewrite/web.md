@@ -79,6 +79,13 @@ text, its version and its keys:
   (`tomlorder.ts`);
 - the file's editor checks the TOML here, with its line, then asks the
   server's dry run (`PUT /api/config?dry_run=1`).
+- Sync's Add a forge sends the forge, its project's address and a token
+  to `POST /api/forges` (route 33), which writes the table and gives the
+  token to git's credential helper, as v1's dialog did; the page never
+  keeps the token.
+
+v1's `#/conflicts` (the GitHub Project's conflicts) opens Settings ›
+GitHub Project, as `#/sync` opens Settings › Sync.
 
 v1's value colors (`/api/colors`) are the page's (`valuecolors.ts`), as
 api.md says: the file's, a word's (done green, blocked red), then a
@@ -93,7 +100,7 @@ worktrees (their own binary), the HTML export, Start over (the CLI's
 `git board reset`), the field migration (`set --filter`), the classic
 and cycle pages as a choice (one page), v1's per-issue sync (until the
 sync engine takes one issue), Labels' comparison with GitHub and lint
-(a tool), the clone's first-pull note (until v2 pulls on a first open).
+(a tool).
 
 Insights is v1's page on route 51 (`GET /api/insights`, the replay in
 `next/tools/insights`, v1's, and `insights` on the CLI). Releases and a
@@ -136,6 +143,7 @@ settings form (a table of the file) and the experimental switch stay.
   `lanes.spec.ts` (a lane's and a table's pages), `insights.spec.ts`,
   `releases.spec.ts` (a cut to a bare authority, its record's writes),
   `work.spec.ts` (the cycle on and off), `cycle.spec.ts` (the panel's actions, a pull request opened and merged on the fake GitHub, Work's Review and Sign off) and `uploads.spec.ts` (pick and
-  drop in a comment) are new. Dropped with their features: the clone's
-  first pull, the ENAC template's labels, Labels' lint, a field's GitHub
+  drop in a comment) are new. `clone.spec.ts` (a fresh clone's
+  first open pulls origin's board, and the header says so) is v1's, on a
+  clone board of its own. Dropped with their features: the ENAC template's labels, Labels' lint, a field's GitHub
   Project column, Start over.

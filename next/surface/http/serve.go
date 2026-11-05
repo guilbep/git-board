@@ -84,6 +84,7 @@ func Serve(ctx context.Context, o ServeOptions) error {
 	defer stop()
 	go s.Watch(watch, cmpDuration(o.Watch, time.Second))
 	go s.index(watch)
+	go s.FirstPull(watch)
 	errs := make(chan error, len(ls))
 	for _, l := range ls {
 		go func() { errs <- srv.Serve(l) }()

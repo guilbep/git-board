@@ -165,6 +165,9 @@ export interface BoardInfo {
   version: string;
   datastore: { name: string; where: string };
   experimental: string[];
+  // this clone opened with no board, and the server pulled origin's, or
+  // couldn't (docs/prd/clone-shows-board.md)
+  first_pull?: { remote: string; issues: number; error?: string };
 }
 
 // the inbox, as `status --json`
