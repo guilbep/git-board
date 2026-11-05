@@ -118,3 +118,40 @@ func TestBrokerDropsTheSlow(t *testing.T) {
 		t.Fatalf("%d events before the stream closed, want %d", n, subBuffer)
 	}
 }
+
+// collect is every event the stream sends within d.
+func collect(ch <-chan Event, d time.Duration) []Event {
+	var got []Event
+	deadline := time.After(d)
+	for {
+		select {
+		case e, ok := <-ch:
+			if !ok {
+				return got
+			}
+			got = append(got, e)
+		case <-deadline:
+			return got
+		}
+	}
+}
+
+// A kind the watcher doesn't read (a release record, a forge's sync
+// state) is no "gone" event a tick later (review finding 3): the server
+// tells those itself, by their run or tag.
+func TestEventsNoGhostGone(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	a := newAPI(t, dir)
+	a.s.heads(ctx, false) // the start: what is there, known
+	sub, cancel := a.s.events.subscribe()
+	defer cancel()
+	a.s.observe(ctx, []kernel.Change{{Kind: "release", ID: "abc", Version: "v1"}, {Kind: "sync", ID: "st", Version: "v1"}})
+	a.s.heads(ctx, true)
+	a.s.heads(ctx, true)
+	select {
+	case data := <-sub:
+		t.Fatalf("an event for a kind the pages hear from the server: %s", data)
+	default:
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -125,9 +126,15 @@ type seen struct {
 	pending map[string]string // found by the watcher, told next tick
 }
 
-// observe tells the pages of each change a request wrote, as it lands.
+// observe tells the pages of each change a request wrote, as it lands:
+// of the kinds the watcher reads. The others (a release record, a forge's
+// sync state) the server tells itself, by their tag or run, and the
+// watcher would tell them gone a tick later.
 func (s *Server) observe(ctx context.Context, cs []kernel.Change) {
 	for _, c := range cs {
+		if !slices.Contains(watchedKinds, c.Kind) {
+			continue
+		}
 		k := c.Kind + "/" + string(c.ID)
 		s.seen.mu.Lock()
 		tell := s.seen.at[k] != string(c.Version)
