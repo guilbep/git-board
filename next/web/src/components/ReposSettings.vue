@@ -32,6 +32,7 @@
             @save="draft.save()"
             @discard="reset"
             @reload="draft.load()"
+            @overwrite="draft.save(true)"
           />
         </template>
       </div>

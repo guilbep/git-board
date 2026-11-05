@@ -33,16 +33,18 @@ export async function upload(file: File): Promise<{ url: string; name: string; m
 export const mediaURL = (url: string) => `${API_BASE}/api/media?url=${encodeURIComponent(url)}`;
 
 // a section of the guide (docs/guide/<page>.md, a ## heading each); id is
-// its heading's anchor
+// its heading's first word, lowercased (v1's: the forms name them so)
 export interface DocSection {
   id: string;
   title: string;
   html: string;
 }
 
-// GET /api/docs/{page} (later: api.md, 26): until it answers, no sections,
-// and the forms show the reference without the guide beside them
-// asked once a page load: every form's reference reads the same
+const idOf = (title: string) => title.toLowerCase().split(' ')[0] ?? '';
+
+// GET /api/docs/{page} comes later (api.md, 26): until it answers, the
+// guide this page was built with, its sections rendered as the server
+// renders a text (POST /api/markdown). Asked once a page load.
 const docs = new Map<string, Promise<DocSection[]>>();
 export function getDocs(page: 'configuration' | 'forges'): Promise<DocSection[]> {
   let d = docs.get(page);
@@ -50,12 +52,17 @@ export function getDocs(page: 'configuration' | 'forges'): Promise<DocSection[]>
   return d;
 }
 
-async function readDocs(page: string): Promise<DocSection[]> {
+async function readDocs(page: 'configuration' | 'forges'): Promise<DocSection[]> {
   try {
     const { items } = await get<{ items: { title: string; html: string }[] }>(`/api/docs/${page}`);
-    return items.map((s) => ({ ...s, id: s.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') }));
+    return items.map((s) => ({ ...s, id: idOf(s.title) }));
   } catch (e) {
-    if (e instanceof ApiError && e.code === 'not-found') return [];
-    throw e;
+    if (!(e instanceof ApiError && e.code === 'not-found')) throw e;
   }
+  const text = (page === 'configuration' ? await import('../../../../docs/guide/configuration.md?raw') : await import('../../../../docs/guide/forges.md?raw')).default;
+  const sections = text.split(/^## /m).slice(1).map((s) => {
+    const nl = s.indexOf('\n');
+    return { title: s.slice(0, nl).trim(), body: s.slice(nl + 1) };
+  });
+  return Promise.all(sections.map(async (s) => ({ id: idOf(s.title), title: s.title, html: (await renderMarkdown(s.body)).html })));
 }

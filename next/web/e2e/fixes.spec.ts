@@ -1,31 +1,15 @@
-// Review fixes the browser shows: a new issue a field refused is created
-// once, and j/k go on after the open issue leaves the view.
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+// Review fixes the browser shows: a new issue a field refused is not
+// created, and the dialog says which field; j/k go on after the open issue
+// leaves the view.
+import { expect, test } from '@playwright/test';
+import { errors, identity, issue } from './board';
 
-function errors(page: Page): Error[] {
-  const out: Error[] = [];
-  page.on('pageerror', (e) => out.push(e));
-  return out;
+async function count(request: import('@playwright/test').APIRequestContext, title: string): Promise<number> {
+  const r = await request.get(`/api/issues?${new URLSearchParams({ filter: `"${title}"`, limit: '0' })}`);
+  return ((await r.json()) as { items: { title: string }[] }).items.filter((i) => i.title === title).length;
 }
 
-async function identity(request: APIRequestContext) {
-  const r = await request.post('/api/me', { data: { name: 'E2E', email: 'e2e@example.com' } });
-  expect(r.ok()).toBeTruthy();
-}
-
-async function issue(request: APIRequestContext, title: string, labels: string[] = []): Promise<string> {
-  const r = await request.post('/api/issues', { data: { title, body: '', labels } });
-  expect(r.ok(), await r.text()).toBeTruthy();
-  return ((await r.json()) as { id: string }).id;
-}
-
-async function count(request: APIRequestContext, title: string): Promise<number> {
-  const r = await request.get(`/api/issues?${new URLSearchParams({ filter: 'is:open,closed' })}`);
-  const buckets = (await r.json()) as { issues: { title: string }[] }[];
-  return buckets.flatMap((b) => b.issues).filter((i) => i.title === title).length;
-}
-
-test('a new issue with a refused field is created once, and the dialog says which field', async ({ page, request }) => {
+test('a new issue with a refused field is not created, and the dialog says which field', async ({ page, request }) => {
   const errs = errors(page);
   await identity(request);
   await page.goto('/#/');
@@ -37,25 +21,22 @@ test('a new issue with a refused field is created once, and the dialog says whic
   }).toPass();
   await dialog.getByLabel('Title (required)').fill('E2E refused field');
   await dialog.getByLabel('Size', { exact: true }).fill('m');
-  // the server refuses the field once the issue exists (a value it can't
-  // take, a forge sync starting): every PATCH, here
-  await page.route('**/api/issues/*', (route) =>
-    route.request().method() === 'PATCH'
-      ? route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'size: refused here' }) })
+  // the server refuses the field: the issue and its fields are one request
+  await page.route('**/api/issues', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ code: 'invalid', message: 'size: refused here', field: 'set' }) })
       : route.fallback(),
   );
   await dialog.getByRole('button', { name: 'Create', exact: true }).click();
-  const alert = dialog.getByRole('alert');
-  await expect(alert).toContainText('without these fields');
-  await expect(alert).toContainText('size: refused here');
-  await page.unroute('**/api/issues/*');
-  // the form started over: a second Create can't make the same issue again
-  await expect(dialog.getByLabel('Title (required)')).toHaveValue('');
-  await expect(dialog.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
-  expect(await count(request, 'E2E refused field')).toBe(1);
-  await dialog.getByRole('button', { name: 'Open it to set them' }).click();
-  await expect(page.getByRole('dialog', { name: /New issue/ })).toHaveCount(0);
+  await expect(dialog.getByRole('alert')).toContainText('size: refused here');
+  await page.unroute('**/api/issues');
+  // nothing was created, and the form keeps what was typed, to fix
+  expect(await count(request, 'E2E refused field')).toBe(0);
+  await expect(dialog.getByLabel('Title (required)')).toHaveValue('E2E refused field');
+  await dialog.getByLabel('Size', { exact: true }).fill('');
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page.locator('.gb-panel .gb-head-title')).toHaveText('E2E refused field');
+  expect(await count(request, 'E2E refused field')).toBe(1);
   expect(errs).toEqual([]);
 });
 
@@ -63,14 +44,14 @@ test('j/k go on after the open issue is closed out of the view', async ({ page, 
   const errs = errors(page);
   await identity(request);
   const titles = ['E2E nav one', 'E2E nav two', 'E2E nav three'];
-  const ids: string[] = [];
-  for (const t of titles) ids.push(await issue(request, t, ['e2enav']));
+  const made = [];
+  for (const t of titles) made.push(await issue(request, t, [], ['e2enav']));
   const filter = encodeURIComponent('is:open label:e2enav');
-  await page.goto(`/#/?filter=${filter}&issue=${ids[1]}`);
+  await page.goto(`/#/?filter=${filter}&issue=${made[1]!.id}`);
   const panel = page.locator('.gb-panel');
   await expect(panel.locator('.gb-head-title')).toHaveText(titles[1]!);
-  // closed elsewhere: the board reloads without it
-  const r = await request.put(`/api/issues/${ids[1]}/status`, { data: { status: 'closed' } });
+  // closed elsewhere: the board hears it (the change events) and reloads
+  const r = await request.patch(`/api/issues/${made[1]!.id}`, { data: { status: 'closed' } });
   expect(r.ok(), await r.text()).toBeTruthy();
   const board = page.locator('main');
   await expect(board.getByText(titles[0]!, { exact: true })).toBeVisible();

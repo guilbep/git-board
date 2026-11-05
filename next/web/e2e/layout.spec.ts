@@ -64,8 +64,8 @@ test.describe('on a phone', () => {
   test('the Sync table scrolls sideways instead of breaking words', async ({ page }) => {
     await page.goto('/#/settings/sync');
     const cell = page.locator('.gb-table td.sy-wrap').first();
-    await expect(cell).toContainText('git@github.com:o/r.git');
-    // the remote's address on one line, not one syllable a line
+    await expect(cell).toContainText('GitHub · o/r');
+    // the remote's forge on one line, not one syllable a line
     const lines = await cell.evaluate((e) => {
       const r = document.createRange();
       r.selectNodeContents(e.firstElementChild ?? e);

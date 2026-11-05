@@ -152,7 +152,7 @@ export class SectionDraft<T> {
       return true;
     } catch (e) {
       this.conflict.value = isStale(e);
-      this.saveError.value = message(e);
+      this.saveError.value = this.conflict.value ? '' : message(e);
       return false;
     } finally {
       this.saving.value = false;

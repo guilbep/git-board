@@ -9,7 +9,7 @@ async function asPierre(page: Page, avatar = PIC) {
   const pierre = { id: 'p1', name: 'Pierre Guilbert', login: 'guilbep', avatar_url: avatar };
   await page.route('**/api/me', (r) =>
     r.request().method() === 'GET'
-      ? r.fulfill({ json: { me: pierre, identities: [pierre], view: 'classic', view_from: 'default', avatars: 'forge' } })
+      ? r.fulfill({ json: { me: pierre, avatars: 'forge' } })
       : r.fallback(),
   );
 }

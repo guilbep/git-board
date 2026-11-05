@@ -1,4 +1,4 @@
-.PHONY: help build test test-pg web-e2e lint fmt vet licences ci compat golden golden-boards agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test test-pg web-e2e lint fmt vet licences ci compat golden golden-boards agents install install-latest web-dev web-check web-lint web-build next-web-dev next-web-check next-web-build next-web-e2e dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -33,7 +33,7 @@ licences: ## Check every licence, Go modules and the web app's packages
 # Everything CI's test job runs: .github/workflows/ci.yml only sets up Go and
 # Node, then runs this (its e2e job runs web-e2e). The web checks and build come first, in prerequisite order,
 # because the binary embeds web/dist.
-ci: web-check web-build build vet test compat ## Everything CI runs
+ci: web-check web-build next-web-check next-web-build build vet test compat ## Everything CI runs
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
 
 # git-board-agents (contrib/board-agents): v1's agents and wtx, out of the
@@ -107,6 +107,26 @@ web-e2e: web/node_modules ## Run the browser tests (Playwright, web/e2e)
 
 web-build: web/node_modules ## Build the web app into web/dist
 	cd web && npm run build
+
+# v2's web app (next/web), served by git-board-next (ADR 0021): the same
+# targets as web's, until it replaces it at the switch.
+next/web/node_modules: next/web/package-lock.json
+	cd next/web && npm ci
+	@touch next/web/node_modules
+
+next-web-dev: ## Run v2's web app's dev server (next/web)
+	cd next/web && npm run dev
+
+next-web-check: next/web/node_modules ## Typecheck and test v2's web app (next/web)
+	cd next/web && npm run typecheck && npm test
+
+next-web-build: next/web/node_modules ## Build v2's web app into next/web/dist
+	cd next/web && npm run build
+
+# The browser tests on git-board-next serve: next/web/e2e/serve.mjs builds
+# the web app and the binary, then serves throwaway boards (git, Markdown).
+next-web-e2e: next/web/node_modules ## Run v2's browser tests (Playwright, next/web/e2e)
+	cd next/web && npx playwright test
 
 # A release's archives, the web app inside, in dist/ with checksums.txt:
 # run on a clean checkout of the tag, so the commands report that version.

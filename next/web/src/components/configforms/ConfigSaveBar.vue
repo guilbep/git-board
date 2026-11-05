@@ -7,6 +7,7 @@
     <span v-else-if="conflict" class="epfl-alert epfl-alert-warning csb-err" role="alert">
       The file changed since you opened it.
       <button type="button" class="gb-linkbtn" @click="$emit('reload')">Reload (your draft is dropped)</button>
+      or <button type="button" class="gb-linkbtn" @click="$emit('overwrite')">save yours over it</button>
     </span>
     <span v-else-if="saved && !dirty" class="csb-state csb-ok" role="status">Saved.</span>
     <span v-else-if="state" class="csb-state" :class="dirty ? 'csb-dirty' : 'csb-ok'" role="status">{{ state }}</span>
@@ -38,7 +39,7 @@ defineProps<{
   conflict?: boolean; // the file changed since the form read it
 }>();
 
-defineEmits<{ save: []; discard: []; reload: [] }>();
+defineEmits<{ save: []; discard: []; reload: []; overwrite: [] }>();
 </script>
 
 <style scoped>

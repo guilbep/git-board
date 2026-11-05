@@ -82,9 +82,11 @@ export function sectionPatch(section: string, body: unknown, model: { raw: Table
       }
       return out;
     }
-    case 'cycle': // {on, cycle}: off removes the table
+    case 'cycle': { // {on, cycle}: off removes the table
       if (!b.on) return model.raw.cycle === undefined ? {} : { cycle: null };
-      return model.raw.cycle === undefined ? { cycle: clean(b.cycle) } : keysOf('cycle', tableOf(b.cycle), had);
+      const { on: _, ...cycle } = tableOf(b.cycle); // the model's own mark, not a key
+      return model.raw.cycle === undefined ? { cycle: clean(cycle) } : keysOf('cycle', cycle, had);
+    }
     case 'roles': {
       const out: Table = {};
       for (const [k, v] of Object.entries(b)) if (!empty(v)) out[`roles.${k}`] = v;

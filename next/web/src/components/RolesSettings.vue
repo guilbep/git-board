@@ -27,7 +27,7 @@
 
           <ConfigSaveBar
             section="roles"
-            :dirty="draft.dirty.value"
+            :dirty="dirty"
             :saving="draft.saving.value"
             :saved="draft.saved.value"
             :valid="valid"
@@ -37,6 +37,7 @@
             @save="save"
             @discard="reset"
             @reload="draft.load()"
+            @overwrite="save(true)"
           />
         </template>
 
@@ -84,13 +85,18 @@ function reset() {
   if (configModel.value) draft.reset(configModel.value);
 }
 
-async function save() {
+// the rows as the roles map: a row without a role or a login is none
+function rolesOf(rs: RoleRow[]): Roles {
   const roles: Roles = {};
-  for (const r of rows.value) {
-    if (r.role.trim() && r.login.trim()) roles[r.role.trim()] = r.login.trim();
-  }
-  draft.value.value = roles;
-  await draft.save();
+  for (const r of rs) if (r.role.trim() && r.login.trim()) roles[r.role.trim()] = r.login.trim();
+  return roles;
+}
+// the rows are the draft until saved: dirty as soon as they differ
+const dirty = computed(() => draft.dirty.value || (!!configModel.value && JSON.stringify(rolesOf(rows.value)) !== JSON.stringify(configModel.value.roles)));
+
+async function save(overwrite = false) {
+  draft.value.value = rolesOf(rows.value);
+  await draft.save(overwrite);
 }
 
 onMounted(() => void draft.load());

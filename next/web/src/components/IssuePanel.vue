@@ -118,8 +118,8 @@
         <!-- a write refused as stale (412): someone wrote in between -->
         <p v-if="conflict" class="gb-stale" role="alert">
           <GbIcon name="warn" small /> <b>This issue changed meanwhile:</b> your change isn’t saved.
-          <button type="button" class="gb-stale-btn" :disabled="saving" @click="reload">Reload</button>
-          <button type="button" class="gb-stale-btn" :disabled="saving" @click="overwrite">Overwrite</button>
+          <button type="button" class="gb-stale-btn" :disabled="saving" @click="dropMine">Reload</button>
+          <button type="button" class="gb-stale-btn" :disabled="saving" @click="keepMine">Overwrite</button>
         </p>
       </div>
 
@@ -402,6 +402,19 @@ const offLive = onLive((e) => {
   else void load();
 });
 onBeforeUnmount(offLive);
+// after a 412: the issue as it is now, the edit dropped; or the edit
+// written over it
+function dropMine() {
+  renaming.value = false;
+  stale.value = false;
+  void reload();
+}
+async function keepMine() {
+  if (await overwrite()) {
+    renaming.value = false;
+    stale.value = false;
+  }
+}
 async function reloadStale() {
   stale.value = false;
   await load();

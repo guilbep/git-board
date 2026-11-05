@@ -63,6 +63,7 @@
             @save="labelsDraft.save()"
             @discard="resetLabels"
             @reload="labelsDraft.load()"
+            @overwrite="labelsDraft.save(true)"
           />
         </section>
 
