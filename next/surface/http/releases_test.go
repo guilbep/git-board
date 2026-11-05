@@ -63,7 +63,7 @@ func TestReleases(t *testing.T) {
 		t.Fatalf("the draft = %+v, want v1.0.1-rc.1", draft)
 	}
 
-	job := want[Job](t, a.do("POST", "/api/releases", map[string]any{"notes": "Fixes the login."}), 202)
+	job := want[Job](t, a.do("POST", "/api/releases", map[string]any{"notes": "Fixes the login."}, "Origin", a.srv.URL), 202)
 	if job.Kind != "cut" || job.State != "running" {
 		t.Fatalf("POST /api/releases = %+v", job)
 	}
@@ -121,7 +121,7 @@ func TestReleases(t *testing.T) {
 		{"/api/environments/prod/deploy", map[string]any{"tag": "nope"}, 400, "tag"},
 		{"/api/environments/prod/deploy", map[string]any{"tag": "v8.0.0"}, 404, ""},
 	} {
-		if e := want[apiError](t, a.do("POST", c.path, c.body), c.status); e.Field != c.field {
+		if e := want[apiError](t, a.do("POST", c.path, c.body, "Origin", a.srv.URL), c.status); e.Field != c.field {
 			t.Errorf("POST %s %v = %+v, want on %q", c.path, c.body, e, c.field)
 		}
 	}

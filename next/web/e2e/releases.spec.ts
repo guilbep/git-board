@@ -12,11 +12,15 @@ const work = process.env.E2E_DIR ?? '';
 const repo = join(work, 'repo');
 const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'pipe' }).toString();
 
+// own is the board's own page's Origin: a [release] write passes the
+// code gate (ADR 0013) from it alone.
+const own = (baseURL: string | undefined) => ({ Origin: baseURL ?? '' });
+
 async function config(request: APIRequestContext): Promise<{ text: string; version: string }> {
   return (await (await request.get('/api/config')).json()) as { text: string; version: string };
 }
 
-test('a release cut from the page, its page, its notes, a comment and a yank', async ({ page, request }) => {
+test('a release cut from the page, its page, its notes, a comment and a yank', async ({ page, request, baseURL }) => {
   const errs = errors(page);
   await identity(request);
   const bare = join(work, 'rel.git');
@@ -27,7 +31,7 @@ test('a release cut from the page, its page, its notes, a comment and a yank', a
   git('push', '-q', 'rel', 'HEAD:refs/heads/dev');
   git('fetch', '-q', 'rel');
   const before = await config(request);
-  const set = await request.patch('/api/config', { data: { set: { release: { environments: ['dev', 'prod'], remote: 'rel' } } }, headers: { 'If-Match': `"${before.version}"` } });
+  const set = await request.patch('/api/config', { data: { set: { release: { environments: ['dev', 'prod'], remote: 'rel' } } }, headers: { ...own(baseURL), 'If-Match': `"${before.version}"` } });
   expect(set.ok(), await set.text()).toBeTruthy();
   try {
     await page.goto('/#/releases');
@@ -64,16 +68,16 @@ test('a release cut from the page, its page, its notes, a comment and a yank', a
     expect(list.releases[0]).toMatchObject({ tag: { name: tag }, record: { yanked: 'breaks the e2e', notes: 'The e2e release, **notes** edited.' } });
   } finally {
     const now = await config(request);
-    const back = await request.put('/api/config', { data: { text: before.text }, headers: { 'If-Match': `"${now.version}"` } });
+    const back = await request.put('/api/config', { data: { text: before.text }, headers: { ...own(baseURL), 'If-Match': `"${now.version}"` } });
     expect(back.ok(), await back.text()).toBeTruthy();
   }
   expect(errs).toEqual([]);
 });
 
-test('Releases without [release] says how to set it up', async ({ page, request }) => {
+test('Releases without [release] says how to set it up', async ({ page, request, baseURL }) => {
   const errs = errors(page);
   const before = await config(request);
-  const off = await request.patch('/api/config', { data: { set: { release: null } }, headers: { 'If-Match': `"${before.version}"` } });
+  const off = await request.patch('/api/config', { data: { set: { release: null } }, headers: { ...own(baseURL), 'If-Match': `"${before.version}"` } });
   expect(off.ok(), await off.text()).toBeTruthy();
   try {
     await page.goto('/#/releases');
@@ -82,7 +86,7 @@ test('Releases without [release] says how to set it up', async ({ page, request 
     await expect(page).toHaveURL(/#\/settings\/release/);
   } finally {
     const now = await config(request);
-    const back = await request.put('/api/config', { data: { text: before.text }, headers: { 'If-Match': `"${now.version}"` } });
+    const back = await request.put('/api/config', { data: { text: before.text }, headers: { ...own(baseURL), 'If-Match': `"${now.version}"` } });
     expect(back.ok(), await back.text()).toBeTruthy();
   }
   expect(errs).toEqual([]);

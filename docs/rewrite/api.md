@@ -100,6 +100,25 @@ A write's `Origin`, when sent, must be this server's own (or the dev
 server's, `localhost:9000`). Both answer 403 `forbidden`, and are logged
 as warnings. Clients without an `Origin` (curl, scripts) are the user's.
 
+**The code gate** (ADR 0013, Amendment 2026-11-05). Reaching the port
+writes the board; it must not run code as the user. A request that makes
+this machine run code, or changes what code a later run runs, is refused
+(403 `forbidden`) when the server listens beyond loopback (`--addr`), and
+otherwise asks a same-host `Origin`, the board's own page (or the dev
+server's): a script without an `Origin` is refused too. It gates:
+
+- a cut (44), a promotion and an adoption (46: `{state: "promoted"}`,
+  `{adopt}`), a deploy and a rollback (48): they build (`sh -c` of
+  `release.build`, `go build`, `docker build`, `helm`) and push the
+  overlays that say what runs;
+- a config write (24, 25) whose file changes a key that holds a command
+  or says what a run builds, deploys or trusts: `[release]` (any key),
+  `[cycle.tests]`, `[cycle.checks]` and `cycle.signers`. The same write
+  without such a change, and every dry run, pass.
+
+Notes, yanks and comments on a release are records, and pass. The
+datastore's copy (29) answers on loopback alone, as before.
+
 ## Routes
 
 `{id}` is an issue's name as the CLI takes it: its id, a prefix of it,

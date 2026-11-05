@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -297,7 +298,15 @@ type putConfigReq struct {
 
 func (s *Server) putConfig(ctx context.Context, r putConfigReq) (Reply, error) {
 	dir := board(ctx).Dir
-	if err := app.SaveConfig(dir, []byte(r.Text), version(r.IfMatch), r.DryRun); err != nil {
+	// checked first, then through the code gate, then written
+	if err := app.SaveConfig(dir, []byte(r.Text), version(r.IfMatch), true); err != nil {
+		return Reply{}, on("text", err)
+	}
+	base, err := codeWrite(ctx, dir, version(r.IfMatch), []byte(r.Text), r.DryRun)
+	if err != nil {
+		return Reply{}, on("text", err)
+	}
+	if err := app.SaveConfig(dir, []byte(r.Text), base, r.DryRun); err != nil {
 		return Reply{}, on("text", err)
 	}
 	return s.configWritten(ctx, dir, []byte(r.Text), r.DryRun)
@@ -319,9 +328,24 @@ func (s *Server) patchConfig(ctx context.Context, r patchConfigReq) (Reply, erro
 		}
 		set[k] = tomlish(v)
 	}
-	text, err := app.SetConfigKeys(dir, set, version(r.IfMatch), r.DryRun)
+	// the file it would write, from the file as it is now (pinned to its
+	// version), passes the code gate before it is written
+	_, cur, err := app.ConfigText(dir)
+	if err != nil {
+		return Reply{}, err
+	}
+	base := cmp.Or(version(r.IfMatch), cur)
+	text, err := app.SetConfigKeys(dir, set, base, true)
 	if err != nil {
 		return Reply{}, on("set", err)
+	}
+	if base, err = codeWrite(ctx, dir, base, text, r.DryRun); err != nil {
+		return Reply{}, on("set", err)
+	}
+	if !r.DryRun {
+		if text, err = app.SetConfigKeys(dir, set, base, false); err != nil {
+			return Reply{}, on("set", err)
+		}
 	}
 	return s.configWritten(ctx, dir, text, r.DryRun)
 }

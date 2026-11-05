@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"mime"
 	"net"
@@ -72,6 +74,7 @@ func withGuard(log *slog.Logger, exposed []string, next http.Handler) http.Handl
 			refuse(forbidden(errForeignHost), slog.String("host", r.Host))
 			return
 		}
+		r = r.WithContext(context.WithValue(r.Context(), codeKey{}, codeVerdict(exposed, r)))
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 			next.ServeHTTP(w, r)
@@ -99,6 +102,52 @@ func withGuard(log *slog.Logger, exposed []string, next http.Handler) http.Handl
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// The code gate (ADR 0013, Amendment 2026-11-05): no login means whoever
+// reaches the port writes the board, and that is accepted; it must not
+// mean they run code as the user. A request that makes this machine run
+// code, or changes what code a later run runs, passes runsCode: the
+// releases' cut, promote, adopt, deploy and rollback, and a config write
+// that changes a key holding a command (codeKeys). It is refused when
+// the server listens beyond loopback (--addr), and asks a same-host
+// Origin, the board's own page, or the dev server's: v1's localWrite
+// (internal/server/refs.go).
+
+type codeKey struct{}
+
+// codeGate is the gate's verdict on a request: why it may not run code,
+// "" when it may.
+type codeGate struct{ why string }
+
+// codeVerdict is the gate's verdict on r.
+func codeVerdict(exposed []string, r *http.Request) codeGate {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	ip := net.ParseIP(host)
+	origin := r.Header.Get("Origin")
+	switch {
+	case len(exposed) > 0:
+		return codeGate{"the server listens beyond this machine (--addr): %s only from a server on localhost"}
+	case err != nil || ip == nil || !ip.IsLoopback():
+		return codeGate{"%s only on localhost"}
+	case origin == "" || !devOrigins[origin] && !sameHost(origin, r.Host):
+		return codeGate{"%s only on a request from this board's own page"}
+	}
+	return codeGate{}
+}
+
+// runsCode refuses, 403 forbidden, a request that may not run code;
+// what says what it would do ("releases are cut"). A context the guard
+// didn't see is refused.
+func runsCode(ctx context.Context, what string) error {
+	g, ok := ctx.Value(codeKey{}).(codeGate)
+	switch {
+	case !ok:
+		return forbidden(fmt.Errorf("%s only through the server's guard", what))
+	case g.why != "":
+		return forbidden(fmt.Errorf(strings.Replace(g.why, "%s", "%v", 1), what))
+	}
+	return nil
 }
 
 // loopbackOnly answers next on a loopback address alone: what reaches
