@@ -13,15 +13,14 @@ import (
 // push), as v1's git board fetch, pull and push.
 // From origin, a pull takes the numbers and a push numbers what origin
 // then has (origin.go).
-// ponytail: v1's reset guards and switch marks aren't moved: v1's git
-// board pull and push do those.
+// Between two boards that started over apart, both refuse (reset.go).
 
 // remoteOf is the board's git store, refusing another datastore and a
 // remote the repository doesn't have.
 func (b *Board) remoteOf(ctx context.Context, what, remote string) (*git.Store, error) {
 	g, ok := b.Kernel.Store().(*git.Store)
 	if !ok {
-		return nil, missing(what + " needs a board kept in git; this board is kept in " + b.DatastoreName())
+		return nil, missing(what + " needs a board kept in git; this board is kept in " + b.keptIn())
 	}
 	out, err := gitRun(ctx, b.Dir, "remote")
 	if err != nil {
@@ -65,6 +64,9 @@ func (b *Board) Pull(ctx context.Context, remote string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := b.resetGuard(ctx, remote); err != nil {
+		return "", err
+	}
 	if _, err := g.Fetch(ctx, remote, Kinds...); err != nil {
 		return "", err
 	}
@@ -83,6 +85,9 @@ func (b *Board) Pull(ctx context.Context, remote string) (string, error) {
 func (b *Board) Push(ctx context.Context, remote string) (string, error) {
 	g, err := b.remoteOf(ctx, "git board push", remote)
 	if err != nil {
+		return "", err
+	}
+	if err := b.resetGuard(ctx, remote); err != nil {
 		return "", err
 	}
 	if err := g.Push(ctx, remote, Kinds...); err != nil {

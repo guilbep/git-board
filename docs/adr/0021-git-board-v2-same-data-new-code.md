@@ -57,6 +57,10 @@ sync engine, after the release mapper.
 - **The server logs.** `git board` (the server and its web UI) writes
   error, warning and info lines, with a level the user chooses.
 
+**Amended 2026-11-05:** v2 does not port `switch` and `prune` (git-bug
+repositories). git-board v0.11 migrates them: a repository that still holds
+git-bug data is refused, with a message that names v0.11's `git board switch`.
+
 ## Consequences
 
 - v1 is deleted in the pull request that ships v0.12. Until then a v1

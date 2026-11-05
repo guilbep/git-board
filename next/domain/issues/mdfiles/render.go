@@ -83,7 +83,12 @@ func names(heads []issues.Head) []string {
 const commentsMark = "<!-- git-board comments -->"
 
 // Render is an issue's file.
-func Render(th issues.Thread) ([]byte, error) {
+func Render(th issues.Thread) ([]byte, error) { return RenderFlat(th, nil) }
+
+// RenderFlat is an issue's file, flat telling a label is a flat kind (bug,
+// not kind:bug), written as the kind field; nil for none (git board
+// export).
+func RenderFlat(th issues.Thread, flat func(label string) bool) ([]byte, error) {
 	f := Front{ID: th.ID, Number: th.Number, Title: th.Title, State: th.Status,
 		Created: th.CreatedAt.UTC().Truncate(time.Second), Updated: th.UpdatedAt.UTC().Truncate(time.Second)}
 	if f.Number == "" {
@@ -100,6 +105,11 @@ func Render(th issues.Thread) ([]byte, error) {
 				f.Fields = map[string][]string{}
 			}
 			f.Fields[ns] = append(f.Fields[ns], v)
+		case flat != nil && flat(l):
+			if f.Fields == nil {
+				f.Fields = map[string][]string{}
+			}
+			f.Fields["kind"] = append(f.Fields["kind"], l)
 		default:
 			f.Labels = append(f.Labels, l)
 		}

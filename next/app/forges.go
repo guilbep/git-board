@@ -268,7 +268,7 @@ func (e SyncEvent) Text(dry bool, name string) string {
 }
 
 // ErrNotSwitched: the repository's issues are still the git-bug fork's.
-var ErrNotSwitched = errors.New("this repository's issues are still git-bug's, in refs/bugs: run git-board switch first")
+var ErrNotSwitched = errors.New("this repository still holds git-bug data, in refs/bugs: migrate it with git-board v0.11 (`git board switch`), then use v0.12")
 
 // switched refuses a repository whose issues are in refs/bugs and that
 // wasn't switched: a forge sync would pull the fork's mirrors as issues

@@ -71,6 +71,37 @@ this clone names.`,
 	}
 	cp.Flags().StringVar(&from, "from", "", "the datastore to copy from (default git)")
 	cp.Flags().StringVar(&to, "to", "", "the datastore to copy into (default the one this clone names)")
-	cmd.AddCommand(cp)
+	cmd.AddCommand(cp, newDatastoreDrop())
 	return cmd
+}
+
+func newDatastoreDrop() *cobra.Command {
+	var force bool
+	drop := &cobra.Command{
+		Use:   "drop",
+		Short: "Throw a forge-only board's copy away: the next sync pulls it again",
+		Long: `Throw away the copy a board kept on the forges alone (board.datastore forge)
+holds, and its sync journal; the next git board sync pulls the board from
+the forges again. It refuses while an issue isn't on a forge yet: those
+would be lost. --force throws them away too.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			b, err := open(cmd, false)
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			n, err := b.DropCopy(cmd.Context(), force)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "%d issues not on a forge were thrown away\n", n)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "the copy is gone: git board sync pulls the board again")
+			return nil
+		},
+	}
+	drop.Flags().BoolVar(&force, "force", false, "throw away the issues no forge has yet too")
+	return drop
 }

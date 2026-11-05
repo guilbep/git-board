@@ -20,6 +20,15 @@ const NumbersRemote = "origin"
 
 // DatastoreName is the board's datastore as a sentence names it: git,
 // Markdown files, PostgreSQL.
+// keptIn is where the board is kept, for a sentence: DatastoreName, but
+// "the forges alone" for a forge-only board, as v1 says it.
+func (b *Board) keptIn() string {
+	if _, ok := b.Kernel.Store().(*forgecopy.Store); ok {
+		return "the forges alone"
+	}
+	return b.DatastoreName()
+}
+
 func (b *Board) DatastoreName() string {
 	switch b.Kernel.Store().(type) {
 	case *git.Store, *forgecopy.Store:

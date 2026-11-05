@@ -250,7 +250,15 @@ func (b *Board) GitConfig(ctx context.Context, key string) string {
 }
 
 func gitRun(ctx context.Context, dir string, args ...string) (string, error) {
+	return gitStdin(ctx, dir, nil, args...)
+}
+
+// gitStdin runs git as gitRun does, stdin given.
+func gitStdin(ctx context.Context, dir string, stdin []byte, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	if stdin != nil {
+		cmd.Stdin = bytes.NewReader(stdin)
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

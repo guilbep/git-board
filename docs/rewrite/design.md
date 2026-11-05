@@ -962,8 +962,8 @@ and push one board between two clones (`next/golden/v1gen`). `forge
 pull|push|sync`, `fetch`, `pull`, `push`, `sync` and numbering through
 origin's counter run. Left: the `Mapper` interface (with releases, the
 second kind; the run is the issue mapper today), the release mapper, the
-whole sync's dry run (`sync --check`; `forge … --check` runs), reset
-guards and switch marks on pull and push, the quote over a thread
+whole sync's dry run (`sync --check`; `forge … --check` runs), the
+switch marks on pull and push (v0.11's, ADR 0021), the quote over a thread
 comment and the note after a published body (v1's `Quote` and
 `Published`, which read the body's sections), and the GitHub Project
 step (built in M6, below).
@@ -983,9 +983,18 @@ cycle is `next/domain/cycle` (+ `work`), its evidence read in `app`;
 `next/tools/code` reads git, `next/tools/branches` names branches. The
 commands `release`, `deploy`, `verify`, `branch`, `sprint` and `tui` are
 v1's; a golden board, `releases`, holds the release reads, and basic the
-sprint, branch and verify cases. Left: agents, insights, lint, export
-and import, and
+sprint, branch and verify cases. Left: agents, insights, and
 the plan's HTML in the cycle's evidence (the caller renders).
+
+**v1's CLI, closed for v0.12 (2026-11-05).** `init` (its templates;
+not yet the start from origin's GitHub labels and Project), `lint`
+(its cycle `read:` lines too; not yet `--create-labels`), `export --md` and `import --md` (the
+Markdown datastore's files, `mdfiles`), `reset --hard`, `push --prune`
+and the reset guards on pull and push, and `datastore drop` are v1's,
+each held to v1 by a cross test in `next/golden` (`TestCrossInit`,
+`TestCrossLint`, `TestCrossExport`, `TestCrossReset`, `TestCrossDrop`).
+git-bug's `switch` and `prune` are not ported: v0.11 migrates (ADR
+0021).
 
 **The GitHub Project bridge, as built (2026-11-05).** `next/tools/ghproject`
 is v1's `internal/ghbridge`, copied and owned, the sync engine's third
