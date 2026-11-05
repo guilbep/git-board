@@ -67,9 +67,9 @@ func Parse(path string, text []byte) (*File, error) {
 	}
 	// a migration that fails leaves the file as it is: a write says why
 	if read, _ := readText(string(text), f.version); read != string(text) {
-		f.text, f.tables = []byte(read), map[string]toml.Primitive{}
-		if f.md, err = toml.Decode(read, &f.tables); err != nil {
-			return nil, err
+		tables := map[string]toml.Primitive{}
+		if md, err := toml.Decode(read, &tables); err == nil {
+			f.text, f.tables, f.md = []byte(read), tables, md
 		}
 	}
 	return f, nil

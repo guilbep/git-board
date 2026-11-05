@@ -204,8 +204,13 @@ func find(text, table, key string) ([]string, int) {
 }
 
 // check parses an edit's text: it is TOML, and sets table.key (a table
-// itself when table is "") or not, as want says.
+// itself when table is "") or not, as want says. A key no line but a
+// comment names isn't set: that needs no parse (a read migrates in
+// memory, and parses the text it gives once, after).
 func check(text, table, key string, want bool) error {
+	if !want && !named(text, key) {
+		return nil
+	}
 	var v any
 	if _, err := toml.Decode(text, &v); err != nil {
 		return err
@@ -231,6 +236,16 @@ func check(text, table, key string, want bool) error {
 		return fmt.Errorf("%s: written in a form this migration can't edit (inline, or a dotted key); write it as %s = … under [%s], or edit it by hand", path, key, table)
 	}
 	return nil
+}
+
+// named says a line of text that isn't a comment has name in it.
+func named(text, name string) bool {
+	for l := range strings.Lines(text) {
+		if strings.Contains(l, name) && !strings.HasPrefix(strings.TrimSpace(l), "#") {
+			return true
+		}
+	}
+	return false
 }
 
 // dotted is a header's name without the spaces TOML allows: a . b is a.b.

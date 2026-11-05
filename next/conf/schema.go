@@ -110,7 +110,11 @@ func Migrate(text string, to int) (string, []Migration, error) {
 	if text, err = run(text, steps, from < to); err != nil {
 		return "", nil, err
 	}
-	return setVersion(text, to), steps, nil
+	text = setVersion(text, to)
+	if _, err := Version(text); err != nil { // what it writes is TOML
+		return "", nil, fmt.Errorf("schema %d to %d: %w", from, to, err)
+	}
+	return text, steps, nil
 }
 
 // run applies steps, up or down.
