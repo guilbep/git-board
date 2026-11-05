@@ -83,11 +83,23 @@ type shared struct {
 
 // New is the project through the posting account's token.
 func New(ctx context.Context, o Options) (*Forge, error) {
-	host := cmp.Or(o.Host, "github.com")
 	owner, repo, ok := strings.Cut(o.Project, "/")
 	if !ok || owner == "" || repo == "" || strings.Contains(repo, "/") {
 		return nil, fmt.Errorf("github: project %q isn't owner/repo", o.Project)
 	}
+	f, err := open(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	f.s.project = o.Project
+	f.s.repo = f.s.api + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo)
+	return f, nil
+}
+
+// open is the host's API through the posting account's token, for no
+// repository yet.
+func open(ctx context.Context, o Options) (*Forge, error) {
+	host := cmp.Or(o.Host, "github.com")
 	if strings.ContainsAny(host, "/?#@ \r\n") {
 		return nil, fmt.Errorf("github: bad host %q", host)
 	}
@@ -118,8 +130,7 @@ func New(ctx context.Context, o Options) (*Forge, error) {
 		return nil, forge.ErrNoToken
 	}
 	s := &shared{
-		host: host, project: o.Project, api: api, graphql: graphql, tokenOf: tokenOf,
-		repo: api + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo),
+		host: host, api: api, graphql: graphql, tokenOf: tokenOf,
 		client: &http.Client{Timeout: time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse // a moved issue is gone; and Go would turn a PATCH into a GET
 		}},

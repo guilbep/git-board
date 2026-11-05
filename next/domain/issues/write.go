@@ -291,6 +291,47 @@ func (s *Service) ChangeLabels(ctx context.Context, name string, added, removed 
 	return s.Schema.Shown(slices.Clone(st.Labels)), nil
 }
 
+// SetMeta sets keys of the issue's metadata (its description's), as
+// v1's set-meta on the create: what travels with the issue, such as what
+// a GitHub Project and git-board last agreed on. Keys already at their
+// value write nothing.
+func (s *Service) SetMeta(ctx context.Context, name string, meta map[string]string) error {
+	ctx, done, werr := s.writing(ctx)
+	if werr != nil {
+		return werr
+	}
+	defer done()
+	_, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
+		changed := map[string]string{}
+		for k, v := range meta {
+			if was, ok := st.Meta[k]; !ok || was != v {
+				changed[k] = v
+			}
+		}
+		if len(changed) == 0 {
+			return nil, nil
+		}
+		return []kernel.Op{op("set-meta", me, map[string]any{"target": st.BodyOp, "meta": changed})}, nil
+	})
+	if err != nil {
+		return fmt.Errorf("setting metadata on %s: %w", name, err)
+	}
+	return nil
+}
+
+// Meta is the issue's metadata, its description's.
+func (s *Service) Meta(ctx context.Context, name string) (map[string]string, error) {
+	id, err := s.Resolve(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	e, err := Kind.Get(ctx, s.Board, id)
+	if err != nil {
+		return nil, err
+	}
+	return e.State.Meta, nil
+}
+
 // stored is a change of labels as the issue keeps them, raw its labels
 // now: a flat kind added as bug, and removed in each spelling raw has; an
 // assignee there in another case not added again, removed in each case.
