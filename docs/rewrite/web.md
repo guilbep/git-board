@@ -102,7 +102,10 @@ adoption's proposals come with the list, a job's steps as `release`
 events; Enable binary release (v1's `/api/releases/setup`) is Settings ›
 Release now, a table of the file. The Work page (experimental: its link
 shows with the cycle on) is v1's on `GET /api/cycle`, without v1's
-agents and its aside (what waits for the forges is Sync's); an issue's
+agents and its aside (what waits for the forges is Sync's). It reads
+every open issue's thread and evidence, a few at once, the branches
+once: 71 s for the 12,000 open issues of the 20,000-issue board (224 s
+one at a time with each issue's git reads; v1 took over 400 s). An issue's
 History draws the cycle's step bars from `GET /api/issues/{id}/cycle`.
 Attaching files (paste, drop, pick in a text, as v1) works on routes 40
 and 41. Waiting for their routes (M6, api.md routes 42 and 50 to 53): the
