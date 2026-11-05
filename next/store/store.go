@@ -22,8 +22,10 @@ type Datastore interface {
 	// current one), in any order, as each is read: each gets the version
 	// it was read at and every pack reachable from it. A ref with no
 	// entity gets ErrNotFound through each, and the load goes on; an
-	// error each returns stops it. Load of one ref is a point read; of
-	// 20,000, a first build.
+	// error each returns stops it, and each may be called on several
+	// goroutines at once. Load of one ref is a point read; of 20,000, a
+	// first build. A datastore that isn't Pinned answers each ref at its
+	// current version, whatever version it names.
 	Load(ctx context.Context, refs []Ref, each func(r Ref, packs [][]byte, err error) error) error
 	// Add stores one pack if the entity is at prev ("" for a new one),
 	// and gives the new version; ErrMoved otherwise.
@@ -51,6 +53,24 @@ type Caps struct {
 	Counter Counter // project numbers (ADR 0016)
 	Locker  Locker  // a lock every machine shares (PostgreSQL)
 	Remote  Remote  // fetch, push, start over (git)
+	SQL     SQL     // a database the view may live in, beside the board (PostgreSQL)
+	Put     Putter  // takes another datastore's packs as they are: datastore copy
+}
+
+// SQL is the database a datastore keeps the board in, where the view may
+// keep its tables too, in a schema of its own.
+type SQL interface {
+	// DSN is the database's connection string, as libpq takes it.
+	DSN() string
+}
+
+// Putter stores another datastore's packs as they are, clocks and all,
+// in one write: datastore copy (datastores.md, Copying a board in).
+type Putter interface {
+	// Put stores the packs the entity doesn't hold yet if it is at prev
+	// ("" for a new one), and gives its version: prev when it held them
+	// all. ErrMoved when it moved.
+	Put(ctx context.Context, kind, id string, packs [][]byte, prev string) (string, error)
 }
 
 // Counter keeps the project numbers' counter (ADR 0016).

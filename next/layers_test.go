@@ -24,6 +24,9 @@ var mayImport = map[string][]string{
 	"next/kernel":             {"next/store", "next/kernel/pack"},
 	"next/store/git":          {"next/store", "next/kernel/pack"},
 	"next/store/mem":          {"next/store", "next/kernel/pack"},
+	"next/store/md":           {"next/store", "next/kernel/pack"},
+	"next/store/pg":           {"next/store", "next/kernel/pack"},
+	"next/store/pg/pgtest":    {},
 	"next/store/storetest":    {"next/store", "next/kernel/pack"},
 	"next/view":               {"next/kernel", "next/kernel/search"},
 	"next/conf":               {},
@@ -42,7 +45,7 @@ const v1gen = "next/golden/v1gen"
 
 // testsMayImport is what a package's tests may import besides: the
 // datastores and the view, to run on real ones, and the conformance suite.
-var testsMayImport = []string{"next/store", "next/store/git", "next/store/mem", "next/store/storetest", "next/view", "next/kernel", "next/kernel/pack"}
+var testsMayImport = []string{"next/store", "next/store/git", "next/store/mem", "next/store/md", "next/store/pg", "next/store/pg/pgtest", "next/store/storetest", "next/view", "next/kernel", "next/kernel/pack"}
 
 // The layers hold, and next/ and v1 never import each other: deleting v1
 // is one git rm (design.md, section 5).
