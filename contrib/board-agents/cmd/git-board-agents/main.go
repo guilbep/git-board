@@ -274,6 +274,9 @@ func dispatch(ctx context.Context, svc *agent.Service, o *opts, cmd string, rest
 		if err != nil {
 			return err
 		}
+		if s.Note != "" {
+			fmt.Fprintln(o.stderrW, "note: the comment is", s.Note)
+		}
 		if o.json {
 			return printJSON(o.stdout, s)
 		}

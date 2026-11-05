@@ -104,22 +104,49 @@ It never reads the board's storage. Everything goes through:
    `show <issue> --json` (the issue, its description, its line comments),
    `branch <issue>` (the branch `[branches]` names for it), `set <issue>
    status=…`, and `comment <issue> -b …` when no server runs.
-2. **The board's HTTP API**, when `git board` serves the repository, for
-   what only the server computes: `GET /api/issues/{id}/cycle` (the step,
-   its gate, the evidence branch, the plan and its approval), `GET
-   /api/issues/{id}/thread` (line comments located on the branch's head),
-   `GET /api/work?who=team` (which issue each worktree's branch names), and
-   `POST /api/issues/{id}/comments` (a comment in a cycle step).
+2. **The board's HTTP API**, git-board v2's ([api.md](https://github.com/guilbep/git-board/blob/main/docs/rewrite/api.md)),
+   when `git board` serves the repository, for what only the server
+   computes:
+
+   | Route | What for |
+   |---|---|
+   | `GET /api/board` | finding the server: its `git_dir` must be this repository's |
+   | `GET /api/issues/{id}/cycle` | the step, its gate, the evidence branch, the plan and its approval, the project's stages (`evidence.stages`), the issue's `version` |
+   | `GET /api/issues/{id}` | the thread, with its `version`, for `brief --comment` |
+   | `GET /api/cycle?who=team` | the Work page's rows: which issue each worktree's branch is the evidence branch of, its step and who it waits for |
+   | `POST /api/issues/{id}/comments` | `risk --write`'s comment, with `If-Match` the version the cycle was read at: written only if the issue is still at the Risk step the check saw (else `stale`, nothing written) |
+
+   An error is the API's shape, `{"code", "message", "field"}`: a 404
+   `experimental` is the cycle off, another 404 no such issue (exit code
+   3), a 412 `stale` an issue that moved since it was read.
 
 The server is found from `--board`, else `GIT_BOARD_URL`, else the address
-a running `git board` writes in the main checkout's
-`.git/git-board/server.json`, if the server there answers. Without one,
-everything still works but the cycle: the prompt names no step, the branch
-is `git board branch`'s, `approve` is refused (`no-cycle`), and `status`
-lists no issues.
+a running `git board` writes in the main checkout's (or this worktree's)
+`.git/git-board/server.json`, if the server there answers for this
+repository. Without one, everything still works but the cycle: the prompt
+names no step, the branch is `git board branch`'s, `approve` is refused
+(`no-cycle`), and `status` lists no issues.
 
-The routes are git-board v1's (v0.11). v2 reshapes the API: every route is
-in `internal/board/board.go`, so following v2 is a change to that file.
+Every route is in `internal/board/board.go`.
+
+### What v2's API doesn't answer yet
+
+git-board v2 reshaped the API (ADR 0021). Three things v1's server gave
+are not in it; the client works without them, and says so:
+
+- **A comment's cycle step.** v1 took `step` on a comment and wrote it as
+  the comment's `cycle:step`; v2's comments take `{body}` alone (a
+  comment's `meta` comes with its domain). `risk --write` writes its
+  comment in no step, and says so on stderr (`note:`) and in `--json`'s
+  `note`.
+- **Line comments located on the branch.** v1's `GET
+  /api/issues/{id}/thread` filled a line comment's `branch`, `outdated`,
+  `head_line` and `text` from the issue's branch; v2's thread leaves them
+  empty. `brief --comment` names the line where the comment was written,
+  and says the board didn't locate it at the branch's head.
+- **Worktrees.** v1's `GET /api/work` listed each worktree with its path;
+  v2's Work page knows branches. `status` matches a worktree to its issue
+  by its branch alone (the issue's evidence branch).
 
 ### Differences from v1
 
@@ -134,9 +161,9 @@ in `internal/board/board.go`, so following v2 is a change to that file.
   from the status. v1 computed it as if moved, and moved it after. A
   failed start leaves two status changes in the issue's history.
 - v1 wrote the AI's suggestion with `ai:model` and `ai:risk` comment
-  metadata, which no API route takes from a client. The model is in the
-  comment's text instead, and the web page doesn't show it as a
-  suggestion.
+  metadata (and `cycle:step`), which no v2 route takes from a client. The
+  model is in the comment's text instead, and the web page doesn't show it
+  as a suggestion.
 - There is no web UI: v1's Agent panel, Work page column and Settings ›
   Worktrees tab are the commands above.
 
@@ -148,7 +175,12 @@ go build ./... && go vet ./... && go test ./...
 
 The tests are hermetic (`internal/hermetic`): no network but loopback, no
 token, no git config but the test's. wtx, git-board and the LLM are fakes:
-shell scripts on `PATH` and `httptest` servers.
+shell scripts on `PATH` and `httptest` servers; the board's server is an
+`httptest` server answering v2's routes in v2's shapes. `TestV2` runs the
+client against a real `git-board-next serve` on a throwaway board, on a
+free loopback port: the binary `GIT_BOARD_NEXT` names, else one built from
+the git-board checkout around this module; skipped with `-short` or
+outside one.
 
 The module requires nothing outside the standard library, and must not
 import git-board's packages (`TestNoDependency`): what it needs from them

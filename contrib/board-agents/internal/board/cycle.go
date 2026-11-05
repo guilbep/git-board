@@ -6,8 +6,9 @@ import (
 )
 
 // Cycle is an issue's step, as GET /api/issues/{id}/cycle answers it
-// (git-board's core/cycle.Cycle and the stages beside it): the fields an
-// agent's prompt and its refusals read.
+// (git-board v2's app.CycleView, next/domain/cycle.Cycle): the fields an
+// agent's prompt and its refusals read. The project's stages are in
+// Evidence.Stages (v1 also answered them beside, as stages).
 type Cycle struct {
 	Step  int    `json:"step"` // the kind's, 1 to 7
 	At    string `json:"at"`   // the list's entry reached, "" before the first
@@ -21,8 +22,8 @@ type Cycle struct {
 		What string `json:"what"`
 	} `json:"waits"`
 	Evidence Evidence `json:"evidence"`
-	Stages   Stages   `json:"stages"`
-	AI       bool     `json:"ai,omitempty"`
+	ID       string   `json:"id"`      // the issue's whole id
+	Version  string   `json:"version"` // the issue's version: a write's If-Match
 }
 
 // Evidence is what the cycle was computed from.

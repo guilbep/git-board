@@ -93,8 +93,8 @@ func TestCLI(t *testing.T) {
 	if err := c.SetStatus(ctx, th.ID, "in-progress"); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Comment(ctx, th.ID, "a b; $(x)", "risk"); err != nil {
-		t.Fatal(err)
+	if w, err := c.Comment(ctx, th.ID, "a b; $(x)", "risk", ""); err != nil || w.Note != NoStep {
+		t.Fatalf("comment: %+v, %v", w, err)
 	}
 	if _, err := c.Thread(ctx, "nope"); !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "no such issue: nope") {
 		t.Fatalf("exit code 3: %v", err)
@@ -121,50 +121,98 @@ func TestNames(t *testing.T) {
 	}
 }
 
-// fakeServer answers the v1 routes the client reads, and records the
+// fakeServer speaks git-board v2's API (docs/rewrite/api.md) for the
+// routes the client reads, in next/surface/http's shapes: the error shape
+// {"code", "message", "field"}, a version in the body and the ETag, 412
+// stale on an If-Match the issue moved from, 415 on a write that isn't
+// JSON, 400 on a field the route doesn't take (its decoder refuses
+// unknown fields). It serves the repository at gitDir, and records the
 // writes.
-func fakeServer(t *testing.T, cycleOff bool) (*httptest.Server, *[]string) {
+func fakeServer(t *testing.T, cycleOff bool, gitDir string) (*httptest.Server, *[]string) {
 	t.Helper()
 	var writes []string
+	const version = "5c1e"
+	fail := func(w http.ResponseWriter, status int, code, msg, field string) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(map[string]string{"code": code, "message": msg, "field": field})
+	}
+	ok := func(w http.ResponseWriter, status int, body string) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("ETag", `"`+version+`"`)
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/repository", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) })
+	mux.HandleFunc("GET /api/board", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"git_dir": gitDir, "dir": "", "version": "test",
+			"datastore": map[string]string{"name": "git"}, "experimental": []string{"cycle"}})
+	})
 	mux.HandleFunc("GET /api/issues/{id}/cycle", func(w http.ResponseWriter, r *http.Request) {
 		if cycleOff {
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte(`{"error": "the cycle is off", "code": "experimental"}`))
+			fail(w, http.StatusNotFound, "experimental", "the cycle is off: [experimental] features", "")
 			return
 		}
-		_, _ = w.Write([]byte(`{"step": 4, "at": "tests", "of": 7, "name": "Tests", "stage": "in-progress", "gate": "g",
-			"waits": {"what": "write the failing test"}, "stages": {"ready": "ready", "in_progress": ["in-progress"], "plans": "docs/plans", "plans_in_pr": true},
-			"evidence": {"branch": "fix/1-x", "plan": {"path": "docs/plans/1-x.md", "status": "draft"}, "plan_approval": {"by": "ada", "at": "2026-11-05T07:00:00Z"},
-			"stages": {"steps": [{"id": "intent", "kind": "intent"}, {"id": "tests", "kind": "tests"}]}}}`))
+		ok(w, http.StatusOK, `{"step": 4, "at": "tests", "of": 7, "name": "Tests", "stage": "in-progress", "done": false, "gate": "g",
+			"waits": {"role": "assignee", "login": "ada", "what": "write the failing test", "anyone": false}, "mine": true,
+			"evidence": {"stages": {"before": [], "ready": "ready", "in_progress": ["in-progress"], "in_review": [], "validation": [], "closing": "done",
+				"plans": "docs/plans", "plans_in_pr": true, "test_files": [], "criteria": [], "kinds": {}, "guessed": false,
+				"steps": [{"id": "intent", "kind": "intent", "name": "Intent"}, {"id": "tests", "kind": "tests", "name": "Tests"}]},
+				"status": "in-progress", "closed": false, "branch": "fix/1-x",
+				"plan": {"path": "docs/plans/1-x.md", "status": "draft"}, "plan_approval": {"by": "ada", "at": "2026-11-05T07:00:00Z"}},
+			"id": "`+r.PathValue("id")+`", "version": "`+version+`", "body_version": 1, "environments": []}`)
 	})
-	mux.HandleFunc("GET /api/issues/{id}/thread", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"id": "` + r.PathValue("id") + `", "events": [{"kind": "comment", "id": "c1", "review": {"path": "a.go", "line": 3, "head_line": 5, "outdated": true, "text": "x := 1"}}]}`))
-	})
-	mux.HandleFunc("GET /api/issues/{id}/thread/missing", http.NotFound)
-	mux.HandleFunc("GET /api/work", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("who") != "team" {
-			http.Error(w, "who", http.StatusBadRequest)
+	mux.HandleFunc("GET /api/issues/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("id") == "missing" {
+			fail(w, http.StatusNotFound, "not-found", "no issue missing", "")
 			return
 		}
-		_, _ = w.Write([]byte(`{"agents": [{"path": "/w/x", "branch": "fix/1-x", "issue": {"id": "abc", "number": "CO2-1"}, "step": 4, "name": "Tests", "state": "Waits for you"}]}`))
+		ok(w, http.StatusOK, `{"id": "`+r.PathValue("id")+`", "title": "t", "status": "open", "labels": [], "shown_title": "t",
+			"author": {"id": "c96b", "name": "T"}, "edited_at": "2026-11-05T07:00:00Z", "participants": [], "version": "`+version+`",
+			"events": [{"kind": "comment", "id": "c1", "author": {"id": "c96b", "name": "T"}, "at": "2026-11-05T07:00:00Z", "body": "b", "html": "<p>b</p>",
+				"meta": {"review:path": "a.go", "review:line": "3"}, "review": {"path": "a.go", "line": 3, "side": "new", "commit": "4e5f"}}]}`)
+	})
+	mux.HandleFunc("GET /api/cycle", func(w http.ResponseWriter, r *http.Request) {
+		if who := r.URL.Query().Get("who"); who != "" && who != "me" && who != "team" {
+			fail(w, http.StatusBadRequest, "invalid", "who "+who+": me or team", "who")
+			return
+		}
+		ok(w, http.StatusOK, `{"needs": [{"issue": {"id": "abc", "title": "A", "status": "open", "labels": [], "number": "CO2-1", "shown_title": "A",
+				"updated_at": "2026-11-05T07:00:00Z", "created_at": "2026-11-05T07:00:00Z"},
+			"step": 4, "of": 7, "name": "Tests", "done": false, "waits": {"what": "write the failing test", "anyone": false}, "mine": true,
+			"since": "2026-11-05T07:00:00Z", "involved": true, "branch": "fix/1-x"}],
+			"waiting": [{"issue": {"id": "def", "title": "D", "status": "open", "labels": []}, "step": 6, "of": 7, "name": "Review",
+			"waits": {"role": "review", "login": "bob", "what": "review", "anyone": false}, "mine": false, "branch": "feat/2-y"},
+			{"issue": {"id": "ghi", "title": "G", "status": "open", "labels": []}, "step": 1, "of": 7, "name": "Intent", "waits": {"what": "x", "anyone": true}}]}`)
 	})
 	mux.HandleFunc("POST /api/issues/{id}/comments", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Type") != "application/json" {
-			w.WriteHeader(http.StatusUnsupportedMediaType)
-			_, _ = w.Write([]byte(`{"error": "not JSON"}`))
+			fail(w, http.StatusUnsupportedMediaType, "not-json", "a write's body is JSON", "")
 			return
 		}
-		var in map[string]string
-		_ = json.NewDecoder(r.Body).Decode(&in)
-		if in["body"] == "refuse" {
-			w.WriteHeader(http.StatusConflict)
-			_, _ = w.Write([]byte(`{"error": "the board is syncing", "code": "syncing"}`))
+		var in struct {
+			Body string `json:"body"`
+		}
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&in); err != nil {
+			fail(w, http.StatusBadRequest, "invalid", err.Error(), "")
 			return
 		}
-		writes = append(writes, r.PathValue("id")+" "+in["step"]+" "+in["body"])
-		_, _ = w.Write([]byte(`{}`))
+		if m := r.Header.Get("If-Match"); m != "" && m != `"`+version+`"` {
+			fail(w, http.StatusPreconditionFailed, "stale", "the issue changed since you read it", "")
+			return
+		}
+		if in.Body == "refuse" {
+			fail(w, http.StatusConflict, "busy", "a sync runs; try again", "")
+			return
+		}
+		writes = append(writes, r.PathValue("id")+" "+r.Header.Get("If-Match")+" "+in.Body)
+		w.Header().Set("Location", "/api/issues/"+r.PathValue("id")+"/comments/9c8b:1")
+		ok(w, http.StatusCreated, `{"id": "`+r.PathValue("id")+`", "events": [], "version": "6d2f"}`)
+	})
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		fail(w, http.StatusNotFound, "not-found", "no route "+r.Method+" "+r.URL.Path+" (docs/rewrite/api.md)", "")
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -173,7 +221,7 @@ func fakeServer(t *testing.T, cycleOff bool) (*httptest.Server, *[]string) {
 
 func TestHTTP(t *testing.T) {
 	t.Parallel()
-	srv, writes := fakeServer(t, false)
+	srv, writes := fakeServer(t, false, "")
 	bin, _ := fakeCLI(t)
 	c := &Client{Bin: bin, Dir: t.TempDir(), URL: srv.URL}
 	ctx := context.Background()
@@ -181,31 +229,44 @@ func TestHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cyc.Position() != 2 || cyc.Of != 7 || cyc.Waits.What != "write the failing test" || cyc.Evidence.Branch != "fix/1-x" ||
-		cyc.Evidence.Plan.Path != "docs/plans/1-x.md" || cyc.Evidence.PlanApproval.By != "ada" || cyc.Stages.InProgress[0] != "in-progress" || !cyc.Stages.PlansInPR {
+	if cyc.Position() != 2 || cyc.Of != 7 || cyc.Waits.What != "write the failing test" || cyc.Evidence.Branch != "fix/1-x" || cyc.Version != "5c1e" ||
+		cyc.Evidence.Plan.Path != "docs/plans/1-x.md" || cyc.Evidence.PlanApproval.By != "ada" || cyc.Evidence.Stages.InProgress[0] != "in-progress" || !cyc.Evidence.Stages.PlansInPR {
 		t.Fatalf("cycle = %+v", cyc)
 	}
 	th, err := c.ReviewThread(ctx, "abc")
-	if err != nil || th.ID != "abc" || th.Events[0].Review.HeadLine != 5 || !th.Events[0].Review.Outdated || th.Events[0].Review.Text != "x := 1" {
+	if err != nil || th.ID != "abc" || th.Version != "5c1e" || th.Events[0].Review.Line != 3 || th.Events[0].Review.Located() {
 		t.Fatalf("thread = %+v, %v", th, err)
 	}
 	agents, err := c.Agents(ctx)
-	if err != nil || len(agents) != 1 || agents[0].Issue.Name() != "CO2-1" || agents[0].State != "Waits for you" {
+	if err != nil || len(agents) != 2 || agents[0].Issue.Name() != "CO2-1" || agents[0].Branch != "fix/1-x" || agents[0].State != "Waits for you" ||
+		agents[1].Branch != "feat/2-y" || agents[1].State != "Waits for @bob" || agents[1].Step != 6 {
 		t.Fatalf("agents = %+v, %v", agents, err)
 	}
-	if err := c.Comment(ctx, "abc", "Suggested: **low**", "risk"); err != nil {
-		t.Fatal(err)
+	w, err := c.Comment(ctx, "abc", "Suggested: **low**", "risk", cyc.Version)
+	if err != nil || w.Note != NoStep || w.ID != "9c8b:1" {
+		t.Fatalf("comment: %+v, %v", w, err)
 	}
-	if len(*writes) != 1 || (*writes)[0] != "abc risk Suggested: **low**" {
+	if w, err := c.Comment(ctx, "abc", "plain", "", ""); err != nil || w.Note != "" {
+		t.Fatalf("a comment in no step: %+v, %v", w, err)
+	}
+	if len(*writes) != 2 || (*writes)[0] != `abc "5c1e" Suggested: **low**` || (*writes)[1] != "abc  plain" {
 		t.Fatalf("writes = %q", *writes)
 	}
-	if err := c.Comment(ctx, "abc", "refuse", ""); err == nil || !strings.Contains(err.Error(), "the board is syncing") {
+	if _, err := c.Comment(ctx, "abc", "late", "", "0ld"); !errors.Is(err, ErrStale) {
+		t.Fatalf("an If-Match the issue moved from: %v", err)
+	}
+	var api *APIError
+	if _, err := c.Comment(ctx, "abc", "refuse", "", ""); !errors.As(err, &api) || api.Code != "busy" || api.Status != http.StatusConflict ||
+		!strings.Contains(err.Error(), "a sync runs") {
 		t.Fatalf("a refused write: %v", err)
 	}
-	if err := c.get(ctx, "/api/issues/abc/thread/missing", nil); !errors.Is(err, ErrNotFound) {
+	if _, err := c.ReviewThread(ctx, "missing"); !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "no issue missing") {
 		t.Fatalf("404: %v", err)
 	}
-	off, _ := fakeServer(t, true)
+	if err := c.get(ctx, "/api/issues/abc/thread", nil); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("v1's route: %v", err)
+	}
+	off, _ := fakeServer(t, true, "")
 	c.URL = off.URL
 	if _, err := c.Cycle(ctx, "abc"); !errors.Is(err, ErrOff) || !strings.Contains(err.Error(), "the cycle is off") {
 		t.Fatalf("cycle off: %v", err)
@@ -234,9 +295,9 @@ func TestApprovedPlan(t *testing.T) {
 }
 
 // Discover reads GIT_BOARD_URL, else the server.json of the main
-// checkout's git directory, from a linked worktree too, when it answers.
+// checkout's git directory, from a linked worktree too, when its server
+// answers for that repository.
 func TestDiscover(t *testing.T) {
-	srv, _ := fakeServer(t, false)
 	t.Setenv("GIT_BOARD_URL", "")
 	root := t.TempDir()
 	run := func(args ...string) {
@@ -262,6 +323,12 @@ func TestDiscover(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	other, _ := fakeServer(t, false, t.TempDir())
+	write(other.URL)
+	if u := Discover(ctx, wt); u != "" {
+		t.Fatalf("a server of another repository: %q", u)
+	}
+	srv, _ := fakeServer(t, false, filepath.Join(root, ".git"))
 	write(srv.URL)
 	if u := Discover(ctx, wt); u != srv.URL {
 		t.Fatalf("from the worktree: %q, want %q", u, srv.URL)

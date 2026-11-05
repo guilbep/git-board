@@ -33,7 +33,9 @@ type Board interface {
 	Branch(ctx context.Context, id string) (string, error)
 	SetStatus(ctx context.Context, id, status string) error
 	ReviewThread(ctx context.Context, id string) (board.Thread, error)
-	Comment(ctx context.Context, id, body, step string) error
+	// Comment writes in the cycle's step when the board records it, and
+	// if-matches version when not "" (board.Client.Comment).
+	Comment(ctx context.Context, id, body, step, version string) (board.Written, error)
 	Agents(ctx context.Context) ([]board.WorkAgent, error)
 }
 
@@ -228,11 +230,11 @@ func (s *Service) Act(ctx context.Context, action, ref string, req Request) (Age
 	// The board computes the step from the status, so the status moves
 	// first, and moves back if wtx go fails (v1 computed the step as if
 	// moved, and moved it after).
-	start := action == "go" && cyc != nil && cyc.Stage == "ready" && len(cyc.Stages.InProgress) > 0 &&
+	start := action == "go" && cyc != nil && cyc.Stage == "ready" && len(cyc.Evidence.Stages.InProgress) > 0 &&
 		(cyc.Risk == "low" || board.ApprovedPlan(cyc.Evidence))
 	was := th.Field("status")
 	if start {
-		if err := s.Board.SetStatus(ctx, th.ID, cyc.Stages.InProgress[0]); err != nil {
+		if err := s.Board.SetStatus(ctx, th.ID, cyc.Evidence.Stages.InProgress[0]); err != nil {
 			return a, err
 		}
 		if cyc, err = s.Board.Cycle(ctx, th.ID); err != nil {
@@ -255,7 +257,7 @@ func (s *Service) Act(ctx context.Context, action, ref string, req Request) (Age
 		}
 		in.Then = fmt.Sprintf("The plan is approved%s on the board. Set `status: accepted` in the plan file's front matter, commit and push it, then go on with step %d.", by, in.Step)
 	case action == "go" && cyc != nil && cyc.Step == 3 && cyc.Stage == "ready":
-		in.What, in.Then = "write the plan, in plan mode", planThen(cyc.Stages, th, a.Branch)
+		in.What, in.Then = "write the plan, in plan mode", planThen(cyc.Evidence.Stages, th, a.Branch)
 	}
 	if req.Comment != "" {
 		rt, err := s.Board.ReviewThread(ctx, th.ID)
@@ -295,7 +297,7 @@ func (s *Service) Act(ctx context.Context, action, ref string, req Request) (Age
 		return a, err
 	}
 	if start {
-		a.Moved = cyc.Stages.InProgress[0]
+		a.Moved = cyc.Evidence.Stages.InProgress[0]
 	}
 	a.Output = wtx.Tail(string(out), 8)
 	return a, nil
@@ -464,6 +466,9 @@ func reviewThread(th board.Thread, comment string) (what, quoted string, ok bool
 				b.WriteString(", outdated: the line changed since")
 			case rv.HeadLine > 0 && rv.HeadLine != rv.Line:
 				fmt.Fprintf(&b, ", now line %d at the branch's head", rv.HeadLine)
+			}
+			if !rv.Located() {
+				b.WriteString(", where it was written: the board didn't locate it on the branch's head")
 			}
 			if rv.Text != "" {
 				fmt.Fprintf(&b, "\n%s", rv.Text)

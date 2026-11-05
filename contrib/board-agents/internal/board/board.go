@@ -8,14 +8,17 @@
 //
 //   - the CLI: an issue's thread (show --json), its branch name (branch),
 //     its status (set), a comment without a server (comment -b);
-//   - the HTTP API, when a server runs: the issue's cycle (GET
-//     /api/issues/{id}/cycle), its thread with the review comments
-//     located on the branch (GET /api/issues/{id}/thread), the Work page's
-//     agents (GET /api/work), a comment in a cycle step (POST
-//     /api/issues/{id}/comments).
+//   - the HTTP API, when a server runs: the board it serves (GET
+//     /api/board), the issue's cycle (GET /api/issues/{id}/cycle), its
+//     thread (GET /api/issues/{id}), the Work page's rows (GET
+//     /api/cycle?who=team), a comment (POST /api/issues/{id}/comments,
+//     If-Match the version the caller read).
 //
-// The routes are git-board v1's (v0.11). v2 reshapes the API (ADR 0021):
-// they are all in this file, so a v2 client changes here alone.
+// The routes are git-board v2's (docs/rewrite/api.md): the error shape
+// {"code", "message", "field"}, versions in ETag and If-Match. They are
+// all in this file. What v2 doesn't answer yet (a comment's cycle step,
+// line comments located on the branch, the worktrees' paths) is said
+// where it is used: the client writes and reads without it, and says so.
 package board
 
 import (
@@ -42,6 +45,10 @@ var ErrNotFound = errors.New("no such issue")
 // feature is off in .git-board.toml (ADR 0018).
 var ErrOff = errors.New("off on this board")
 
+// ErrStale is 412 {"code": "stale"}: the issue moved from the version an
+// If-Match named, and nothing was written.
+var ErrStale = errors.New("the issue changed since it was read")
+
 // Client is a board: the git-board binary run in Dir, and the board's
 // server at URL ("" when none runs).
 type Client struct {
@@ -65,14 +72,15 @@ type Forge struct {
 	Number string `json:"number"`
 }
 
-// Review is a line comment's anchor; the server fills Branch, Outdated,
-// HeadLine and Text from the issue's branches.
+// Review is a line comment's anchor; v1's server filled Branch,
+// Outdated, HeadLine and Text from the issue's branches (Located).
 type Review struct {
 	Path     string `json:"path,omitempty"`
 	Line     int    `json:"line,omitempty"`
 	Side     string `json:"side,omitempty"`
 	Commit   string `json:"commit,omitempty"`
 	ReplyTo  string `json:"reply_to,omitempty"`
+	Branch   string `json:"branch,omitempty"`
 	Outdated bool   `json:"outdated,omitempty"`
 	HeadLine int    `json:"head_line,omitempty"`
 	Text     string `json:"text,omitempty"`
@@ -99,6 +107,9 @@ type Thread struct {
 	Counted bool     `json:"counted,omitempty"`
 	Forges  []Forge  `json:"forges,omitempty"`
 	Events  []Event  `json:"events"`
+	// Version is the issue's version, as the API answers it (its ETag):
+	// what a write sends back in If-Match. "" from the CLI.
+	Version string `json:"version,omitempty"`
 }
 
 // Field is the value of a single field, from its label: status:ready
@@ -206,23 +217,47 @@ func (c *Client) SetStatus(ctx context.Context, id, status string) error {
 	return err
 }
 
-// Comment writes a comment on the issue. With a server it goes through
-// the API, in the cycle's step when step isn't "" (the comment's
-// cycle:step); without one, through git-board comment, in no step.
-func (c *Client) Comment(ctx context.Context, id, body, step string) error {
-	if c.URL == "" {
-		_, err := c.cli(ctx, "comment", id, "-b", body)
-		return err
-	}
-	req := map[string]any{"body": body}
-	if step != "" {
-		req["step"] = step
-	}
-	return c.send(ctx, http.MethodPost, "/api/issues/"+url.PathEscape(id)+"/comments", req, nil)
+// NoStep is the note of a comment asked in a cycle step that the board
+// can't record: git-board v2's comments take {body} alone (api.md, routes
+// 9 to 11: a comment's meta comes with its domain), so the comment is
+// written in no step, as git-board comment writes it.
+const NoStep = "written in no cycle step: git-board's API takes no comment metadata (cycle:step) yet"
+
+// Written is what Comment wrote: Note says what was asked and not
+// written, "" when nothing was left out.
+type Written struct {
+	ID   string `json:"id,omitempty"` // the comment's id, when the server names it
+	Note string `json:"note,omitempty"`
 }
 
-// Cycle is the issue's cycle, as the server computes it. ErrOff when the
-// cycle is off on the board; an error when no server runs.
+// Comment writes a comment on the issue, through the API when a server
+// runs, else through git-board comment. step is the cycle step it answers
+// ("" none): no board records it yet (NoStep). version is the issue's
+// version the caller read it at, sent as If-Match: ErrStale when the
+// issue moved since, and nothing written; "" writes whatever the issue is
+// now.
+func (c *Client) Comment(ctx context.Context, id, body, step, version string) (Written, error) {
+	var w Written
+	if step != "" {
+		w.Note = NoStep
+	}
+	if c.URL == "" {
+		_, err := c.cli(ctx, "comment", id, "-b", body)
+		return w, err
+	}
+	res, err := c.do(ctx, http.MethodPost, "/api/issues/"+url.PathEscape(id)+"/comments", version, map[string]string{"body": body}, nil)
+	if err != nil {
+		return Written{}, err
+	}
+	if loc := res.Header.Get("Location"); loc != "" {
+		w.ID = loc[strings.LastIndexByte(loc, '/')+1:]
+	}
+	return w, nil
+}
+
+// Cycle is the issue's cycle, as the server computes it, with the issue's
+// version. ErrOff when the cycle is off on the board; an error when no
+// server runs.
 func (c *Client) Cycle(ctx context.Context, id string) (*Cycle, error) {
 	var cyc Cycle
 	if err := c.get(ctx, "/api/issues/"+url.PathEscape(id)+"/cycle", &cyc); err != nil {
@@ -231,22 +266,33 @@ func (c *Client) Cycle(ctx context.Context, id string) (*Cycle, error) {
 	return &cyc, nil
 }
 
-// ReviewThread is the issue's thread with its line comments located on
-// the issue's branch: the server's, else show --json's, whose line
-// comments say where they were written only.
+// ReviewThread is the issue's thread for answering a line comment: the
+// server's (GET /api/issues/{id}, with its version), else show --json's.
+// Neither locates a line comment on the branch's head: v1's server filled
+// Review's Branch, Outdated, HeadLine and Text, v2's doesn't yet, so they
+// stay empty and the comment says where it was written only
+// (Review.Located).
 func (c *Client) ReviewThread(ctx context.Context, id string) (Thread, error) {
 	if c.URL == "" {
 		return c.Thread(ctx, id)
 	}
 	var th Thread
-	err := c.get(ctx, "/api/issues/"+url.PathEscape(id)+"/thread", &th)
+	err := c.get(ctx, "/api/issues/"+url.PathEscape(id), &th)
 	return th, err
 }
 
-// WorkAgent is a linked worktree as the Work page lists it: the issue its
-// branch names, the step, and what it waits for.
+// Located tells whether the server located the comment on the issue's
+// branch: false, it says where it was written only.
+func (r Review) Located() bool {
+	return r.Branch != "" || r.Outdated || r.HeadLine > 0 || r.Text != ""
+}
+
+// WorkAgent is a branch the Work page shows an issue's step for: the
+// issue whose evidence branch it is, its step, and who it waits for.
+// Path is "": v2's Work page knows branches, not worktrees, and the
+// caller matches a worktree by its branch.
 type WorkAgent struct {
-	Path   string  `json:"path"`
+	Path   string  `json:"path,omitempty"`
 	Branch string  `json:"branch"`
 	Issue  *Thread `json:"issue,omitempty"`
 	Step   int     `json:"step,omitempty"`
@@ -254,86 +300,150 @@ type WorkAgent struct {
 	State  string  `json:"state"`
 }
 
-// Agents are the Work page's agents (GET /api/work?who=team): the cycle
-// must be on, and a server running.
+// workRow is a row of GET /api/cycle (next/domain/cycle/work.Row): the
+// fields read here.
+type workRow struct {
+	Issue  Thread `json:"issue"`
+	Step   int    `json:"step"`
+	Name   string `json:"name"`
+	Done   bool   `json:"done"`
+	Mine   bool   `json:"mine"`
+	Branch string `json:"branch"`
+	Waits  struct {
+		Login  string `json:"login"`
+		What   string `json:"what"`
+		Anyone bool   `json:"anyone"`
+	} `json:"waits"`
+}
+
+func (r workRow) state() string {
+	switch {
+	case r.Done:
+		return "Done"
+	case r.Mine:
+		return "Waits for you"
+	case r.Waits.Anyone:
+		return "Waits for anyone"
+	case r.Waits.Login != "":
+		return "Waits for @" + r.Waits.Login
+	}
+	return r.Waits.What
+}
+
+// Agents are the Work page's rows that name a branch (GET
+// /api/cycle?who=team, every open issue, unpaged): the cycle must be on,
+// and a server running.
 func (c *Client) Agents(ctx context.Context) ([]WorkAgent, error) {
 	var res struct {
-		Agents []WorkAgent `json:"agents"`
+		Needs   []workRow `json:"needs"`
+		Waiting []workRow `json:"waiting"`
 	}
-	err := c.get(ctx, "/api/work?who=team", &res)
-	return res.Agents, err
+	if err := c.get(ctx, "/api/cycle?who=team", &res); err != nil {
+		return nil, err
+	}
+	var out []WorkAgent
+	for _, r := range append(res.Needs, res.Waiting...) {
+		if r.Branch == "" {
+			continue
+		}
+		issue := r.Issue
+		out = append(out, WorkAgent{Branch: r.Branch, Issue: &issue, Step: r.Step, Name: r.Name, State: r.state()})
+	}
+	return out, nil
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {
-	return c.send(ctx, http.MethodGet, path, nil, out)
+	_, err := c.do(ctx, http.MethodGet, path, "", nil, out)
+	return err
 }
 
-// send is one API request: JSON in, JSON out, the server's error shape
-// ({"error", "code"}) read back.
-func (c *Client) send(ctx context.Context, method, path string, in, out any) error {
+// APIError is the API's error shape (api.md, One error shape), with the
+// request's status.
+type APIError struct {
+	Status  int    `json:"-"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Field   string `json:"field,omitempty"`
+}
+
+func (e *APIError) Error() string {
+	s := e.Code
+	if e.Message != "" {
+		s += ": " + e.Message
+	}
+	if e.Field != "" {
+		s += " (" + e.Field + ")"
+	}
+	return s
+}
+
+// do is one API request: JSON in, JSON out, ifMatch as If-Match when not
+// "", the server's error shape read back: 404 experimental is ErrOff,
+// another 404 ErrNotFound, 412 ErrStale, each wrapping the *APIError.
+func (c *Client) do(ctx context.Context, method, path, ifMatch string, in, out any) (*http.Response, error) {
 	if c.URL == "" {
-		return errors.New("no board server: run git board in the repository, or pass --board")
+		return nil, errors.New("no board server: run git board in the repository, or pass --board")
 	}
 	var body io.Reader
 	if in != nil {
 		data, err := json.Marshal(in)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		body = bytes.NewReader(data)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.URL+path, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if in != nil {
-		req.Header.Set("Content-Type", "application/json") // the server refuses a write without it
+		req.Header.Set("Content-Type", "application/json") // the server answers 415 without it
 	}
+	if ifMatch != "" {
+		req.Header.Set("If-Match", `"`+strings.Trim(ifMatch, `"`)+`"`)
+	}
+	req.Header.Set("X-Git-Board-Client", "git-board-agents")
 	hc := c.HTTP
 	if hc == nil {
 		hc = &http.Client{Timeout: 2 * time.Minute}
 	}
 	res, err := hc.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 32<<20))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if res.StatusCode/100 != 2 {
-		var e struct{ Error, Code string }
-		_ = json.Unmarshal(raw, &e)
+		e := &APIError{Status: res.StatusCode}
+		if json.Unmarshal(raw, e) != nil || e.Code == "" {
+			e.Code, e.Message = "http", fmt.Sprintf("%s: %s", res.Status, strings.TrimSpace(string(raw[:min(len(raw), 300)])))
+		}
 		switch {
 		case res.StatusCode == http.StatusNotFound && e.Code == "experimental":
-			return fmt.Errorf("%w: %s", ErrOff, e.Error)
+			return nil, fmt.Errorf("%w: %w", ErrOff, e)
 		case res.StatusCode == http.StatusNotFound:
-			return fmt.Errorf("%w: %s", ErrNotFound, cmpOr(e.Error, path))
+			return nil, fmt.Errorf("%w: %s %s: %w", ErrNotFound, method, path, e)
+		case res.StatusCode == http.StatusPreconditionFailed:
+			return nil, fmt.Errorf("%w: %w", ErrStale, e)
 		}
-		return fmt.Errorf("%s %s: %s: %s", method, path, res.Status, cmpOr(e.Error, strings.TrimSpace(string(raw[:min(len(raw), 300)]))))
+		return nil, fmt.Errorf("%s %s: %w", method, path, e)
 	}
-	if out == nil {
-		return nil
+	if out != nil {
+		if err := json.Unmarshal(raw, out); err != nil {
+			return nil, fmt.Errorf("%s %s: %w", method, path, err)
+		}
 	}
-	if err := json.Unmarshal(raw, out); err != nil {
-		return fmt.Errorf("%s %s: %w", method, path, err)
-	}
-	return nil
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
+	return res, nil
 }
 
 // Discover is the URL of the board's server for the repository at dir:
 // GIT_BOARD_URL when set, else the address a running git-board server
-// wrote in the main checkout's git directory (git-board/server.json, as
-// git board and show --web find it), when the server there answers. ""
-// when none runs.
+// wrote in the main checkout's git directory, or in this worktree's
+// (git-board/server.json, as git board finds it), when the server there
+// answers GET /api/board for that git directory. "" when none runs.
 func Discover(ctx context.Context, dir string) string {
 	if u := os.Getenv("GIT_BOARD_URL"); u != "" {
 		return strings.TrimRight(u, "/")
@@ -343,7 +453,8 @@ func Discover(ctx context.Context, dir string) string {
 		if err != nil {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(strings.TrimSpace(string(out)), "git-board", "server.json"))
+		gitDir := strings.TrimSpace(string(out))
+		data, err := os.ReadFile(filepath.Join(gitDir, "git-board", "server.json"))
 		if err != nil {
 			continue
 		}
@@ -353,26 +464,31 @@ func Discover(ctx context.Context, dir string) string {
 		if json.Unmarshal(data, &inst) != nil || inst.URL == "" {
 			continue
 		}
-		if answers(ctx, inst.URL) {
+		if answers(ctx, inst.URL, gitDir) {
 			return strings.TrimRight(inst.URL, "/")
 		}
 	}
 	return ""
 }
 
-// answers tells whether a git-board server answers at u: a file left by
-// a server that died names nothing.
-func answers(ctx context.Context, u string) bool {
+// answers tells whether a git-board server answers at u for the
+// repository at gitDir: a file left by a server that died names nothing,
+// nor one whose port another board took since.
+func answers(ctx context.Context, u, gitDir string) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(u, "/")+"/api/repository", nil)
-	if err != nil {
+	c := &Client{URL: strings.TrimRight(u, "/"), HTTP: http.DefaultClient}
+	var b struct {
+		GitDir string `json:"git_dir"`
+	}
+	if err := c.get(ctx, "/api/board", &b); err != nil {
 		return false
 	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false
-	}
-	res.Body.Close()
-	return res.StatusCode == http.StatusOK
+	return sameDir(b.GitDir, gitDir)
+}
+
+func sameDir(a, b string) bool {
+	a, errA := filepath.EvalSymlinks(a)
+	b, errB := filepath.EvalSymlinks(b)
+	return errA == nil && errB == nil && a == b
 }

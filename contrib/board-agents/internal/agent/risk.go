@@ -24,6 +24,9 @@ type Suggestion struct {
 	Why     string `json:"why"`
 	Model   string `json:"model"`
 	Comment bool   `json:"comment"` // written on the issue
+	// Note says what the comment lacks: the board records no cycle step
+	// for it (board.NoStep)
+	Note string `json:"note,omitempty"`
 }
 
 // SuggestRisk asks the AI for the issue's class, with its title and
@@ -41,8 +44,12 @@ func (s *Service) SuggestRisk(ctx context.Context, c *ai.Client, ref string, com
 	}
 	// the comment goes in step 2's discussion: refused past it, when the
 	// board says where the issue is
-	if cyc, err := s.Board.Cycle(ctx, th.ID); comment && err == nil && (cyc.Step != 2 || cyc.Done) {
-		return Suggestion{}, refuse("not-at-risk", "not at Risk: the issue is at step "+fmt.Sprint(cyc.Step))
+	version := ""
+	if cyc, err := s.Board.Cycle(ctx, th.ID); comment && err == nil {
+		if cyc.Step != 2 || cyc.Done {
+			return Suggestion{}, refuse("not-at-risk", "not at Risk: the issue is at step "+fmt.Sprint(cyc.Step))
+		}
+		version = cyc.Version // written only if the issue is still where the check saw it
 	}
 	answer, err := c.Chat(ctx, riskPrompt, "# "+th.Title+"\n\n"+th.Description())
 	if err != nil {
@@ -58,10 +65,11 @@ func (s *Service) SuggestRisk(ctx context.Context, c *ai.Client, ref string, com
 		// metadata, which no API route takes from a client: the model goes
 		// in the text, and the web page doesn't show it as a suggestion
 		body := strings.TrimSpace(fmt.Sprintf("Suggested: **%s** (%s)\n\n%s", class, c.Model, why))
-		if err := s.Board.Comment(ctx, th.ID, body, "risk"); err != nil {
+		w, err := s.Board.Comment(ctx, th.ID, body, "risk", version)
+		if err != nil {
 			return out, err
 		}
-		out.Comment = true
+		out.Comment, out.Note = true, w.Note
 	}
 	return out, nil
 }
