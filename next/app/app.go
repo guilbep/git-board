@@ -19,7 +19,10 @@ import (
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/domain/people"
 	"github.com/guilbep/git-board/next/kernel"
+	"github.com/guilbep/git-board/next/store"
 	"github.com/guilbep/git-board/next/store/git"
+	"github.com/guilbep/git-board/next/store/md"
+	"github.com/guilbep/git-board/next/store/pg"
 	"github.com/guilbep/git-board/next/view"
 )
 
@@ -47,28 +50,17 @@ type Options struct {
 	Notice issues.Notice
 }
 
-// Open opens the board of the repository holding dir: the git
-// datastore, its view in <common dir>/board/v2/view.db (v1's index.db is
-// v1's), .git-board.toml, and with o.Who who writes.
+// Open opens the board of the repository holding dir: the datastore the
+// clone names (GIT_BOARD_DATASTORE, else its board.datastore: git, a
+// markdown:<dir> folder, a postgres:// URL), its view (in
+// <common dir>/board/v2/view.db, or in the board's PostgreSQL database;
+// v1's index is v1's), .git-board.toml, and with o.Who who writes.
 func Open(ctx context.Context, dir string, o Options) (*Board, error) {
-	type set struct {
-		me, avatars string
-		err         error
-	}
 	settled := make(chan set, 1)
-	if o.Who { // git config runs while the rest opens
-		go func() {
-			var s set
-			s.me, s.avatars, s.err = settings(ctx, dir)
-			settled <- s
-		}()
-	}
-	ds, err := git.Open(ctx, dir)
+	go func() { settled <- settings(ctx, dir) }() // git config runs while the rest opens
+	g, err := git.Open(ctx, dir)
 	if err != nil {
 		return nil, err
-	}
-	if o.Warm {
-		go ds.Warm(ctx)
 	}
 	f, err := conf.Load(configPath(dir))
 	if err != nil {
@@ -83,8 +75,25 @@ func Open(ctx context.Context, dir string, o Options) (*Board, error) {
 	if len(probs) > 0 {
 		return nil, fmt.Errorf("%s: %w", conf.FileName, probs[0])
 	}
-	v, err := view.Open(ctx, filepath.Join(ds.Folder(), "v2", "view.db"))
+	set := <-settled
+	if set.err != nil {
+		return nil, set.err
+	}
+	ds, err := OpenDatastore(ctx, g, dir, set.datastore)
 	if err != nil {
+		return nil, err
+	}
+	if o.Warm && ds == store.Datastore(g) {
+		go g.Warm(ctx)
+	}
+	var v kernel.View
+	if c := ds.Caps(); c.Shared && c.SQL != nil {
+		v, err = view.OpenPG(ctx, c.SQL.DSN(), filepath.Join(ds.Folder(), "v2", "pg"))
+	} else {
+		v, err = view.Open(ctx, filepath.Join(ds.Folder(), "v2", "view.db"))
+	}
+	if err != nil {
+		ds.Close()
 		return nil, fmt.Errorf("opening the view: %w", err)
 	}
 	kb, err := kernel.Open(ctx, ds, v, issues.Kind, people.Kind)
@@ -97,15 +106,45 @@ func Open(ctx context.Context, dir string, o Options) (*Board, error) {
 		Issues: &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge, Notice: o.Notice, Folder: ds.Folder(), Views: views},
 		People: &people.Service{Board: kb, Avatars: people.Forge, SetMe: c.setMe}}
 	if o.Who {
-		set := <-settled
-		if set.err != nil {
-			kb.Close()
-			return nil, set.err
-		}
 		b.Issues.Me, b.Issues.Avatars = kernel.ID(set.me), people.ParseAvatars(set.avatars)
 		b.People.Me, b.People.Avatars = b.Issues.Me, b.Issues.Avatars
 	}
 	return b, nil
+}
+
+// DatastoreEnv names the board's datastore, over board.datastore.
+const DatastoreEnv = "GIT_BOARD_DATASTORE"
+
+// DatastoreKey is the clone's git config key naming its datastore.
+const DatastoreKey = "board.datastore"
+
+// OpenDatastore opens the datastore a board.datastore value names, for
+// the repository g at dir: g itself for "" and git. Its own folder stays
+// g's (<common dir>/board): the view, the inbox, the sync lock.
+func OpenDatastore(ctx context.Context, g *git.Store, dir, name string) (store.Datastore, error) {
+	switch {
+	case name == "" || name == "git":
+		return g, nil
+	case strings.HasPrefix(name, md.Prefix):
+		folder := strings.TrimSpace(strings.TrimPrefix(name, md.Prefix))
+		if !filepath.IsAbs(folder) {
+			top, err := gitRun(ctx, dir, "rev-parse", "--show-toplevel")
+			if err != nil {
+				return nil, err
+			}
+			folder = filepath.Join(strings.TrimSpace(top), folder)
+		}
+		return md.Open(folder, g.Folder())
+	case pg.IsURL(name):
+		p, err := pg.Open(ctx, name, g.Folder())
+		if err != nil {
+			return nil, fmt.Errorf("opening the board's datastore (%s): %s", DatastoreKey, pg.Redact(err.Error()))
+		}
+		return p, nil
+	case name == "forge":
+		return nil, &Error{Class: Missing, Code: "missing", Err: fmt.Errorf("%s forge: a board kept on the forges alone comes with git-board-next's sync", DatastoreKey)}
+	}
+	return nil, fmt.Errorf("%s %q: git, forge, markdown:<dir>, or a postgres:// URL", DatastoreKey, pg.Redact(name))
 }
 
 // Close lets the board go.
@@ -130,27 +169,42 @@ func configPath(dir string) string {
 	}
 }
 
-// settings are the clone's board.me, from its own config only
-// (data-model.md, Me), and board.avatars, from any level: one git.
-func settings(ctx context.Context, dir string) (me, avatars string, err error) {
-	out, err := gitRun(ctx, dir, "config", "--show-scope", "--get-regexp", `^board\.(me|avatars)$`)
+// set is the clone's settings.
+type set struct {
+	me, avatars, datastore string
+	err                    error
+}
+
+// settings are the clone's board.me and board.datastore, from its own
+// config only (data-model.md, Me; v1's board.datastore), and
+// board.avatars, from any level: one git. GIT_BOARD_DATASTORE wins over
+// board.datastore.
+func settings(ctx context.Context, dir string) (s set) {
+	defer func() {
+		if v := os.Getenv(DatastoreEnv); v != "" {
+			s.datastore = v
+		}
+	}()
+	out, err := gitRun(ctx, dir, "config", "--show-scope", "--get-regexp", `^board\.(me|avatars|datastore)$`)
 	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 1 {
-		return "", "", nil // neither is set
+		return s // none is set
 	}
 	if err != nil {
-		return "", "", err
+		return set{err: err}
 	}
 	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		scope, kv, _ := strings.Cut(line, "\t")
 		k, v, _ := strings.Cut(kv, " ")
 		switch {
 		case k == "board.me" && scope == "local":
-			me = v
+			s.me = v
+		case k == "board.datastore" && scope == "local":
+			s.datastore = v
 		case k == "board.avatars":
-			avatars = v // the last level wins, as git's --get
+			s.avatars = v // the last level wins, as git's --get
 		}
 	}
-	return me, avatars, nil
+	return s
 }
 
 // clone is this clone's own git config: who writes.

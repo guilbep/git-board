@@ -33,7 +33,7 @@ var mayImport = map[string][]string{
 	"next/conf":               {},
 	"next/domain/people":      {"next/kernel", "next/kernel/pack"},
 	"next/domain/issues":      {"next/kernel", "next/kernel/pack", "next/kernel/search", "next/conf", "next/domain/people"},
-	"next/app":                {"next/kernel", "next/conf", "next/domain/issues", "next/domain/people", "next/store/git", "next/view"},
+	"next/app":                {"next/kernel", "next/conf", "next/domain/issues", "next/domain/people", "next/store", "next/store/git", "next/store/md", "next/store/pg", "next/view"},
 	"next/surface/cli":        {"next/app", "next/kernel", "next/domain/issues", "next/domain/people"},
 	"next/cmd/git-board-next": {"next/surface/cli"},
 	"next/golden":             {},

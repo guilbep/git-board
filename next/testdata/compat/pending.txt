@@ -9,9 +9,6 @@
 # BIN=<git-board-next> fails on an entry no difference needs any more
 # ("remove it from pending"), so the list only shrinks.
 
-# The Markdown datastore comes with M3: every case of its board.
-markdown * * M3 the Markdown folder datastore (docs/spec/datastores.md)
-
 basic cmd01-ls-is-closed-json stdout M4 forges from sync records (forges, github_url, #n, pending, shown_title)
 basic cmd02-ls-is-open-closed-json stdout M4 forges from sync records (forges, github_url, #n, pending, shown_title)
 basic cmd06-ls-assignee-chloe-json stdout M4 forges from sync records (forges, github_url, #n, pending, shown_title)
