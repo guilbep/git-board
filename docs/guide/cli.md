@@ -4,7 +4,8 @@ Everything you do to an issue on a forge, you can do with `git board`,
 offline: create one, read it with its comments, comment, edit, set its
 fields, close and reopen it. Every change is written to the board at once
 and reaches the forges with the next `git board sync`. No command but a
-sync touches the network.
+sync touches the network, unless it says so (`init`, `lint
+--create-labels`, `forge status --check`).
 
 `git board X` and `git-board X` are the same command: the binary is a git
 subcommand.
@@ -298,6 +299,32 @@ by field. Deleted issues don't count. `--json` prints `[{"label",
 `labels rename <old> <new>` renames a label on every issue that has it,
 one change each. A field's value is a label too. It doesn't check the new
 name against `.git-board.toml`: `git board lint` does.
+
+## `init`: a new board's file
+
+```bash
+git board init                    # the global file's template, else the default
+git board init --template enac    # a built-in template, a file or an http(s) URL
+```
+
+`init` writes `.git-board.toml` at the repository's root, and never
+overwrites one. When origin is on GitHub, the file starts as its labels
+and its first Project's fields (names, colors, descriptions, each
+field's values in order), written over the template, which fills what
+the forge lacks: [A new board](configuration.md#a-new-board-its-forge-then-a-template).
+On GitLab, its labels: GitLab has no Projects. It says what it read:
+
+```
+from EPFL-ENAC/test: 12 labels, Project EPFL-ENAC/53, ENAC-IT4R Template
+wrote /home/me/src/test/.git-board.toml: edit it in Settings › Project file (git board), or by hand
+```
+
+and a line for each thing it left to the template: a Project field kept
+in labels, a label whose field lives in the Project, a second Project.
+The forge is read with the token a sync uses: an environment variable,
+else git's credential helper ([ADR
+0010](../adr/0010-tokens-from-env-or-git-credential-helper.md)). No
+token, or nothing read: the template, and a line saying what wasn't read.
 
 ## `config`: settings
 

@@ -1,0 +1,34 @@
+{"data": {"repository": {"projectsV2": {"nodes": [{"number": 53, "title": "ENAC-IT4R Template", "owner": {"login": "EPFL-ENAC"},
+  "fields": {"nodes": [
+    {"name": "Title", "dataType": "TITLE"},
+    {"name": "Assignees", "dataType": "ASSIGNEES"},
+    {"name": "Status", "dataType": "SINGLE_SELECT", "options": [
+      {"name": "Backlog", "color": "GRAY", "description": "Known, not yet specified"},
+      {"name": "Ready", "color": "BLUE", "description": "Specified and prioritized; can be started"},
+      {"name": "In progress", "color": "YELLOW", "description": "Branch created"},
+      {"name": "In review", "color": "ORANGE", "description": "Pull request open"},
+      {"name": "Ready for validation", "color": "PURPLE", "description": "Merged into dev, waiting for validation"},
+      {"name": "Validated", "color": "GREEN", "description": "Signed off; released with the next tag"}]},
+    {"name": "Labels", "dataType": "LABELS"},
+    {"name": "Linked pull requests", "dataType": "LINKED_PULL_REQUESTS"},
+    {"name": "Milestone", "dataType": "MILESTONE"},
+    {"name": "Repository", "dataType": "REPOSITORY"},
+    {"name": "Reviewers", "dataType": "REVIEWERS"},
+    {"name": "Parent issue", "dataType": "PARENT_ISSUE"},
+    {"name": "Sub-issues progress", "dataType": "SUB_ISSUES_PROGRESS"},
+    {"name": "Priority", "dataType": "SINGLE_SELECT", "options": [
+      {"name": "P0", "color": "RED", "description": "Now: production broken, data at risk, or the team blocked"},
+      {"name": "P1", "color": "ORANGE", "description": "This cycle: before the next staging review"},
+      {"name": "P2", "color": "YELLOW", "description": "Soon: the default for accepted work"},
+      {"name": "P3", "color": "GRAY", "description": "Someday: when convenient"}]},
+    {"name": "MoSCoW", "dataType": "SINGLE_SELECT", "options": [
+      {"name": "Must", "color": "PURPLE", "description": "The milestone fails without it"},
+      {"name": "Should", "color": "BLUE", "description": "Important; the milestone survives without it"},
+      {"name": "Could", "color": "GREEN", "description": "If time allows; the first to go"},
+      {"name": "Won't", "color": "GRAY", "description": "Agreed out of this milestone, on record"}]},
+    {"name": "Sprint", "dataType": "ITERATION", "configuration": {"duration": 14, "startDay": 2}},
+    {"name": "Est. hours", "dataType": "NUMBER"},
+    {"name": "Created", "dataType": "CREATED_AT"},
+    {"name": "Updated", "dataType": "UPDATED_AT"},
+    {"name": "Closed", "dataType": "CLOSED_AT"}
+  ]}}]}}}}

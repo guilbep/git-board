@@ -993,8 +993,9 @@ v1's; a golden board, `releases`, holds the release reads, and basic the
 sprint, branch and verify cases. Left: agents, insights, and
 the plan's HTML in the cycle's evidence (the caller renders).
 
-**v1's CLI, closed for v0.12 (2026-11-05).** `init` (its templates;
-not yet the start from origin's GitHub labels and Project), `lint`
+**v1's CLI, closed for v0.12 (2026-11-05).** `init` (its templates,
+and the start from origin's labels and first GitHub Project, GitLab's
+labels too, held to v1's files in `app/testdata/init`), `lint`
 (its cycle `read:` lines too, and `--create-labels`, through the forge
 adapters' `forge.Labeler`, GitLab's as GitHub's), `export --md` and `import --md` (the
 Markdown datastore's files, `mdfiles`), `reset --hard`, `push --prune`
