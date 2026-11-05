@@ -379,7 +379,12 @@ Uploads are `[uploads]`'s, a tool's (`next/tools/uploads`, v1's, ADR
 forges' pictures of issue text (GitHub's attachments, GitLab's uploads),
 which a private repository's page can't load without the forge's token:
 a thread's and a preview's HTML point them at this route, which fetches
-them with the token, from a forge's picture addresses alone.
+them with the token, from a forge's picture addresses alone: GitHub's
+(`github.com`'s attachments, `*.githubusercontent.com`, and the one S3
+bucket its attachments redirect to, by its exact name), and GitLab's
+uploads on the board's GitLab hosts. They are kept in the board's folder,
+256 MB at most: a picture unused for 30 days goes, then the least
+recently used.
 
 ### Domains that come with M6
 
