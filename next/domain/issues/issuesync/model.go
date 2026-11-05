@@ -171,7 +171,16 @@ func CreateIssue(ctx context.Context, b *kernel.Board, ops ...kernel.Op) (*Issue
 }
 
 func DoIssue(ctx context.Context, b *kernel.Board, id string, ops ...kernel.Op) (*Issue, error) {
-	e, err := issues.Kind.Do(ctx, b, kernel.ID(id), func(kernel.Entity[issues.State]) ([]kernel.Op, error) { return ops, nil })
+	return DecideIssue(ctx, b, id, func(*Issue) ([]kernel.Op, error) { return ops, nil })
+}
+
+// DecideIssue writes the operations decide gives for the issue as it is
+// at the head they are written on, asked again when it moved meanwhile
+// (kernel's Do), and answers the issue after them.
+func DecideIssue(ctx context.Context, b *kernel.Board, id string, decide func(cur *Issue) ([]kernel.Op, error)) (*Issue, error) {
+	e, err := issues.Kind.Do(ctx, b, kernel.ID(id), func(cur kernel.Entity[issues.State]) ([]kernel.Op, error) {
+		return decide(issueOf(&cur.State))
+	})
 	if err != nil {
 		return nil, err
 	}

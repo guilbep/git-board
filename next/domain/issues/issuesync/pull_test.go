@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	gosync "sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -692,5 +693,66 @@ func TestAuthorsReadEachPersonOnce(t *testing.T) {
 	}
 	if got := c.reads["person"]; got != 3 {
 		t.Errorf("read persons %d times, want 3", got)
+	}
+}
+
+// editedMeanwhile is a git datastore that runs a hook once, right after
+// its load of an issue past the skip first: a local edit landing while a
+// pull reconciles it.
+type editedMeanwhile struct {
+	*git.Store
+	skip atomic.Int32
+	hook atomic.Pointer[func()]
+}
+
+func (e *editedMeanwhile) Load(ctx context.Context, refs []store.Ref, each func(store.Ref, [][]byte, error) error) error {
+	err := e.Store.Load(ctx, refs, each)
+	if len(refs) == 1 && refs[0].Kind == "issue" && e.hook.Load() != nil && e.skip.Add(-1) < 0 {
+		if f := e.hook.Swap(nil); f != nil {
+			(*f)()
+		}
+	}
+	return err
+}
+
+// A local edit that lands between a pull's read of an issue and its write
+// is kept: the pull decides again on the head it writes on (sync.md: a
+// change made in git-board is kept), here a later title than the forge's.
+func TestPullDecidesOnTheHead(t *testing.T) {
+	t.Parallel()
+	g, err := git.Open(t.Context(), newRepo(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds := &editedMeanwhile{Store: g}
+	v, err := view.Open(t.Context(), filepath.Join(t.TempDir(), "view.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := kernel.Open(t.Context(), ds, v, issues.Kind, people.Kind)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	f := fake.New(key)
+	f.Add(sample())
+	pull(t, s, f)
+	id := only(t, s).ID
+	f.Edit("1", func(i *forge.Issue) { // before the local edit: ours is the later
+		i.Title, i.Changed = "theirs", map[string]int64{"title": time.Now().Unix() - 60}
+	})
+	hook := func() {
+		if _, err := DoIssue(t.Context(), s, id, SetTitle("me", "ours")); err != nil {
+			t.Error(err)
+		}
+	}
+	ds.skip.Store(1) // the run's first read of every issue; then reconcile's
+	ds.hook.Store(&hook)
+	pull(t, s, f)
+	if ds.hook.Load() != nil {
+		t.Fatal("the hook didn't run")
+	}
+	if is := only(t, s); is.Title != "ours" {
+		t.Fatalf("title %q after the pull, want the local edit made meanwhile, %q", is.Title, "ours")
 	}
 }

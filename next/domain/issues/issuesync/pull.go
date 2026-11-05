@@ -219,7 +219,14 @@ func (r *run) reconcile(p *project, id string, fi forge.Issue, pull, push bool) 
 		return false, false, 0, err
 	}
 	if len(pl.ops) > 0 {
-		if is, err = DoIssue(r.ctx, r.s, id, pl.ops...); err != nil {
+		// planned again on the head the pull is written on: a local change
+		// that landed since the read above is kept (sync.md, The four cases)
+		if is, err = DecideIssue(r.ctx, r.s, id, func(cur *Issue) ([]kernel.Op, error) {
+			if pl, err = r.plan(p, cur, fi, who, pull, push); err != nil {
+				return nil, err
+			}
+			return pl.ops, nil
+		}); err != nil {
 			return false, false, 0, err
 		}
 		r.issues[id] = is
