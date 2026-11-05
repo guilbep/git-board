@@ -59,6 +59,20 @@ func Open(ctx context.Context, dir string) (*Store, error) {
 	return &Store{gitDir: lines[0], commonDir: lines[1], warmed: make(chan warmed, 1), idle: make(chan *walker, idleWalkers)}, nil
 }
 
+// OpenGitDir opens the board of the git directory gitDir itself (a bare
+// repository's), never one above it.
+func OpenGitDir(gitDir string) (*Store, error) {
+	abs, err := filepath.Abs(gitDir)
+	if err != nil {
+		return nil, err
+	}
+	s, ok := gitDirAt(abs)
+	if !ok {
+		return nil, fmt.Errorf("%s: not a git directory", gitDir)
+	}
+	return s, nil
+}
+
 // find is the repository holding dir, found as git finds it in the
 // common case, without starting git: a .git directory, or a .git file
 // naming a worktree's, up from dir. Anything else (GIT_DIR and its

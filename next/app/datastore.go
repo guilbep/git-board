@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/guilbep/git-board/next/store"
+	"github.com/guilbep/git-board/next/store/forgecopy"
 	"github.com/guilbep/git-board/next/store/git"
 	"github.com/guilbep/git-board/next/store/md"
 	"github.com/guilbep/git-board/next/store/pg"
@@ -24,6 +25,8 @@ func Where(ds store.Datastore) string {
 		return "PostgreSQL " + d.Where()
 	case *md.Store:
 		return "Markdown files " + d.Dir()
+	case *forgecopy.Store:
+		return "the forges alone"
 	case *git.Store:
 		return "git"
 	}

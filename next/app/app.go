@@ -20,6 +20,7 @@ import (
 	"github.com/guilbep/git-board/next/domain/people"
 	"github.com/guilbep/git-board/next/kernel"
 	"github.com/guilbep/git-board/next/store"
+	"github.com/guilbep/git-board/next/store/forgecopy"
 	"github.com/guilbep/git-board/next/store/git"
 	"github.com/guilbep/git-board/next/store/md"
 	"github.com/guilbep/git-board/next/store/pg"
@@ -141,8 +142,8 @@ func OpenDatastore(ctx context.Context, g *git.Store, dir, name string) (store.D
 			return nil, fmt.Errorf("opening the board's datastore (%s): %s", DatastoreKey, pg.Redact(err.Error()))
 		}
 		return p, nil
-	case name == "forge":
-		return nil, &Error{Class: Missing, Code: "missing", Err: fmt.Errorf("%s forge: a board kept on the forges alone comes with git-board-next's sync", DatastoreKey)}
+	case name == forgecopy.Name: // filled by the sync, M4's
+		return forgecopy.Open(ctx, g.Folder())
 	}
 	return nil, fmt.Errorf("%s %q: git, forge, markdown:<dir>, or a postgres:// URL", DatastoreKey, pg.Redact(name))
 }
