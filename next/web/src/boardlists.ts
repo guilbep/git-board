@@ -8,6 +8,7 @@
 import { ref, shallowRef, type Ref } from 'vue';
 import { getLabels, listIssues, type Issue, type LabelCount } from '@/api';
 import type { Bucket } from '@/bucket';
+import { configModel } from '@/configmodel';
 import { facetsOf, type Counted, type Facet } from '@/facets';
 import type { Fields } from '@/fields';
 import { NONE, STATE, laneFilter, owns, rest, terms } from '@/filterterms';
@@ -18,8 +19,10 @@ export interface ListParams {
   sort: string; // the API's: created, updated, title or a field, asc or desc
 }
 
-// a list's first page: enough for a screen, and a board's lanes
+// a page: a table's 100 rows; a lane's 40 cards, a screen and more, times
+// the lanes
 export const PAGE = 100;
+export const LANE_PAGE = 40;
 
 // apiSort is a sort as the page holds it ({key: prio, desc}) for the API:
 // "prio desc"; '' for an order the API doesn't have (id, state, links).
@@ -39,16 +42,11 @@ export function useBoardLists(fields: Ref<Fields>) {
   let abort: AbortController | null = null;
 
   const page = (filter: string, signal: AbortSignal, cursor?: string) =>
-    listIssues({ filter, sort: params.sort || undefined, limit: PAGE, cursor }, signal);
+    listIssues({ filter, sort: params.sort || undefined, limit: params.group ? LANE_PAGE : PAGE, cursor }, signal);
 
-  // the values of the group field the board shows: those in use under the
-  // filter, then the field's options
-  function groupValues(labels: LabelCount[]): string[] {
-    const g = params.group;
-    if (g === STATE) return ['open', 'closed'];
-    const used = labels.filter((l) => l.field === g).map((l) => l.value);
-    return [...new Set([...(fields.value[g]?.options ?? []), ...used])];
-  }
+  // the group field's options, known before any count: the fields', else
+  // the file's (the page's fields come beside the first list)
+  const optionsOf = (g: string): string[] => (g === STATE ? ['open', 'closed'] : (fields.value[g]?.options ?? configModel.value?.fields[g]?.options ?? []));
 
   async function load(p: ListParams): Promise<void> {
     params = p;
@@ -66,20 +64,16 @@ export function useBoardLists(fields: Ref<Fields>) {
         next = [{ group: '', issues: first.items, total: first.total, next: first.next }];
         total.value = first.total;
       } else {
+        // the options' lanes and the counts at once; then a lane for each
+        // value in use that no option names
+        const lane = (v: string) => page(laneFilter(p.filter, p.group, v), signal).then((pg): Bucket => ({ group: v, issues: pg.items, total: pg.total, next: pg.next }));
+        const options = [...optionsOf(p.group), NONE];
         labels = getLabels(p.filter, signal);
-        const values = [...groupValues(await labels), NONE];
-        const counted = new Map((await labels).filter((l) => l.field === p.group).map((l) => [l.value, l.open + l.closed]));
-        const [all, ...pages] = await Promise.all([
-          listIssues({ filter: p.filter, limit: 1 }, signal),
-          ...values.map((v) =>
-            v === NONE || p.group === STATE || counted.get(v) ? page(laneFilter(p.filter, p.group, v), signal) : Promise.resolve(null),
-          ),
-        ]);
-        next = values.map((v, i) => {
-          const pg = pages[i];
-          return pg ? { group: v, issues: pg.items, total: pg.total, next: pg.next } : { group: v, issues: [], total: 0 };
-        });
-        total.value = all!.total;
+        const all = listIssues({ filter: p.filter, limit: 1 }, signal);
+        const known = Promise.all(options.map(lane));
+        const extra = (await labels).filter((l) => l.field === p.group && !options.includes(l.value)).map((l) => l.value);
+        next = [...(await known), ...(await Promise.all([...new Set(extra)].map(lane)))];
+        total.value = (await all).total;
       }
       if (signal.aborted) return;
       buckets.value = next;
@@ -130,7 +124,7 @@ export function useBoardLists(fields: Ref<Fields>) {
     b.loading = true;
     const filter = params.group ? laneFilter(params.filter, params.group, b.group) : params.filter;
     try {
-      const pg = await listIssues({ filter, sort: params.sort || undefined, limit: PAGE, cursor: b.next });
+      const pg = await listIssues({ filter, sort: params.sort || undefined, limit: params.group ? LANE_PAGE : PAGE, cursor: b.next });
       const seen = new Set(b.issues.map((i) => i.id));
       const fresh: Bucket = { ...b, issues: [...b.issues, ...pg.items.filter((i) => !seen.has(i.id))], total: pg.total, next: pg.next, loading: false };
       buckets.value = (buckets.value ?? []).map((x) => (x === b ? fresh : x));

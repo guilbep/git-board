@@ -40,7 +40,9 @@ of JSON before the first row.
 - A list is pages of 100 (`boardlists.ts`). Ungrouped, one list; grouped,
   one list per value of the field: the lane's term added to the filter
   (`status:ready`, `no:status` for the issues without one), each loading
-  its first page and the next as its end comes near. The server sorts.
+  its first page (40 cards a lane) and the next as its end comes near.
+  The server sorts. A board asks its options' lanes and the counts at
+  once, then a lane for each value in use no option names.
 - A table past 300 loaded rows renders those on screen and a screen
   around them (`windowrows.ts`); spacers hold the rest's height.
 - The filters panel counts with `GET /api/labels`: each facet against the
@@ -96,11 +98,11 @@ settings form (a table of the file) and the experimental switch stay.
 ## Tests
 
 - `npm test` (`make next-web-check`): the pure modules, Node's runner.
-- `make next-web-e2e`: 76 browser tests on `git-board-next serve` over a
+- `make next-web-e2e`: 78 browser tests on `git-board-next serve` over a
   git board and a Markdown board (`next/web/e2e/serve.mjs`), ported from
   v1's; `stale.spec.ts` (Reload, Overwrite, a form's), `live.spec.ts`
   (the change events), `markdown.spec.ts` (an issue's life on the
-  Markdown board, in its file) and `views.spec.ts` (a view saved from the
-  board) are new. Dropped with their features: the clone's
+  Markdown board, in its file), `views.spec.ts` (a view saved from the
+  board) and `lanes.spec.ts` (a lane's and a table's pages) are new. Dropped with their features: the clone's
   first pull, the ENAC template's labels, Labels' lint, a field's GitHub
   Project column, Start over.
