@@ -1,0 +1,4 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-lint	0	lint
+02-lint-strict	1	lint --strict
+03-lint-apply	1	lint --apply

@@ -1,4 +1,4 @@
-<!-- A release (internal/server/releases.go releaseDetail): its tag, what it
+<!-- A release (GET /api/releases/{tag}): its tag, what it
      is and where it runs, its notes, the issues it carries, its version's
      candidates, the conversation on its record; beside them where it runs
      per target, its images and its record. Yank… and Promote (a candidate
@@ -215,7 +215,8 @@ import GbIcon from '@/components/GbIcon.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';
 import ReleaseJob from '@/components/ReleaseJob.vue';
-import { commentRelease, getRelease, getReleases, getViews, promoteRelease, renderMarkdown, setReleaseNotes, yankRelease, type EnvState, type ReleaseDetail, type ReleaseRecord, type ReleaseRow, type Releases } from '@/api/board';
+import { commentRelease, getRelease, getReleases, promoteRelease, renderMarkdown, setReleaseNotes, yankRelease, type EnvState, type ReleaseDetail, type ReleaseRecord, type ReleaseRow, type Releases } from '@/api';
+import { configModel, loadConfigModel } from '@/configmodel';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
 import { initials } from '@/me';
@@ -225,7 +226,7 @@ import { on, when } from '@/when';
 const route = useRoute();
 const tag = computed(() => String(route.params.tag));
 
-const viewNames = ref<string[]>([]);
+const viewNames = computed(() => configModel.value?.view_order ?? []);
 const detail = ref<ReleaseDetail | null>(null);
 const data = ref<Releases | null>(null); // the environments and the job
 const detailError = ref(''); // the release's load failed
@@ -443,14 +444,12 @@ watch(tag, () => {
 // release's history is the slow read); config: [release] changed; issues,
 // while a job runs: live.ts says it after a reconnect
 const reloadSoon = debounced(() => (running.value ? void loadReleases() : load()));
-const offLive = onLive((e) => (e.kind === 'releases' || e.kind === 'config' || (e.kind === 'issues' && running.value)) && reloadSoon());
+// own: a job this page started tells its steps by this page
+const offLive = onLive((e) => (e.kind === 'release' || e.kind === 'config' || e.kind === 'resync') && reloadSoon(), { own: true });
 onBeforeUnmount(offLive);
 
 onMounted(() => {
-  void getViews().then(
-    (v) => (viewNames.value = Object.keys(v)),
-    () => {},
-  );
+  void loadConfigModel();
   load();
 });
 </script>

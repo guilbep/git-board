@@ -3,7 +3,7 @@
 // can't do (datastore.ts needsGit) and Settings' menu line. Settings ›
 // Datastore writes its answers here.
 import { ref } from 'vue';
-import { getDatastore, type Datastore } from '@/api/board';
+import { getDatastore, type Datastore } from '@/api';
 
 export const datastore = ref<Datastore | null>(null);
 

@@ -1,0 +1,1 @@
+{"clock":1,"nonce":"0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c","ops":[{"kind":"create","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740834000,"data":{"email":"chloe@exämple.org","name":"Chloé Dubois-Ångström"}},{"kind":"add-account","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740834000,"data":{"id":"1004","login":"chloe","server":"github.com"}}]}

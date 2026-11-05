@@ -1,16 +1,16 @@
-<!-- The Work page: what needs a person, from every open issue's step
-     (internal/server/work.go). Needs you is the rows whose gate waits for
-     the viewer (or, in Team, for anyone), or that carry an agent's
-     question; Waiting on others is the viewer's other issues (Team: every
-     other open one). Agents are the linked worktrees; the aside is what
-     waits to go to the forges and the sprint's corrections. -->
+<!-- The Work page (experimental, the cycle's; GET /api/cycle): what needs
+     a person, from every open issue's step. Needs you is the rows whose
+     gate waits for the viewer (or, in Team, for anyone), or that carry a
+     question to them; Waiting on others is the viewer's other issues
+     (Team: every other open one). v1's agents went to their own binary
+     (ADR 0021). -->
 <template>
   <AppHeader :views="viewNames" />
   <main class="gb-page gb-work">
     <div class="gb-work-main">
       <div class="epfl-eyebrow">Work</div>
       <h1 class="h3">What needs a person</h1>
-      <p class="gb-lead">Human time is the bottleneck. Agents wait here, not in a terminal.</p>
+      <p class="gb-lead">Human time is the bottleneck. What waits for a person shows here.</p>
 
       <div class="gb-seg gb-work-who" role="group" aria-label="Whose work">
         <button type="button" :aria-pressed="who === 'me'" @click="setWho('me')">Mine</button>
@@ -22,14 +22,10 @@
         <router-link to="/settings/experimental">Turn it on in Settings › Experimental</router-link>
       </p>
       <p v-else-if="error?.code === 'no-identity'" class="gb-work-need">
-        The page shows what waits for the identity you write as, and none is chosen here yet.
+        The page shows what waits for the person you write as, and none is chosen here yet, or they have neither a name nor a login.
         <router-link to="/settings/you">Choose who you write as</router-link>
       </p>
-      <p v-else-if="error?.code === 'no-login'" class="gb-work-need">
-        Tell git-board your forge login: without it, no role and no field can name you. Start the server with <code>--me your-login</code>, or set <code>GIT_BOARD_ME</code>.
-      </p>
       <p v-else-if="error" class="gb-error">{{ error.message }}</p>
-      <p v-if="agentNote && !noteFor" class="gb-hint" role="status">{{ agentNote }}</p>
 
       <template v-if="data">
         <section class="gb-work-group" aria-labelledby="needs-h">
@@ -45,8 +41,6 @@
                 <tr v-for="r in shownRows(g)" :key="r.issue.id">
                   <td>
                     <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
-                    <button v-if="canStart(r)" type="button" class="gb-linkbtn gb-work-start" :disabled="busy" @click="start(r.issue.id)">{{ starting === r.issue.id ? 'Starting…' : 'Start an agent' }}</button>
-                    <span v-if="noteFor === r.issue.id && agentNote" class="gb-work-note" role="status">{{ agentNote }}</span>
                   </td>
                   <td class="gb-work-since">{{ ago(r.since) }}</td>
                   <td class="gb-work-action">
@@ -69,24 +63,6 @@
           </div>
         </section>
 
-        <section v-if="data.agents.length" class="gb-work-group" aria-labelledby="agents-h">
-          <h2 id="agents-h" class="h5">Agents <span class="gb-work-n">{{ data.agents.length }} {{ data.agents.length === 1 ? 'worktree' : 'worktrees' }}</span><span v-if="data.reason" class="gb-work-n">· {{ data.reason }}</span></h2>
-          <ul class="gb-work-agents">
-            <li v-for="a in data.agents" :key="a.path">
-              <code class="gb-work-branch" :title="a.path">{{ a.branch }}</code>
-              <span v-if="a.issue" class="gb-work-step">{{ stepLabel(a.step ?? 0, a.name ?? '') }}</span>
-              <span>{{ a.state }}<template v-if="a.issue"> · <router-link :to="`/issues/${a.issue.id}`">{{ a.issue.shown_title }}</router-link></template></span>
-              <span v-if="data.can_start" class="gb-work-session">{{ agentWords(a.session, true) }}</span>
-              <span class="gb-work-since">Last commit {{ ago(a.at) }}</span>
-              <button v-if="a.issue && data.can_start" type="button" class="gb-linkbtn" :aria-expanded="briefing === a.path" @click="briefing = briefing === a.path ? '' : a.path">Brief</button>
-              <form v-if="a.issue && briefing === a.path" class="gb-work-brief" @submit.prevent="brief(a.issue.id)">
-                <textarea v-model="briefText" class="epfl-input" rows="3" :aria-label="`Brief the agent on ${a.branch}`" :disabled="busy" />
-                <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="busy || !briefText.trim()">Send</button>
-              </form>
-            </li>
-          </ul>
-        </section>
-
         <section class="gb-work-group" aria-labelledby="waiting-h">
           <h2 id="waiting-h" class="h5">Waiting on others <span class="gb-work-n">{{ data.waiting.length }}</span></h2>
           <div v-if="data.waiting.length" class="gb-table-wrap">
@@ -96,7 +72,6 @@
                 <tr v-for="r in data.waiting" :key="r.issue.id">
                   <td>
                     <router-link :to="`/issues/${r.issue.id}`"><span v-if="numberOf(r.issue)" class="gb-work-num">{{ numberOf(r.issue) }}</span> {{ r.issue.shown_title }}</router-link>
-                    <button v-if="canStart(r)" type="button" class="gb-linkbtn gb-work-start" :disabled="busy" @click="start(r.issue.id)">{{ starting === r.issue.id ? 'Starting…' : 'Start an agent' }}</button>
                   </td>
                   <td class="gb-work-step">{{ stepLabel(r.step, r.name) }}</td>
                   <td>{{ waitsFor(r) }}</td>
@@ -109,24 +84,6 @@
         </section>
       </template>
     </div>
-
-    <aside v-if="data" class="gb-work-aside">
-      <section aria-labelledby="send-h">
-        <h2 id="send-h" class="h5">For the forges <span class="gb-work-n">{{ sendWords(data.pending) }}</span></h2>
-        <ul v-if="data.to_send.length" class="gb-work-lines">
-          <li v-for="(l, i) in data.to_send" :key="i"><span class="gb-work-num">{{ numberOf(l.issue) || l.issue.id.slice(0, 7) }}</span> {{ l.what }}</li>
-          <li v-if="data.pending > data.to_send.length" class="gb-hint">and {{ data.pending - data.to_send.length }} more</li>
-        </ul>
-        <p v-else class="gb-hint">The forges have everything.</p>
-        <SyncProgress v-if="forgeStatus?.job?.state === 'running'" :job="forgeStatus.job" :bridges="forgeStatus.bridges" :starting="sent || 'Running…'" />
-        <p v-else-if="sent" class="gb-hint">{{ sent }}</p>
-        <p v-if="data.pending" class="gb-hint">They go out with the next <router-link to="/settings/sync">Sync</router-link>.</p>
-      </section>
-      <section aria-labelledby="retro-h">
-        <h2 id="retro-h" class="h5">Since the last retro</h2>
-        <p>{{ retroWords(data.retro) }}</p>
-      </section>
-    </aside>
   </main>
 
   <q-dialog
@@ -159,29 +116,26 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
 import IssuePanel from '@/components/IssuePanel.vue';
-import SyncProgress from '@/components/SyncProgress.vue';
-import { agentAction, ApiError, getFields, getViews, getWork, patchIssue, type Issue, type WorkResponse, type WorkRow } from '@/api/board';
+import { ApiError, cycleAct, getFields, getWork, type Issue } from '@/api';
+import type { WorkGroups, WorkRow } from '@/api/cycletypes';
+import { configModel, loadConfigModel } from '@/configmodel';
 import { namespaces } from '@/facets';
 import type { Fields } from '@/fields';
-import { forgeStatus, loadForges, onStep } from '@/forges';
-import { forgeNumbers } from '@/issuesync';
+import { forgeNumbers } from '@/idlabel';
 import { debounced, onLive } from '@/live';
 import { latestOnly } from '@/latest';
-import { checkWords, doneWords } from '@/ways';
 import { me } from '@/me';
 import { panelMode } from '@/panelsize';
-import { actionFor, ago, retroWords, sendWords, stepLabel, waitsFor } from '@/work';
-import { agentWords } from '@/worktrees';
+import { actionFor, ago, stepLabel, waitsFor } from '@/work';
 
 const route = useRoute();
 const router = useRouter();
 
-const viewNames = ref<string[]>([]);
+const viewNames = computed(() => configModel.value?.view_order ?? []);
 const fields = ref<Fields>({});
-const data = ref<WorkResponse | null>(null);
+const data = ref<WorkGroups | null>(null);
 const error = ref<ApiError | null>(null);
 const busy = ref(false);
-const sent = ref('');
 const who = computed<'me' | 'team'>(() => (route.query.who === 'team' ? 'team' : 'me'));
 const rows = computed(() => (data.value ? [...data.value.needs, ...data.value.waiting] : []));
 const names = computed(() => namespaces(rows.value.map((r) => r.issue), fields.value));
@@ -193,6 +147,7 @@ const label = (r: WorkRow) => {
   const a = actionFor(r);
   return a.kind === 'open' ? a.label : '';
 };
+const asError = (e: unknown) => (e instanceof ApiError ? e : new ApiError(e instanceof Error ? e.message : String(e), 0, 'internal'));
 
 // Me then Team quickly: the one asked last shows, whichever answers last
 const reloads = latestOnly();
@@ -205,8 +160,7 @@ async function reload() {
     error.value = null;
   } catch (e) {
     if (!current()) return;
-    if (e instanceof ApiError) error.value = e;
-    else error.value = new ApiError(e instanceof Error ? e.message : String(e), 0, '');
+    error.value = asError(e);
   }
 }
 
@@ -215,55 +169,17 @@ function setWho(w: 'me' | 'team') {
 }
 watch(who, () => void reload());
 
+// the risk class: the cycle's action, by the risk role when one holds it
 async function setRisk(r: WorkRow, risk: string) {
   busy.value = true;
   try {
-    await patchIssue(r.issue.id, { risk });
+    await cycleAct(r.issue.id, 'set-risk', undefined, { risk }); // one field: the last writer wins it
     await reload();
   } catch (e) {
-    error.value = e instanceof ApiError ? e : new ApiError(e instanceof Error ? e.message : String(e), 0, '');
+    error.value = asError(e);
   } finally {
     busy.value = false;
   }
-}
-
-// a run's end, started here or not: its one line
-watch(() => forgeStatus.value?.job?.state, (now, was) => {
-  const job = forgeStatus.value?.job;
-  if (was !== 'running' || !job || now === 'running') return;
-  if (job.state === 'failed') sent.value = `Stopped: ${job.error ?? ''}`;
-  else sent.value = job.dry_run ? `Checked: ${checkWords(job.bridges)}.` : `Sent: ${doneWords(job)}.`;
-});
-
-// the agents, through wtx (internal/server/worktrees.go): Brief on an
-// Agents row, Start an agent on an issue that has none
-const briefing = ref('');
-const briefText = ref('');
-const starting = ref('');
-const agentNote = ref('');
-const noteFor = ref(''); // the row an action's result shows on
-const withAgent = computed(() => new Set(data.value?.agents.map((a) => a.issue?.id)));
-const canStart = (r: WorkRow) => !!data.value?.can_start && !withAgent.value.has(r.issue.id);
-async function agent(id: string, action: 'go' | 'brief', text: string) {
-  busy.value = true;
-  agentNote.value = '';
-  noteFor.value = action === 'go' ? id : '';
-  try {
-    const r = await agentAction(id, action, text);
-    agentNote.value = action === 'go' ? `Session ${r.session?.session ?? r.branch} started.` : 'Sent to the agent.';
-    briefing.value = briefText.value = '';
-    await reload();
-  } catch (e) {
-    agentNote.value = e instanceof Error ? e.message : String(e);
-  } finally {
-    busy.value = false;
-    starting.value = '';
-  }
-}
-const brief = (id: string) => agent(id, 'brief', briefText.value.trim());
-function start(id: string) {
-  starting.value = id;
-  void agent(id, 'go', '');
 }
 
 // Needs you, grouped by step and what it waits for, in the server's order;
@@ -311,13 +227,9 @@ watch(
 );
 let stopLive = () => {};
 onMounted(async () => {
-  stopLive = onLive((e) => {
-    onStep(e);
-    if (e.kind === 'issues' || e.kind === 'sync') reloadSoon();
-  });
-  void loadForges(); // a run going on shows here too
+  stopLive = onLive((e) => (e.kind === 'issue' || e.kind === 'config' || e.kind === 'me' || e.kind === 'resync') && reloadSoon());
+  void loadConfigModel();
   try {
-    viewNames.value = Object.keys(await getViews());
     fields.value = await getFields();
   } catch {
     // no config: fields shown as labels
@@ -330,12 +242,11 @@ onBeforeUnmount(() => stopLive());
 <style scoped>
 .gb-work { display: flex; flex-wrap: wrap; gap: var(--space-5) var(--space-6); align-items: flex-start; }
 .gb-work-main { flex: 999 1 45rem; min-width: 0; }
-.gb-work-aside { flex: 1 1 17rem; display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-4); border: var(--border-w) solid var(--border); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .gb-work-who { margin: var(--space-3) 0 var(--space-4); }
 .gb-work-need { margin: var(--space-4) 0; }
 .gb-work-group { margin-top: var(--space-5); }
-.gb-work-group h2, .gb-work-aside h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .5rem; margin-bottom: var(--space-3); }
+.gb-work-group h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .5rem; margin-bottom: var(--space-3); }
 .gb-work-n { font-size: 1rem; font-weight: normal; color: var(--fg-muted); }
 .gb-work-num { font-family: var(--font-mono); font-weight: normal; color: var(--fg-muted); }
 .gb-work-step { font-family: var(--font-mono); white-space: nowrap; }
@@ -346,20 +257,6 @@ onBeforeUnmount(() => stopLive());
 .gb-work-table td .epfl-btn { font-weight: normal; }
 .gb-work-empty { padding: var(--space-4) 0; }
 .gb-work-empty p { margin: 0; }
-.gb-work-agents, .gb-work-lines { list-style: none; margin: 0; padding: 0; }
-.gb-work-agents li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); padding: var(--space-2) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
-.gb-work-branch { font-size: .875rem; }
-.gb-work-session { font-size: .875rem; }
-.gb-work-brief { display: grid; flex-basis: 100%; gap: var(--space-2); justify-items: start; }
-.gb-work-brief textarea { width: 100%; }
-.gb-work-start { display: block; font-size: .8125rem; color: var(--fg-muted); opacity: 0; }
-/* Start an agent shows on the row the pointer or the focus is on, always on a touch screen */
-tr:hover .gb-work-start, tr:focus-within .gb-work-start { opacity: 1; }
-@media (hover: none) { .gb-work-start { opacity: 1; } }
-.gb-work-note { display: block; font-size: .8125rem; color: var(--fg-muted); }
 .gb-work-table td { vertical-align: top; }
 .gb-work-grouprow th { padding-top: .75rem; background: var(--bg-subtle); font-weight: 700; text-align: left; }
-.gb-work-lines li { padding: .125rem 0; font-size: .9375rem; }
-.gb-work-send { display: flex; gap: var(--space-2); margin: var(--space-3) 0; }
-.gb-work-aside p { margin: 0 0 var(--space-2); }
 </style>

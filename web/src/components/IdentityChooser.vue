@@ -31,9 +31,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { adoptIdentity, createIdentity } from '@/api/board';
+import { setMe } from '@/api';
 import { message } from '@/issue';
-import { me } from '@/me';
+import { me, people as everyone } from '@/me';
 
 const picked = ref('');
 const name = ref('');
@@ -42,10 +42,10 @@ const busy = ref(false);
 const error = ref('');
 const all = ref(false);
 
-const people = computed(() => me.value?.identities ?? []);
+const people = computed(() => everyone.value);
 const shownPeople = computed(() => (all.value ? people.value : people.value.slice(0, 5)));
 
-async function run(fn: () => ReturnType<typeof adoptIdentity>) {
+async function run(fn: () => ReturnType<typeof setMe>) {
   busy.value = true;
   error.value = '';
   try {
@@ -57,8 +57,8 @@ async function run(fn: () => ReturnType<typeof adoptIdentity>) {
   }
 }
 
-const adopt = () => run(() => adoptIdentity(picked.value));
-const create = () => run(() => createIdentity(name.value, email.value));
+const adopt = () => run(() => setMe({ id: picked.value }));
+const create = () => run(() => setMe({ name: name.value, email: email.value }));
 </script>
 
 <style scoped>

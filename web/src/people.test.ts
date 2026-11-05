@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { peopleLabel, peopleOf, personByLogin } from './people.ts';
-import type { IssueEvent, Person } from './api/board';
+import type { IssueEvent, Person } from './api/types.ts';
 
 const a: Person = { id: 'a', name: 'Person A' };
 const b: Person = { id: 'b', name: 'Person B' };

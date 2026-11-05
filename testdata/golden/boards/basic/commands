@@ -1,0 +1,93 @@
+ls is:closed --json
+ls "is:open,closed" --json
+ls "status:ready,in-review" --json
+ls "-status:in-progress is:open" --json
+ls -- "-status:in-progress is:open" --json
+ls "assignee:chloe" --json
+ls "assignee:@me" --json
+ls "author:bob" --json
+ls "involves:bobby" --json
+ls "label:étiquette" --json
+ls "no:prio" --json
+ls "prio:p0,p2 is:closed" --json
+ls "kind:bug" --json
+ls "title:*search*" --json
+ls closed --json
+ls "\"unless the query\"" --json
+ls "inbox in:comments" --json
+ls "日本語" --json
+ls "#12" --json
+ls "GB-7" --json
+ls "comments:>=2" --json
+ls "est:>1" --json
+ls "created:2025-03-03" --json
+ls "created:>=2025-03-03T12:00 created:<2025-03-04" --json
+ls "updated:2025-03-03..2025-03-03" --json
+ls "closed:2025-03-03" --json
+ls "created:>=@today-1d" --at 2025-03-04 --json
+ls "sprint:@current" --at 2025-03-05 --json
+ls --at 2025-03-03T10:00 --json
+ls --sort "prio asc" --json
+ls "is:open,closed" --sort "updated desc" --limit 3 --json
+ls --json id,title,number,forges
+ls "is:open,closed" --json number --jq ".[].number"
+ls "nosuchfield:x" --json
+ls "created:yesterday" --json
+view ready --json
+show 26a4ba8 --at 2025-03-03T03:15 --json
+show 26a4ba8 --at 2025-03-03T11:15 --json
+show GB-100 --json
+show "#7" --json
+show 22d74e7 --no-comments --json
+show 999eab2 --md
+show 0000000 --json
+log 26a4ba8 --field status --json
+log 26a4ba8 --since 2025-03-03T04:00 --json
+log 26a4ba8 --since 2025-03-04 --json
+log 398523d --field prio --json
+labels --json
+me --ls --json
+sprint ls
+sprint report s1
+sprint report nope
+sprint new s9
+branch 26a4ba8
+branch 398523d
+branch 0000000
+verify
+insights --days 0
+insights --view nope
+diff 26a4ba8 --since 2025-03-03T04:00
+diff 26a4ba8 --since 2025-03-03 --json
+diff 9062b9a --since 2020-01-01 --json
+diff 9062b9a --since 2020-01-01
+diff 999eab2 --since 2025-03-04
+diff 999eab2 --since 2030-01-01 --json id,created,added
+diff 26a4ba8
+diff 26a4ba8 --since nope
+diff 0000000 --since 2025-03-03
+get 26a4ba8
+get GB-100
+get 0000000
+__complete show ""
+__complete show GB-10
+__complete show 26
+__complete set 26a4ba8 ""
+__complete set 26a4ba8 prio=
+__complete set 26a4ba8 assignee=+
+__complete set 26a4ba8 label=
+__complete set 26a4ba8 sprint=
+__complete set --filter "is:open st"
+__complete move 26a4ba8 ""
+__complete new "A title" k
+__complete ls ""
+__complete ls "is:open -prio:"
+__complete ls "no:"
+__complete ls --group ""
+__complete ls --sort ""
+__complete ls --json=id,t
+__complete log 26a4ba8 --field ""
+__complete view ""
+__complete me ""
+sync --migrate nosuch
+sync --migrate prio

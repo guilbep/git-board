@@ -1,0 +1,5 @@
+warning: .git-board.toml: fields.status.singel: git-board doesn't know this key, ignored (git board lint)
+warning: .git-board.toml: foo: git-board doesn't know this key, ignored (git board lint)
+warning: .git-board.toml: foo.x: git-board doesn't know this key, ignored (git board lint)
+warning: .git-board.toml: views.a.filterr: git-board doesn't know this key, ignored (git board lint)
+warning: .git-board.toml: views.a.top: git-board doesn't know this key, ignored (git board lint)

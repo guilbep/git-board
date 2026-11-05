@@ -1,0 +1,10 @@
+# The differences make compat allows between a binary's outputs and v1's
+# recorded ones (testdata/golden/cli). One a line:
+#
+#   <board> <case> <what> <reason>
+#
+# board: a golden board's name, or *; case: a case's name from its
+# index.txt, a prefix ending in *, or *; what: exit, stdout, stderr or *.
+# The reason is required: every difference is a decision, said here.
+#
+# None: git-board prints what v1 printed, byte for byte.

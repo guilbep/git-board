@@ -1,11 +1,11 @@
 // An issue's history replayed (the History mode of the issue panel): every
 // change in time order, comment edits included, and the issue as it was
 // after any of them. Pure: built from the thread the server already sends.
-import type { IssueEvent, Person } from './api/board';
+import type { IssueEvent, Person } from './api/types.ts';
 import { lineDiff, type DiffLine } from './linediff.ts';
 import { isTick } from './sections.ts';
 
-// the core's operation names (core/issue/ops.go)
+// the core's operation names (domain/issues)
 export type Op = 'create' | 'comment' | 'edit-text' | 'change-labels' | 'set-status' | 'set-title' | 'set-meta';
 
 export interface Step {

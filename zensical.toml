@@ -6,8 +6,8 @@
 site_name = "git-board"
 docs_dir = "docs"
 site_dir = "site"
-# docs/embed.go embeds the guide in the binary: not a page, and a copy in
-# site/ would be a Go package of the module
+# no Go file is a page: a copy in site/ would be a package of the module
+# (v0.11's docs/embed.go was one)
 exclude_docs = """
 *.go
 prd/
@@ -27,6 +27,7 @@ nav = [
   { "Guide" = [
     { "Issues from the command line" = "guide/cli.md" },
     { "Configuration" = "guide/configuration.md" },
+    { "The file's schema version" = "guide/config-schema.md" },
     { "Forges" = "guide/forges.md" },
     { "Where the board is kept" = "guide/datastores.md" },
     { "Performance" = "guide/performance.md" },
@@ -35,6 +36,7 @@ nav = [
     { "How the data flows" = "spec/data-flow.md" },
     { "Data model" = "spec/data-model.md" },
     { "Storage" = "spec/storage.md" },
+    { "Other datastores and the counter" = "spec/datastores.md" },
     { "Queries and search" = "spec/queries.md" },
     { "Sync" = "spec/sync.md" },
     { "Forges" = "spec/forges.md" },
@@ -61,6 +63,13 @@ nav = [
     { "ADR 0018: you own your issues; work in progress is opt-in" = "adr/0018-own-your-issues-work-in-progress-is-opt-in.md" },
     { "ADR 0019: deleting is a tombstone: hidden everywhere, kept in history" = "adr/0019-deleting-is-a-tombstone.md" },
     { "ADR 0020: the core in layers: a kernel, then issues, releases and the cycle" = "adr/0020-the-core-in-layers.md" },
+    { "ADR 0021: git-board v2: new code, the same data" = "adr/0021-git-board-v2-same-data-new-code.md" },
+  ] },
+  { "Rewrite" = [
+    { "v2: the design of a rewrite" = "rewrite/design.md" },
+    { "v2: the golden boards and make compat" = "rewrite/compat.md" },
+    { "v2: the HTTP API" = "rewrite/api.md" },
+    { "v2: the web app" = "rewrite/web.md" },
   ] },
 ]
 

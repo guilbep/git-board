@@ -1,7 +1,8 @@
 // The issue's flow (docs/prd/time-flow.md): its whole life as one column,
 // cut into a segment per step, and the readings a person picks of it.
 // Pure: built from the thread the server already sends.
-import type { CycleStages, IssueEvent } from './api/board.ts';
+import type { IssueEvent } from './api/types.ts';
+import type { CycleStages } from './api/cycletypes.ts';
 import { DEFAULT_IDS, kindOf, listOf } from './cycle.ts';
 import type { Fields } from './fields.ts';
 import { threadsOf } from './review.ts';
@@ -22,7 +23,7 @@ export const stepOf = (e: IssueEvent): string => idOf(e.meta?.['cycle:step'] ?? 
 
 // segments cuts the flow at the operations that opened each entry of the
 // list (call 3): a status move, the risk set at ready, the close. A move
-// reaches the entry core/cycle's at would: at a validation status its
+// reaches the entry domain/cycle's at would: at a validation status its
 // sign-off, else verify; else the last entry ranked at most the status's
 // step. A comment goes to the entry it carries (cycle:step), a line comment
 // without one to Review, anything else (an id the list lacks included) to
@@ -32,7 +33,7 @@ export const stepOf = (e: IssueEvent): string => idOf(e.meta?.['cycle:step'] ?? 
 // waits at plan for in-progress). Before the first entry opens, the first
 // segment takes the entries. No cycle: one segment, n 0. ponytail: a step
 // opened by evidence alone (a PR, a test run) shows only through the
-// comments that carry it; the server replaying core/cycle over the
+// comments that carry it; the server replaying domain/cycle over the
 // operations if that misleads.
 export function segments(events: IssueEvent[], stages: CycleStages | undefined, current: string, skip: number[] = []): Segment[] {
   const sorted = events.filter((e) => e.kind !== 'created').map((e, i) => [e, i] as const)
@@ -56,7 +57,7 @@ export function segments(events: IssueEvent[], stages: CycleStages | undefined, 
     const rank = (x: (typeof list)[number]) => [kindOf(x), x.kind === 'signoff' && x.id !== 'verify' ? stages.validation.indexOf(x.status ?? '') + 1 : 0] as const;
     return list.findLastIndex((x) => rank(x)[0] < k || (rank(x)[0] === k && rank(x)[1] <= v)) + 1;
   };
-  // the step a status opens, as core/cycle's Compute: a kind the list
+  // the step a status opens, as domain/cycle's Compute: a kind the list
   // leaves out holds nothing back (ready is plan without risk, in-progress
   // code without tests)
   const stepAt = (s: string, risk: boolean) => {

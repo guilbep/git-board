@@ -1,0 +1,1 @@
+error: only reset --hard exists: it empties this clone's board, or with a remote makes it the remote's

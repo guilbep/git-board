@@ -1,11 +1,11 @@
-<!-- The release job running, or the last one (internal/server/releases.go
-     releaseJob): its steps as the canvas's plan list, each as the server
+<!-- The release job running, or the last one (surface/http/releases.go
+     Job): its steps as the canvas's plan list, each as the server
      last reported it, and why it stopped, in the States board's forms. -->
 <template>
   <section class="gb-job" aria-labelledby="job-h">
     <div class="gb-side-head">
       <h2 id="job-h" class="gb-section-title">{{ jobTitle(job) }}</h2>
-      <span class="gb-note">{{ job.state === 'running' ? 'It goes on if you leave this page.' : when(job.ended ?? job.started, true) }}</span>
+      <span class="gb-note">{{ job.state === 'running' ? 'It goes on if you leave this page.' : when(job.ended_at ?? job.started_at, true) }}</span>
     </div>
     <ol v-if="job.steps.length" class="gb-plan" aria-live="polite">
       <li v-for="(s, i) in job.steps" :key="i" :class="stateClass[stepState(job, i)]">
@@ -26,13 +26,13 @@
           <span><b>{{ job.error }}</b></span>
         </div>
       </slot>
-      <p v-if="codeNote[job.code]" class="gb-note">{{ codeNote[job.code] }}</p>
+      <p v-if="codeNote[job.code ?? '']" class="gb-note">{{ codeNote[job.code ?? ''] }}</p>
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
-import type { ReleaseJob } from '@/api/board';
+import type { ReleaseJob } from '@/api';
 import GbIcon from '@/components/GbIcon.vue';
 import { jobTitle, stepLabel, stepState } from '@/releases';
 import { when } from '@/when';

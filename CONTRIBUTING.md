@@ -12,9 +12,37 @@
   Without `GOPRIVATE`, `go install` tries the public module proxy/checksum
   DB first, 404s (it's private), and fails — even with the SSH rewrite
   above already in place.
-- `gh` CLI, authenticated, for `git board project` (`read:project` scope at
-  minimum). The labels (`lint --create-labels`, Settings › Labels) go
-  through GitHub's API with the forge sync's token instead.
+- Node 22.12+ for the web app (`web/`), which the binary embeds.
+- PostgreSQL, optional: the PostgreSQL datastore's tests and its golden
+  board run on the server `GIT_BOARD_TEST_POSTGRES` names (a DSN whose
+  user may create databases), and are skipped without it.
+
+## Layout
+
+One Go module, `github.com/guilbep/git-board`, in layers ([the
+design](docs/rewrite/design.md#packages), [ADR
+0020](docs/adr/0020-the-core-in-layers.md), [ADR
+0021](docs/adr/0021-git-board-v2-same-data-new-code.md)), from the bottom:
+
+| Path | What |
+|---|---|
+| `store/` | the datastores: `git`, `pg`, `md`, `forgecopy`, `mem`, and `storetest`, the suite every one passes |
+| `kernel/` | entities, operations and packs (`kernel/pack`), the search tokenizer (`kernel/search`) |
+| `view/` | the index the lists read (SQLite, or the PostgreSQL datastore's tables) |
+| `conf/` | `.git-board.toml`, table by table, and its schema versions |
+| `domain/` | the kinds and their rules: `issues` (with `issuesync`, `mdfiles`), `people`, `releases` (with `proof`, `releasesync`), `cycle` |
+| `forge/`, `sync/` | the GitHub and GitLab adapters, a fake and their conformance suite; the sync engine |
+| `tools/` | the release runner (`ship`), the GitHub Project bridge (`ghproject`), `insights`, `uploads`, `boardgen`, `perfcheck` |
+| `app/` | opens a board and wires the domains: the one API every surface calls |
+| `surface/` | `cli`, `http` (the server and its API) and `tui`, on `app` |
+| `cmd/git-board` | the binary; `cmd/boardgen` makes the boards `make perf` times |
+| `web/` | the web app (Quasar/Vue), embedded in the binary |
+| `golden/`, `testdata/golden/` | the golden boards and the outputs git-board is held to (`make compat`, [compat.md](docs/rewrite/compat.md)) |
+| `contrib/board-agents` | `git-board-agents`, a module of its own: agents and wtx, through git-board's CLI and HTTP API |
+
+`layers_test.go`, at the root, holds the layers: each package imports only
+what its row of the table names, a new package takes its row first, and
+nothing imports `contrib/`.
 
 ## Workflow
 
@@ -22,14 +50,21 @@
 make         # make help: every target, in a line each
 make build   # go build ./...
 make test    # go test ./...
+make test-pg # the PostgreSQL datastore's tests, the view's and the golden board's on it (GIT_BOARD_TEST_POSTGRES)
 make vet     # go vet ./...
 make fmt     # gofmt -l . (lists files needing formatting; run gofmt -w to fix)
 make web-check # the web app's typecheck and tests
-make web-e2e # the browser tests (web/e2e, Playwright) on this checkout's binary and a throwaway repo; first run: cd web && npx playwright install chromium
-make web-lint  # the EPFL adherence linter on web/src, reporting only (EPFL_SKILL=../epfl-design-skill); its count is in docs/prd/issue-head-m2-plan.md
-make ci      # the web checks and build, then everything above: what CI runs
+make web-e2e # the browser tests (web/e2e, Playwright) on this checkout's binary and throwaway boards; first run: cd web && npx playwright install chromium
+make web-lint  # the EPFL adherence linter on web/src, reporting only (EPFL_SKILL=../epfl-design-skill)
+make compat  # git-board over the golden boards, against the recorded outputs (docs/rewrite/compat.md)
+make golden  # record those outputs again from git-board: a change of the contract, its diff reviewed
+make dogfood DIR=<repo> # a real board read by v1 (V1_REF) and by git-board, every issue compared
+make perf    # the timed budgets on 5,000 and 20,000 issues (testdata/perf/budgets.txt)
+make agents  # build and test contrib/board-agents, its own module
+make ci      # the web app's checks and build, then build, vet, test, compat, gofmt: what CI runs
 make install # the web app built, then go install the git-board binary
 make install-latest # the latest release's binary instead, web app inside
+make dist    # a release's archives, in dist/
 make docs    # the docs site (guide, spec, decisions), in site/: a broken link fails it
 make docs-serve # the docs site on localhost, rebuilt on save
 ```
@@ -38,19 +73,20 @@ Run `make ci` once a change is done, before it's pushed or landed: CI runs
 `make ci`, and `make web-e2e` in a job beside it. It installs the web app's dependencies
 (`npm ci`) only when `web/package-lock.json` is newer than `web/node_modules`.
 While working, the package's own tests are enough
-(`go test ./internal/server/ -run TestName`).
+(`go test ./surface/http/ -run TestName`).
 
 A page's regression gets an e2e test in `web/e2e/` (we favor them over unit
 tests for what the browser shows). `web/e2e/serve.mjs` builds the web app and
-the binary, makes a repository with a `.git-board.toml` and a GitHub origin, and
-serves it with a fake GitHub on the port after `E2E_PORT` (18321): nothing
-leaves the machine; `E2E_TOML=<path>` serves another board's file instead, for a
-one-off smoke run of `e2e/tabs.spec.ts`. `make web-e2e` is not part of `make ci`, which stays fast:
+the binary, and serves throwaway boards on `E2E_PORT` (18421) and the ports after it:
+a git board with a GitHub origin and a fake GitHub, and a Markdown board
+beside it. Nothing leaves the machine; `E2E_TOML=<path>` serves another
+board's file instead, for a one-off smoke run of `e2e/tabs.spec.ts`. `make web-e2e` is not part of `make ci`, which stays fast:
 CI runs it in its own job (`e2e` in `.github/workflows/ci.yml`), Playwright's
 Chromium in a cache.
 
 The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
-`make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly.
+`make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly
+([web/README.md](web/README.md)).
 
 ## Commit hooks
 
@@ -98,14 +134,19 @@ send. The per-issue sync touches only that issue.
 
 ## Conventions
 
-- Real fixtures over mocks: tests spin up a real on-disk git repository
-  (`newTestRepo`/`storetest`) or a fake CLI script on `PATH` (see
-  `bridge.go`'s `fetchGithubItems` seam, `lint.go`'s
-  `existingGithubLabels`/`createGithubLabel` seams), not hand-rolled mocks.
+- Real fixtures over mocks: tests run on real on-disk git repositories
+  (`hermetic`, `store/storetest`, `tools/boardgen`), real datastores, a forge
+  kept in memory that passes the adapters' conformance suite
+  (`forge/fake`, `forge/forgetest`), and fakes served by `httptest`
+  (`tools/ghproject/projectfake`), not hand-rolled mocks ([ADR
+  0014](docs/adr/0014-hermetic-tests-on-real-repositories.md)).
 - Every bug fix ships with a regression test that fails without the fix.
-- Read `docs/implementation-plan.md` before starting — it's the living
-  status log for what's shipped, what's deliberately deferred, and why.
-  Add a dated "Status update" section for anything non-trivial you land.
+- Read [the design](docs/rewrite/design.md) before starting: its section 5
+  is the status of each milestone, what was built and what was left.
+  `docs/implementation-plan.md` is v1's log, kept as history.
+- A change to what git-board prints on the golden boards is a change of
+  the contract: `make golden`, its diff reviewed and explained in the
+  commit ([compat.md](docs/rewrite/compat.md#running-it)).
 - Tag a release (`git tag vX.Y.Z && git push origin vX.Y.Z`) after every
   meaningful batch of work lands on `main` — `go install ...@latest`
   resolves to the newest semver *tag*, not the newest commit, so an

@@ -1,0 +1,10 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-me-new	0	me --new
+02-new-local-only	0	new "local only"
+03-datastore-drop	1	datastore drop
+04-reset-hard	1	reset --hard
+05-push-prune	1	push --prune
+06-pull	1	pull
+07-datastore-drop-force	0	datastore drop --force
+08-me	0	me
+09-ls-is-open-closed-json-id	0	ls "is:open,closed" --json id

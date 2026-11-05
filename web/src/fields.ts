@@ -2,7 +2,8 @@
 // "ns:value" label shows under the field "ns", configured or not; labels
 // without a namespace show under "Other labels". No component re-derives
 // this.
-import type { Bucket, FieldConfig } from './api/board';
+import type { FieldConfig } from './api/types.ts';
+import type { Bucket } from './bucket.ts';
 
 export type Fields = Record<string, FieldConfig>;
 
@@ -65,3 +66,6 @@ export function orderBuckets(buckets: Bucket[], group: string, fields: Fields): 
   // Array.prototype.sort is stable, so equal ranks keep the server's order.
   return [...buckets].sort((a, b) => rank(a) - rank(b));
 }
+
+// a view's tab words: current-sprint → Current sprint
+export const viewLabel = (name: string) => displayName(name.replaceAll('-', ' '));

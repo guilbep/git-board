@@ -1,0 +1,1 @@
+error: template ../bad.toml: toml: line 2 (last key "fields.prio.options"): incompatible types: TOML value has type int64; destination has type slice

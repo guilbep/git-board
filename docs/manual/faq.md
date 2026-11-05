@@ -44,10 +44,12 @@ for consent: run `git board sync --check`, read what it would do, then
 
 ## Where is the cycle, the Work page, the agents?
 
-They are experimental, off unless the project's `.git-board.toml` turns
-them on (`[experimental] features = ["cycle", "agents", "worktrees"]`) or
+The cycle and its Work page are experimental, off unless the project's
+`.git-board.toml` turns them on (`[experimental] features = ["cycle"]`) or
 your clone does (`git config board.experimental cycle`). See
 [Configuration › Experimental features](../guide/configuration.md#experimental-features).
+The coding agents are no longer in git-board: they are `git-board-agents`,
+a program of their own ([Configuration › Worktrees](../guide/configuration.md#worktrees)).
 
 ## The index looks wrong, or a list is slow the first time
 

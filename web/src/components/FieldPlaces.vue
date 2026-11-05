@@ -29,15 +29,13 @@
         </div>
         <p class="fp-muted">Empty: the value keeps its own name.</p>
       </details>
-      <p v-if="r.target !== r.savedTarget && counts[r.forge.name]" class="fp-move" role="note">{{ counts[r.forge.name] }}</p>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import type { ConfigField } from '@/api/board';
-import { previewFieldMigration } from '@/api/board';
+import { computed } from 'vue';
+import type { ConfigField } from '@/configparse';
 import { fieldTarget, targetLabels, targetsFor, typeOf, type ForgeMapping, type ForgeModel } from '@/fieldtargets';
 import { choose, columnFor, rename, type Places } from '@/fieldplaces';
 import GbIcon from '@/components/GbIcon.vue';
@@ -88,24 +86,6 @@ function setName(r: Row, value: string, on: string) {
   emit('set', r.forge.name, props.field, m.to === r.defaultTarget && !m.values && !m.field ? null : m);
 }
 
-// what a move would migrate, counted before anything is written (the
-// counts are the forge's as it stands)
-const counts = ref<Record<string, string>>({});
-watch(
-  () => rows.value.filter((r) => r.target !== r.savedTarget).map((r) => r.forge.name).join(','),
-  (moving) => {
-    counts.value = {};
-    if (!moving) return;
-    previewFieldMigration(props.field)
-      .then((res) => {
-        const out: Record<string, string> = {};
-        for (const p of res.plans ?? []) out[p.forge] = `${p.issues} issue${p.issues === 1 ? '' : 's'} carry it${p.labels ? `, ${p.labels} labels come off` : ''}: after Save, the migration asks first.`;
-        counts.value = out;
-      })
-      .catch(() => {});
-  },
-  { immediate: true },
-);
 </script>
 
 <style scoped>

@@ -1,0 +1,14 @@
+---
+id: fe82974e8b7769405ecb048265e59a511263796b
+number: MD-2
+title: "Ünïcödé 日本語 \U0001F680"
+state: closed
+people:
+  author: Chloé Dubois-Ångström
+created: 2025-03-03T11:00:00Z
+updated: 2025-03-03T11:05:00Z
+---
+
+é é
+
+<!-- git-board comments -->

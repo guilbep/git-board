@@ -1,0 +1,36 @@
+{
+  "id": "9062b9a381ed0075abb7c2b22261a9be88f7a685",
+  "since": "2020-01-01T00:00:00Z",
+  "created": true,
+  "title": {
+    "was": "",
+    "now": "Thread with a deleted comment"
+  },
+  "added": [],
+  "removed": [],
+  "comments": [
+    {
+      "id": "d3ad24ba0e7f224f0f6ab7df12df8778583f29cf:0",
+      "author": {
+        "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+        "name": "Ada King",
+        "login": "ada-l",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2025-03-03T19:05:00Z",
+      "body": "first, edited"
+    },
+    {
+      "id": "6a8541a68e86e1891dc14811da09a600be5dace2:1",
+      "author": {
+        "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+        "name": "Bob",
+        "login": "bobby",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2025-03-03T19:06:00Z",
+      "body": "sorry"
+    }
+  ],
+  "edited_comments": []
+}

@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: line 2: [branches] kinds: bug = "fix": a branch starts with its kind's label, write bug = "bug" (its branches start bug/)

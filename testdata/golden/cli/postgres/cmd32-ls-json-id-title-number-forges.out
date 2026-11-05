@@ -1,0 +1,72 @@
+[
+  {
+    "forges": [
+      {
+        "name": "GitHub",
+        "number": "12",
+        "url": "https://github.com/acme/widgets/issues/12"
+      },
+      {
+        "name": "GitLab",
+        "number": "3",
+        "url": "https://gitlab.epfl.ch/acme/widgets/-/issues/3"
+      }
+    ],
+    "id": "26a4ba85e9ef4a8ff1b61f228dd598c8b3667905",
+    "number": "GB-100",
+    "title": "Search hides closed issues by default"
+  },
+  {
+    "forges": null,
+    "id": "9062b9a381ed0075abb7c2b22261a9be88f7a685",
+    "number": null,
+    "title": "Thread with a deleted comment"
+  },
+  {
+    "forges": [
+      {
+        "name": "",
+        "url": ""
+      }
+    ],
+    "id": "999eab2e4a22d1af3d62abffe7e62e79db7d12ac",
+    "number": "GB-102",
+    "title": "Ünïcödé: 日本語のタイトル 🚀 — שלום \u0026 \u003cb\u003e (renamed)"
+  },
+  {
+    "forges": [
+      {
+        "name": "GitHub",
+        "number": "7",
+        "url": "https://github.com/acme/widgets/issues/7"
+      }
+    ],
+    "id": "22d74e73979498ba69c554da1bf1cc1014cb013d",
+    "number": "GB-7",
+    "title": "Crash on empty report"
+  },
+  {
+    "forges": null,
+    "id": "427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42",
+    "number": null,
+    "title": "Lenient packs: the second title wins"
+  },
+  {
+    "forges": [
+      {
+        "name": "GitLab",
+        "number": "31",
+        "url": "https://gitlab.epfl.ch/acme/widgets/-/issues/31"
+      }
+    ],
+    "id": "e9584910eb0517fe61a9a45e4cfaa53dff219957",
+    "number": null,
+    "title": "Bare"
+  },
+  {
+    "forges": null,
+    "id": "22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71",
+    "number": "GB-103",
+    "title": "Label churn"
+  }
+]

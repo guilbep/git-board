@@ -1,0 +1,5 @@
+[forges.gh]
+kind = "github"
+project = "o/r"
+[forges.gh.fields.prio]
+to = "label"

@@ -1,0 +1,192 @@
+{
+  "id": "6944b2e490aabf8029615a13e2046abd898ab057",
+  "title": "Unit scope shows english the migration slowly retry (0)",
+  "status": "open",
+  "labels": [
+    "area:frontend",
+    "assignee:dev3",
+    "cat:chore",
+    "est:2",
+    "prio:p0",
+    "status:backlog"
+  ],
+  "shown_title": "Unit scope shows english the migration slowly retry (0)",
+  "updated_at": "2024-01-16T17:14:36Z",
+  "created_at": "2024-01-01T09:58:00Z",
+  "comments": 5,
+  "author": {
+    "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+    "name": "Developer 0",
+    "login": "dev0",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+  },
+  "edited_at": "2024-01-16T17:14:36Z",
+  "participants": [
+    {
+      "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+      "name": "Developer 0",
+      "login": "dev0",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+    },
+    {
+      "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+      "name": "Developer 1",
+      "login": "dev1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    {
+      "id": "b5d85ae6ceb6b8626b9a4813d3d565f0a0790d2c",
+      "name": "Developer 2",
+      "login": "dev2",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1002?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "6944b2e490aabf8029615a13e2046abd898ab057:0",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-01T09:58:00Z",
+      "body": "Message index button upload building travel dialog. File travel modal query message role has need. Production translation message to emissions button emissions migration query request test.\n\nCache import unit admin total staging total session chart production after scope energy file admin laboratory page production. Date building we dialog building query has crashes need we slowly we check column we english. Role need when energy spinner the query message login."
+    },
+    {
+      "kind": "labels",
+      "id": "6944b2e490aabf8029615a13e2046abd898ab057:1",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-01T09:58:00Z",
+      "added": [
+        "status:in-review",
+        "prio:p0",
+        "cat:chore",
+        "assignee:dev3",
+        "area:frontend",
+        "est:2"
+      ]
+    },
+    {
+      "kind": "comment",
+      "id": "1b873acd063d1f2c2084c3ba848e64b6927b72d4:0",
+      "author": {
+        "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+        "name": "Developer 1",
+        "login": "dev1",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2024-01-03T05:52:07Z",
+      "body": "Factor table year role validation cache backend page invoice backend energy check unit need api spinner. Timeout login button returns module year when loads modal the file english production sort when admin invoice purchase. When the api scope emissions export user role year check. When shows index missing wrong chart upload import for building message cache laboratory english."
+    },
+    {
+      "kind": "comment",
+      "id": "2d856f8430266dda46f0ed7a4897678d6b84c925:0",
+      "author": {
+        "id": "b5d85ae6ceb6b8626b9a4813d3d565f0a0790d2c",
+        "name": "Developer 2",
+        "login": "dev2",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1002?s=88"
+      },
+      "at": "2024-01-03T23:02:43Z",
+      "body": "Could loads no lines factor report login. Column filter laboratory message api loads staging staging invoice staging endpoint could migration value purchase shows staging. Endpoint no english energy on value admin. Query check translation chart test response production chart endpoint csv need. Deploy update import year emissions retry field purchase we english could building index query calculation role.\n\nTotal page login when unit report emissions save table building year value slowly invoice crashes report form. Login unit loads travel the invoice check index file date role error save response scope save the admin. Report to column calculation dialog filter calculation unit laboratory modal database database dialog page spinner year refactor invoice.\n\nColumn module chart token building the. English could page energy index check form chart has we error emissions login database emissions filter. Has migration purchase for report filter. Scope would loads refactor dialog page to factor scope loads update. Slowly lines permission laboratory session api permission.",
+      "edited": true,
+      "history": [
+        {
+          "id": "2d856f8430266dda46f0ed7a4897678d6b84c925:0",
+          "author": {
+            "id": "b5d85ae6ceb6b8626b9a4813d3d565f0a0790d2c",
+            "name": "Developer 2",
+            "login": "dev2",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1002?s=88"
+          },
+          "at": "2024-01-03T23:02:43Z",
+          "body": "Scope form migration laboratory token year returns admin for user translation report shows value slowly. Lines filter total crashes check no export table file production refactor save. Total total could to emissions scope slowly.\n\nFor english test returns crashes emissions scope request invoice french would session test chart query wrong. Need chart total field role endpoint permission fix emissions timeout role energy column after chart for endpoint user need. Calculation should page lines cache french upload should check date slowly fix deploy calculation. Returns csv translation message role response has index no has travel on admin token validation button migration no.\n\nFilter button database response csv returns. Timeout message sort when login english query session test query permission filter year. Form travel upload the report year chart unit table unit english has value spinner migration error travel."
+        },
+        {
+          "id": "11bcad30adbc4a970e9bde4243a0d4f410b33631:0",
+          "author": {
+            "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+            "name": "Developer 4",
+            "login": "dev4",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+          },
+          "at": "2024-01-11T13:51:37Z",
+          "body": "Could loads no lines factor report login. Column filter laboratory message api loads staging staging invoice staging endpoint could migration value purchase shows staging. Endpoint no english energy on value admin. Query check translation chart test response production chart endpoint csv need. Deploy update import year emissions retry field purchase we english could building index query calculation role.\n\nTotal page login when unit report emissions save table building year value slowly invoice crashes report form. Login unit loads travel the invoice check index file date role error save response scope save the admin. Report to column calculation dialog filter calculation unit laboratory modal database database dialog page spinner year refactor invoice.\n\nColumn module chart token building the. English could page energy index check form chart has we error emissions login database emissions filter. Has migration purchase for report filter. Scope would loads refactor dialog page to factor scope loads update. Slowly lines permission laboratory session api permission."
+        }
+      ]
+    },
+    {
+      "kind": "comment",
+      "id": "b72f43365b796d53682304253ac4fd8a384506e4:0",
+      "author": {
+        "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+        "name": "Developer 1",
+        "login": "dev1",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2024-01-06T00:33:13Z",
+      "body": "Scope lines validation migration save migration cache shows. On api fix shows we sort import crashes login when module file laboratory page translation shows.\n\nUnit fix scope scope building user for shows import calculation form could after. Value page token update update unit building dialog english role check need loads sort english to. Button year migration cache validation endpoint scope table."
+    },
+    {
+      "kind": "comment",
+      "id": "b8cb10038b01e44e8748cf42a5bc7f7f87ee8a83:0",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-08T21:17:43Z",
+      "body": "Laboratory module refactor form total value validation when total purchase value module slowly travel migration. Button response check login validation file. Building filter session fix has button lines deploy. Shows the modal filter save button loads. Refactor we export invoice permission migration has save no user dialog cache building button unit to chart translation.\n\nReturns crashes sort check scope save after refactor report fix. Retry purchase button cache permission slowly building on to index timeout chart when admin update staging. Loads shows permission unit endpoint query returns purchase role report query modal. Endpoint when database login cache check for file slowly for invoice validation missing building loads french should no. Error french index chart module filter we translation table invoice login query cache scope sort."
+    },
+    {
+      "kind": "comment",
+      "id": "0abe5a16e079d08022165ab47c31c2b9aa5c42ac:0",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-11T11:46:44Z",
+      "body": "File scope permission filter form permission refactor save index module file. Retry timeout invoice timeout has after could index fix chart import factor role. Timeout on save no error permission could refactor the column scope total spinner returns api laboratory building when. The user validation energy to unit invoice session loads."
+    },
+    {
+      "kind": "labels",
+      "id": "926f85f5a88c3b096f97c11d2aa30847db423bed:0",
+      "author": {
+        "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+        "name": "Developer 4",
+        "login": "dev4",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+      },
+      "at": "2024-01-13T23:15:26Z",
+      "added": [
+        "status:backlog"
+      ],
+      "removed": [
+        "status:in-review"
+      ]
+    },
+    {
+      "kind": "title",
+      "id": "ce63037a98102c8aa27c1718e3be5eb28159855e:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-16T17:14:36Z",
+      "title": "Unit scope shows english the migration slowly retry (0)",
+      "was": "Loads to query value request total travel (0)"
+    }
+  ]
+}

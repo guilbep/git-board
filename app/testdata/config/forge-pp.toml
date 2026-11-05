@@ -1,0 +1,3 @@
+[forges]
+publish-private = true
+discover = false

@@ -5,6 +5,13 @@
   domain's satellites; step 3, the release domain; step 4, the cycle (see
   Step 2, Step 3 and Step 4 below).
 - Date: 2026-11-04
+- Package layout superseded by [ADR
+  0021](0021-git-board-v2-same-data-new-code.md) (2026-11-05): v2 keeps
+  the layers, a kernel and the domains on it, but not these packages.
+  Since the switch (v0.12) `core/` and `internal/` are gone; the layers
+  are `kernel`, `store`, `view`, `conf`, `domain/…`, `forge`, `sync`,
+  `tools`, `app` and `surface`, and the guard is `layers_test.go` at the
+  module's root. The paths below are v0.11's.
 - Builds on [ADR 0005](0005-core-is-a-library.md) (core/ is a library),
   [ADR 0018](0018-own-your-issues-work-in-progress-is-opt-in.md) (what the
   core is for) and [ADR 0002](0002-datastores.md) (datastores).

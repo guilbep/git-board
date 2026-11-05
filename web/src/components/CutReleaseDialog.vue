@@ -1,4 +1,4 @@
-<!-- Cut a release (internal/release Draft, Cut): from what the followed
+<!-- Cut a release (tools/ship Draft, Cut): from what the followed
      environment runs, a version and where it goes (a candidate, or the
      final), the checks, the notes drafted from the issues, and what the cut
      does. Cutting starts a job: the dialog closes into the page's
@@ -110,7 +110,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { cutRelease, getDraft, type CutRequest, type Draft, type EnvState, type ReleaseJob, type ReleaseRow } from '@/api/board';
+import { cutRelease, getDraft, type CutRequest, type Draft, type EnvState, type ReleaseJob, type ReleaseRow } from '@/api';
 import { message } from '@/issue';
 import { checkIcon, cutHint, cutLabel, finalOf, newest, nextTag, plural, registryName, repoName, sha7, tagPattern, takenOf } from '@/releases';
 import { when } from '@/when';

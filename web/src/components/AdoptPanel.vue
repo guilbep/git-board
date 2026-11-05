@@ -1,4 +1,4 @@
-<!-- First time (internal/release Proposals, Adopt): each overlay that
+<!-- First time (tools/ship Proposals, Adopt): each overlay that
      doesn't say which commit it runs, with git-board's guess, from its
      release tag or its image's revision label; one it couldn't guess is
      typed in. Adopting writes each commit next to the digest. The States
@@ -32,14 +32,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { getProposals, type EnvState, type Proposal } from '@/api/board';
+import { ref, watch } from 'vue';
+import type { EnvState, Proposal } from '@/api';
 import { message } from '@/issue';
 import { envMark, markClass, repoName, sha7 } from '@/releases';
 
 // adopt: the page's write, busy while it runs; busy: a job runs, or the
 // page waits for an answer
-const props = defineProps<{ envs: EnvState[]; busy: boolean; adopt: (ps: Proposal[]) => Promise<void> }>();
+// proposals: GET /api/releases's, what the overlays not adopted run
+const props = defineProps<{ envs: EnvState[]; proposals: Proposal[]; busy: boolean; adopt: (ps: Proposal[]) => Promise<void> }>();
 
 const rows = ref<{ p: Proposal; known: boolean; target: string }[] | null>(null); // null: being read
 const error = ref('');
@@ -49,15 +50,13 @@ const envClass = (env: string) => markClass(envMark(props.envs.find((e) => e.nam
 // the deploy target's name, as the environment strip says it (enack8s)
 const targetName = (p: Proposal) => props.envs.find((e) => e.name === p.env)?.targets.find((t) => t.repo === p.repo && t.path === p.path)?.name ?? repoName(p.repo);
 
-// the guesses: it fetches, and asks the registries for revision labels
-async function load() {
-  try {
-    rows.value = (await getProposals()).map((p) => ({ p: { ...p }, known: !!p.commit, target: targetName(p) }));
-    error.value = '';
-  } catch (e) {
-    error.value = message(e);
-  }
-}
+// the guesses, as the list answered them: the server fetched, and asked
+// the registries for revision labels
+watch(
+  () => props.proposals,
+  (ps) => (rows.value = ps.map((p) => ({ p: { ...p }, known: !!p.commit, target: targetName(p) }))),
+  { immediate: true },
+);
 
 async function adopt() {
   if (!rows.value || props.busy) return;
@@ -69,7 +68,6 @@ async function adopt() {
   }
 }
 
-onMounted(load);
 </script>
 
 <style scoped>

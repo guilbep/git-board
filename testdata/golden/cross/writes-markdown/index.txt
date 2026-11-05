@@ -1,0 +1,25 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-new-cross-write-on-a-folder-prio-p1-b-a	0	new "Cross write on a folder" prio=p1 -b "a body"
+02-comment-c82cfa3-b-a-comment-from-the-cro	0	comment c82cfa3 -b "a comment from the cross test"
+03-comment-fe82974-b-another-nicode	0	comment fe82974 -b "another, ünicode"
+04-comment-fe82974-edit-last-b-another-edit	0	comment fe82974 --edit-last -b "another, edited"
+05-edit-c82cfa3-title-retitled-by-the-cross	0	edit c82cfa3 --title "Retitled by the cross test"
+06-edit-fe82974-b-a-new-body	0	edit fe82974 -b "a new body"
+07-set-c82cfa3-prio-p0-est-3	0	set c82cfa3 prio=p0 est=3
+08-set-c82cfa3-prio-p9	2	set c82cfa3 prio=p9
+09-move-c82cfa3-in-review	0	move c82cfa3 in-review
+10-close-fe82974-c-closing-it	0	close fe82974 -c "closing it"
+11-reopen-fe82974	0	reopen fe82974
+12-set-fe82974-assignee-me	0	set fe82974 assignee=+@me
+13-comment-703c174-b-on-a-deleted-issue	3	comment 703c174 -b "on a deleted issue"
+14-undo-c82cfa3	0	undo c82cfa3
+15-delete-fe82974-yes	0	delete fe82974 --yes
+16-labels	0	labels
+17-numbers	0	numbers
+18-numbers-init-prefix-gb-start-1	1	numbers init --prefix GB --start 1
+19-numbers-init-prefix-1x-start-1	1	numbers init --prefix 1x --start 1
+20-ls-is-open-closed-json	0	ls "is:open,closed" --json
+21-labels-json	0	labels --json
+22-ls-follows-me-is-open-closed-json	0	ls "follows:@me is:open,closed" --json
+23-config-list-json	0	config list --json
+24-view-ready-json	0	view ready --json

@@ -1,0 +1,15 @@
+missing-value:
+  c82cfa32 Kept in a folder, merged by union: no est value
+  c82cfa32 Kept in a folder, merged by union: no reviewer value
+  c82cfa32 Kept in a folder, merged by union: no sprint value
+dead-option:
+  kind:feature: no issue carries it
+  prio:p0: no issue carries it
+  prio:p2: no issue carries it
+  prio:p3: no issue carries it
+  status:backlog: no issue carries it
+  status:in-progress: no issue carries it
+  status:in-review: no issue carries it
+  status:done: no issue carries it
+
+summary: 11 finding(s) (missing-value: 3, dead-option: 8)

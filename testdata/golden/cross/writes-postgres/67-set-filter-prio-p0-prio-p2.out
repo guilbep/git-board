@@ -1,0 +1,2 @@
+ID GB-100 Search hides closed issues by default: +prio:p2 -prio:p0
+1 issue would change; --apply writes it

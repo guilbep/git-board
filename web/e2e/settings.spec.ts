@@ -1,16 +1,9 @@
 // Settings regressions, on a board whose forge is found in the git remotes
 // (no [forges] table): the model once answered "forges": null, which broke
-// the Fields page, and the forge's places said "No forge declared".
-import { expect, test, type Page } from '@playwright/test';
-import { boardFile } from './board';
-
-// errors collects the page's uncaught errors: a page that throws is broken
-// even when it shows something
-function errors(page: Page): Error[] {
-  const out: Error[] = [];
-  page.on('pageerror', (e) => out.push(e));
-  return out;
-}
+// the Fields page, and the forge's places said "No forge declared". (A
+// field's GitHub Project column is the bridge's, M6: its test waits.)
+import { expect, test } from '@playwright/test';
+import { boardFile, errors } from './board';
 
 test('a field of Fields opens its editor', async ({ page }) => {
   const errs = errors(page);
@@ -37,7 +30,7 @@ test('Sync is in the project file group; each forge says where its fields live, 
   expect(errs).toEqual([]);
 });
 
-test('a place on a forge found in the remotes, saved with its field, writes the forge’s table', async ({ page, request }) => {
+test('a place on a forge found in the remotes, saved with its field, writes the forge’s table', async ({ page }) => {
   const errs = errors(page);
   await page.goto('/#/settings/fields/prio');
   // one override, saved: the file gets the forge's table and the mapping
@@ -50,31 +43,9 @@ test('a place on a forge found in the remotes, saved with its field, writes the 
   await select.selectOption(other!);
   await page.getByRole('button', { name: /^Save/ }).click();
   await expect(page.getByRole('button', { name: 'Discard changes' })).toHaveCount(0);
-
-  const model = await (await request.get('/api/config/model')).json();
-  expect(model.forges).toHaveLength(1);
-  expect(model.forges[0]).toMatchObject({ name: 'github', kind: 'github', project: 'o/r' });
-  expect(model.forges[0].discovered).toBeFalsy();
-  expect(model.forges[0].fields?.prio?.to).toBe(other);
-  expect(model.error ?? '').toBe('');
-  expect(errs).toEqual([]);
-});
-
-test('a Project column saved with its field, and the default again removes the override', async ({ page }) => {
-  const errs = errors(page);
-  await page.goto('/#/settings/fields/est');
-  await page.getByLabel('est lives on GitHub in').selectOption('project');
-  await expect(page.getByLabel('The Project column of est on GitHub')).toHaveValue('Est. hours'); // the draft's target shows its details
-  await page.getByRole('button', { name: /^Save/ }).click();
-  await expect(page.getByRole('button', { name: 'Discard changes' })).toHaveCount(0);
-  expect(boardFile()).toMatch(/est = \{ to = "project", field = "Est\. hours" \}/);
-  expect(boardFile()).toMatch(/\[fields\.est\]/);
-  // a move is never run by the save: it waits for its button
-  await expect(page.getByRole('button', { name: 'Run the migration' })).toBeVisible();
-
-  await page.getByLabel('est lives on GitHub in').selectOption('label');
-  await page.getByRole('button', { name: /^Save/ }).click();
-  await expect(page.getByRole('button', { name: 'Discard changes' })).toHaveCount(0);
-  expect(boardFile()).not.toMatch(/^est = /m);
+  const file = boardFile();
+  expect(file).toMatch(/kind = "github"/);
+  expect(file).toMatch(/project = "o\/r"/);
+  expect(file).toMatch(new RegExp(`\\[forges\\.github\\.fields\\.prio\\]\\nto = "${other}"`));
   expect(errs).toEqual([]);
 });

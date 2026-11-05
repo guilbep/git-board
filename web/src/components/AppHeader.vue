@@ -16,30 +16,24 @@
     <nav class="epfl-nav" aria-label="Main">
       <!-- an issue's page (/issues/:id) is under Issues too -->
       <router-link to="/" :class="{ active: issuesHere }" :aria-current="issuesHere ? 'page' : undefined">Issues</router-link>
-      <!-- the cycle's work units: with the cycle's issue page alone -->
-      <router-link v-if="cycleView" to="/work" active-class="active">Work</router-link>
+      <router-link to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
+      <!-- the cycle's work units: with the cycle on alone (experimental) -->
+      <router-link v-if="cycleOn" to="/work" active-class="active">Work</router-link>
       <router-link to="/insights" active-class="active">Insights</router-link>
       <!-- a release's page (/releases/:tag) is under Releases too -->
       <router-link to="/releases" active-class="active" :class="{ active: releasesHere }" :aria-current="releasesHere ? 'page' : undefined">Releases</router-link>
-      <router-link to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
       <!-- Settings, as a cog: every /settings page is under it -->
       <router-link to="/settings" class="nav-cog" :class="{ active: settingsHere }" :aria-current="settingsHere ? 'page' : undefined" aria-label="Settings" title="Settings"><GbIcon name="settings" /></router-link>
     </nav>
     <!-- the tip, when the header has room for it (else the strip below) -->
     <div ref="tipSlot" class="app-tip"><TipLine v-if="tipWhere === 'header'" /></div>
     <div class="app-right">
-      <!-- Sync, drawn as an issue's forge button (ForgeIcons, docs/design
-           issue-head 16e): the icon alone when nothing waits; a yellow count,
-           up arrow, to send; a blue one, down arrow, to get; a blue badge
-           while a sync runs; a red one for changes on both sides -->
-      <router-link to="/settings/sync" class="gb-iconbtn gb-sync" active-class="active" :aria-label="`Sync: ${syncWords}`" :title="`Sync: ${syncWords} · ${w.checked ? `checked ${when(w.checked, true)}` : 'not checked yet'}`">
+      <!-- Sync, drawn as an issue's forge button (ForgeIcons): a badge
+           while a run goes on, a red one when the last one failed -->
+      <router-link to="/settings/sync" class="gb-iconbtn gb-sync" active-class="active" :aria-label="`Sync: ${syncWords}`" :title="`Sync: ${syncWords}`">
         <GbIcon name="sync" />
-        <span v-if="w.running" class="gb-fbadge is-syncing" aria-hidden="true"><GbIcon name="sync" small /></span>
-        <span v-else-if="w.conflicts" class="gb-fbadge is-conflict" aria-hidden="true"><GbIcon name="warn" small /></span>
-        <template v-else>
-          <span v-if="w.send" class="gb-fcount" aria-hidden="true"><GbIcon name="arrow-up" small />{{ w.send.toLocaleString() }}</span>
-          <span v-if="w.get" class="gb-fcount is-in" :class="{ 'is-under': w.send }" aria-hidden="true"><GbIcon name="arrow-down" small />{{ w.get.toLocaleString() }}</span>
-        </template>
+        <span v-if="run?.state === 'running'" class="gb-fbadge is-syncing" aria-hidden="true"><GbIcon name="sync" small /></span>
+        <span v-else-if="run?.state === 'failed'" class="gb-fbadge is-conflict" aria-hidden="true"><GbIcon name="warn" small /></span>
       </router-link>
       <!-- the palette, as a search field (Zensical's), and the shortcut
            list's key beside ⌘K: two buttons in one field -->
@@ -63,16 +57,11 @@
       </router-link>
     </div>
   </header>
-  <p v-if="me?.unswitched" class="epfl-alert epfl-alert-warning app-unswitched" role="alert">
-    <b>This repository’s issues are still git-bug’s</b> (in <code>refs/bugs</code>), so the board shows none of them.
-    Move them once, in a terminal: <code>git board switch</code> says what it would do, <code>git board switch --apply</code> does it, then <code>git board sync</code>.
-  </p>
   <div v-if="tipWhere === 'strip'" class="app-tipstrip"><TipLine /></div>
-  <!-- a fresh clone: its board came from origin as it opened, or couldn't
-       (docs/prd/clone-shows-board.md) -->
-  <p v-if="me?.first_pull && !firstPullHidden" class="epfl-alert app-unswitched" :class="me.first_pull.error ? 'epfl-alert-warning' : 'epfl-alert-success'" role="status">
-    <template v-if="me.first_pull.error"><b>This clone has no board yet.</b> {{ me.first_pull.error }}. Pull it from Sync once {{ me.first_pull.remote }} answers.</template>
-    <template v-else><b>This clone had no board:</b> {{ me.first_pull.issues }} issue{{ me.first_pull.issues === 1 ? '' : 's' }} pulled from {{ me.first_pull.remote }}.</template>
+  <!-- a fresh clone's first open: what the server pulled from origin, or why it couldn't -->
+  <p v-if="firstPull && !firstPullHidden" class="epfl-alert app-firstpull" :class="firstPull.error ? 'epfl-alert-warning' : 'epfl-alert-success'" role="status">
+    <template v-if="firstPull.error"><b>This clone has no board yet.</b> {{ firstPull.error }}. Pull it from Sync once {{ firstPull.remote }} answers.</template>
+    <template v-else><b>This clone had no board:</b> {{ firstPull.issues }} issue{{ firstPull.issues === 1 ? '' : 's' }} pulled from {{ firstPull.remote }}.</template>
     <button type="button" class="gb-linkbtn" @click="firstPullHidden = true">Hide</button>
   </p>
   <KeyboardHelp />
@@ -93,18 +82,16 @@ import TipLine from '@/components/TipLine.vue';
 import { noteUse } from '@/keys';
 import CommandPalette from '@/components/CommandPalette.vue';
 import { openShortcuts, paletteOpen } from '@/commands';
-import { forgeStatus, loadForges } from '@/forges';
-import { cycleView, loadMe, me, when } from '@/me';
-import { loadSyncStatus, syncStatus } from '@/sync';
-import { checkOrigin, loadRemotes, remotes, repo } from '@/remotes';
-import { faviconDot, waitWords, waiting } from '@/ways';
+import { board, cycleOn, loadMe, me } from '@/me';
+import { loadSync, onStep, syncStatus } from '@/sync';
+import { runWords } from '@/ways';
 import { setFavicon } from '@/favicon';
 import GbIcon from '@/components/GbIcon.vue';
 import GbAvatar from '@/components/GbAvatar.vue';
 import AccountCard from '@/components/AccountCard.vue';
 import { inbox, loadInbox } from '@/inbox';
 import { debounced, onLive } from '@/live';
-import { clientId } from '@/api/board';
+import { clientId } from '@/api';
 
 // the saved views, for the palette's jumps
 defineProps<{ views: string[] }>();
@@ -113,32 +100,27 @@ const route = useRoute();
 const issuesHere = computed(() => route.path === '/' || route.path.startsWith('/issues/'));
 // every Settings page, under the cog
 const settingsHere = computed(() => route.path.startsWith('/settings'));
+const run = computed(() => syncStatus.value?.run ?? null);
+// the tab's dot: red when the last sync failed
+watch(() => (run.value?.state === 'failed' ? 'send' : null), setFavicon, { immediate: true });
+const syncWords = computed(() => runWords(run.value));
+const firstPull = computed(() => board.value?.first_pull);
+const firstPullHidden = ref(false);
 // Releases, or one release's page
 const releasesHere = computed(() => route.path === '/releases' || route.path.startsWith('/releases/'));
-
-const w = computed(() => waiting(remotes.value, forgeStatus.value, syncStatus.value));
-// the tab's dot: red to send, teal to get
-watch(() => faviconDot(w.value), setFavicon, { immediate: true });
-
-// what the Sync button says: running, else what waits
-const syncWords = computed(() => (w.value.running ? 'syncing now' : waitWords(w.value).toLowerCase()));
 // the palette's key, as this keyboard writes it
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
-const inboxCount = computed(() => inbox.value?.rows.length ?? 0);
-// the repository's name, else git-board's; the tab says it too, with the
+const inboxCount = computed(() => (inbox.value ? inbox.value.follows.length + inbox.value.opened.length : 0));
+// the repository's folder, else git-board's; the tab says it too, with the
 // inbox's count: "(3) co2-calculator"
-const title = computed(() => repo.value || 'git-board');
+const title = computed(() => board.value?.dir.split('/').filter(Boolean).at(-1) || 'git-board');
 watch([inboxCount, title], ([n, t]) => (document.title = n ? `(${n}) ${t}` : t), { immediate: true });
 // ponytail: every issues event reloads the inbox, debounced; the server
 // recomputes it each time (inbox.go says when to keep it instead)
 const reloadInbox = debounced(() => void loadInbox());
-// a sync elsewhere, or an edit: what waits changes
-const reloadWaiting = debounced(() => {
-  void loadRemotes();
-  void loadForges();
-  void loadSyncStatus();
-});
+// a run started or ended
+const reloadSync = debounced(() => void loadSync(), 200);
 // another identity (here, or in another tab: LiveNotice reloads me): another inbox
 watch(
   () => me.value?.me?.id,
@@ -148,8 +130,6 @@ watch(
 );
 
 const menu = ref<HTMLDetailsElement | null>(null);
-// the fresh clone's note, hidden for this page load
-const firstPullHidden = ref(false);
 
 // where the tip goes (docs/prd/header-help.md, 4): the header from 80rem
 // when its free space takes a tip, a strip under it from 48rem, else none
@@ -206,16 +186,16 @@ onMounted(() => {
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onKey);
   document.addEventListener('click', fold);
-  if (!syncStatus.value) void loadSyncStatus();
-  if (!forgeStatus.value) void loadForges();
-  void checkOrigin(); // what waits to get, fetched once in five minutes
+  if (!syncStatus.value) void loadSync();
   if (!me.value) void loadMe();
-  if (!inbox.value) void loadInbox();
-  // this tab's own writes too: an issue written here waits to send
+  // the inbox's count after what the page shows first (it reads every
+  // issue you follow)
+  if (!inbox.value) setTimeout(() => void loadInbox(), 600);
   stopLive = onLive((e) => {
     const own = e.by === clientId;
-    if (!own && (e.kind === 'issues' || e.kind === 'inbox')) reloadInbox();
-    if (e.kind === 'issues' || e.kind === 'sync') reloadWaiting();
+    if (!own && (e.kind === 'issue' || e.kind === 'inbox' || e.kind === 'resync')) reloadInbox();
+    if (e.kind === 'sync') reloadSync();
+    onStep(e);
   }, { own: true });
 });
 </script>
@@ -231,7 +211,7 @@ onMounted(() => {
 
 /* the header stays on top while the page scrolls */
 .app-header { position: sticky; top: 0; z-index: 30; }
-.app-unswitched { margin: 0; border-radius: 0; }
+.app-unswitched, .app-firstpull { margin: 0; border-radius: 0; }
 /* the nav takes what's left, on one line */
 .app-header .epfl-nav { flex: 0 1 auto; min-width: 0; align-items: center; }
 .app-header .epfl-nav > a { flex: none; white-space: nowrap; }

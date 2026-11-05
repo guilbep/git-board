@@ -1,0 +1,1 @@
+error: this clone's board was started over on <when>, origin's wasn't: git board push --prune makes origin match, git board reset --hard origin goes back to it

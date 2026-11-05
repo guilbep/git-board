@@ -4,7 +4,7 @@
 // of a release's page and its dialogs (ReleasePage.vue, CutReleaseDialog,
 // RollbackDialog): the cut's tag and label, the checks, rollback targets.
 // Pure, no "@/" imports: node runs releases.test.ts on it.
-import type { Draft, EnvState, IssueEnvironment, ReleaseJob, ReleaseRow, ReleaseStep, ReleaseVersion, TargetState } from './api/board.ts';
+import type { Draft, EnvState, ReleaseJob, ReleaseRow, ReleaseStep, ReleaseVersion, TargetState } from './api/releases.ts';
 
 // a release tag: v1.4.20, v1.4.20-rc.2 (release.ParseTag)
 export const tagPattern = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/;
@@ -15,21 +15,6 @@ export type EnvMark = 'prod' | 'stage' | 'dev' | 'off';
 export function envMark(role: EnvState['role'], here: boolean): EnvMark {
   if (!here) return 'off';
   return role === 'last' ? 'prod' : role === 'candidate' ? 'stage' : 'dev';
-}
-
-// envLine: an issue's Development line, one piece per environment, in the
-// environments' order: "in dev", "in stage · v1.4.20-rc.2", "not in prod".
-// A version shows only when it is a release tag (the followed environment's
-// bare dev version doesn't). The marks follow the roles by position, as the
-// config has them: the first environment is followed (dev), the last is
-// prod, the ones between are candidates (stage).
-export function envLine(envs: IssueEnvironment[]): { text: string; mark: EnvMark }[] {
-  const n = envs.length;
-  return envs.map((e, i) => {
-    const role: EnvState['role'] = i === n - 1 ? 'last' : i === 0 ? 'follow' : 'candidate';
-    const version = e.in && tagPattern.test(e.version) ? ` · ${e.version}` : '';
-    return { text: `${e.in ? 'in' : 'not in'} ${e.name}${version}`, mark: envMark(role, e.in) };
-  });
 }
 
 export interface VersionGroup {
@@ -266,23 +251,3 @@ export const markClass = (m: EnvMark): string[] => ['gb-envmark', m === 'dev' ? 
 // repoNames: each config repo's target name (enack8s), for the job steps
 // that name the repo
 export const repoNames = (envs: EnvState[]): Record<string, string> => Object.fromEntries(envs.flatMap((e) => e.targets.map((t) => [t.repo, t.name])));
-
-// Setup is what Enable binary release proposes (ReleaseSetup).
-type Setup = { binaries: string[]; platforms: string[]; build: string; repo: string };
-
-// setupLines: the Enable panel's sentences, what a cut will do.
-export function setupLines(s: Setup): string[] {
-  const list = new Intl.ListFormat('en', { type: 'conjunction' });
-  return [
-    `Build ${s.binaries.join(', ')} for ${list.format(s.platforms)}`,
-    s.build ? `Run “${s.build}” in a clean checkout of the tag; its dist/ is what ships` : 'Go builds, CGO off, stripped; a .tar.gz per platform, .zip for windows, with checksums.txt',
-    `Publish them as a GitHub release on ${s.repo}, with the notes drafted from the issues`,
-    "Record what shipped in git, on the release's record",
-  ];
-}
-
-// setupToml: the [release] table Enable writes, as config.WithRelease does.
-export function setupToml(s: Setup): string {
-  const arr = (xs: string[]) => `[${xs.map((x) => JSON.stringify(x)).join(', ')}]`;
-  return `[release]\nbinaries = ${arr(s.binaries)}\nplatforms = ${arr(s.platforms)}\n` + (s.build ? `build = ${JSON.stringify(s.build)}\n` : '');
-}

@@ -1,0 +1,8 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-import	0	import
+02-import-md-issues	0	import --md issues
+03-import	0	import
+04-export-md-out	0	export --md out
+05-file-1-kept-in-a-folder-merged-by-union	0	file 1-kept-in-a-folder-merged-by-union.md
+06-file-2-n-c-d-md	0	file 2-n-c-d.md
+07-file-id-made-by-hand-md	0	file ID-made-by-hand.md

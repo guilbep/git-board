@@ -1,0 +1,133 @@
+[
+  {
+    "closed_at": "NOW",
+    "comments": 1,
+    "counted": true,
+    "created_at": "2025-03-03T16:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "assignee:ada-l",
+      "est:0.5",
+      "kind:feature",
+      "prio:p3",
+      "status:done"
+    ],
+    "number": "GB-101",
+    "status": "closed",
+    "title": "Retitled by the cross test",
+    "updated_at": "NOW"
+  },
+  {
+    "closed_at": "NOW",
+    "comments": 0,
+    "counted": true,
+    "created_at": "2025-03-03T19:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "status:done"
+    ],
+    "status": "closed",
+    "title": "Thread with a deleted comment",
+    "updated_at": "NOW"
+  },
+  {
+    "closed_at": "NOW",
+    "comments": 3,
+    "counted": true,
+    "created_at": "2025-03-03T20:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "area:données",
+      "assignee:chloe",
+      "status:done",
+      "étiquette"
+    ],
+    "number": "GB-102",
+    "status": "closed",
+    "title": "Ünïcödé: 日本語のタイトル 🚀 — שלום \u0026 \u003cb\u003e (renamed)",
+    "updated_at": "NOW"
+  },
+  {
+    "closed_at": "NOW",
+    "comments": 4,
+    "counted": true,
+    "created_at": "2025-03-03T21:30:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "kind:bug",
+      "closed-as:duplicate",
+      "duplicate-of:ID",
+      "status:done"
+    ],
+    "number": "GB-7",
+    "status": "closed",
+    "title": "Crash on empty report",
+    "updated_at": "NOW"
+  },
+  {
+    "closed_at": "NOW",
+    "comments": 0,
+    "counted": true,
+    "created_at": "2025-03-04T00:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "status:done"
+    ],
+    "status": "closed",
+    "title": "Bare",
+    "updated_at": "NOW"
+  },
+  {
+    "closed_at": "NOW",
+    "comments": 0,
+    "counted": true,
+    "created_at": "2025-03-04T01:00:00Z",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "a",
+      "assignee:chloe",
+      "d",
+      "sprint:s2",
+      "status:done"
+    ],
+    "number": "GB-103",
+    "status": "closed",
+    "title": "Label churn",
+    "updated_at": "NOW"
+  },
+  {
+    "closed_at": "NOW",
+    "comments": 0,
+    "counted": true,
+    "created_at": "NOW",
+    "id": "ID",
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "labels": [
+      "prio:p1",
+      "status:done"
+    ],
+    "status": "closed",
+    "title": "Cross write one",
+    "updated_at": "NOW"
+  }
+]

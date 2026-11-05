@@ -18,7 +18,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { getForgeDocs, type DocSection } from '@/api/board';
+import { getDocs, type DocSection } from '@/api';
 import { message } from '@/issue';
 import GbIcon from '@/components/GbIcon.vue';
 
@@ -29,7 +29,7 @@ const error = ref('');
 async function load() {
   if (docs.value.length) return;
   try {
-    docs.value = await getForgeDocs();
+    docs.value = await getDocs('forges');
   } catch (e) {
     error.value = message(e);
   }

@@ -1,0 +1,2 @@
+[views.mine]
+filter = "assignee:@me"

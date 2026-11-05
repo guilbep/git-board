@@ -1,0 +1,4 @@
+{"clock":1,"nonce":"d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0","ops":[{"kind":"create","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740992400,"data":{"body":"A body with a heading:\n\n### not a comment · 2025-01-01T00:00:00Z\n\nstill the body.","title":"Kept in a folder"}},{"kind":"change-labels","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740992400,"data":{"add":["status:ready","prio:p1","assignee:ada","bug","plain"]}}]}
+{"clock":2,"ops":[{"kind":"comment","author":"9b787ae15fe85e31754d154f1d95eb962c91bbcf","time":1740996000,"data":{"body":"A comment."}}]}
+{"clock":3,"ops":[{"kind":"set-title","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1741010460,"data":{"title":"Kept in a folder, merged by union"}}]}
+{"clock":3,"ops":[{"kind":"comment","author":"c2c767e89eb76626f8a9d76bdec5ec1acef93f53","time":1741010400,"data":{"body":"Written on the branch side."}}]}

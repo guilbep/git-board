@@ -1,17 +1,22 @@
-// The project's [labels] list, read once a page and shared by every
-// issue's label picker (LabelPicker): it changes with the project file,
-// which a save reloads.
-import { ref } from 'vue';
-import { getLabelList, type LabelList } from '@/api/board';
+// The project's [labels] list (.git-board.toml), read with the file's
+// model and shared by every issue's label picker (LabelPicker): a save
+// reloads it.
+import { computed } from 'vue';
+import { configModel, loadConfigModel } from '@/configmodel';
 
-export const labelList = ref<LabelList | null>(null);
+export interface LabelList {
+  defined: boolean; // the file has a [labels] list
+  list: string[];
+  colors: Record<string, string>;
+  descriptions: Record<string, string>;
+}
 
-let reading: Promise<void> | null = null;
+export const labelList = computed<LabelList | null>(() => {
+  const m = configModel.value;
+  if (!m) return null;
+  return { defined: 'labels' in m.raw, list: m.labels.list, colors: m.labels.colors ?? {}, descriptions: m.labels.descriptions ?? {} };
+});
 
 export function loadLabelList(): Promise<void> {
-  reading ??= getLabelList().then(
-    (l) => void (labelList.value = l),
-    () => void (labelList.value = null), // an older server: no list, no picker
-  );
-  return reading;
+  return configModel.value ? Promise.resolve() : loadConfigModel();
 }

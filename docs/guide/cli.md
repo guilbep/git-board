@@ -208,13 +208,16 @@ git board undo a1b2c3d --force      # though someone wrote after you
 It writes the inverse of your last change: a label added is removed and
 one removed added back; a status, a title or a text goes back to what it
 was; a new comment is deleted. A change is what one command wrote, so
-`edit -e`'s title and description go back together. Undoing twice redoes.
-Nothing is erased: the change and its undo are both in `git board log`.
+`edit -e`'s title and description go back together. Undoing twice redoes,
+but for a new comment: its undo is a delete, and a delete is final ([ADR
+0019](../adr/0019-deleting-is-a-tombstone.md)), so a second undo refuses
+and says so; post the text again with `git board comment`. Nothing is
+erased: the change and its undo are both in `git board log`.
 
 Refused, exit code 2, with the reason:
 
 - creating an issue: `git board delete` deletes it;
-- a delete: never undone;
+- a delete: never undone, the one undoing a comment wrote too;
 - a change of metadata (a review thread resolved, a Project field);
 - someone else wrote to the issue after you, or a sync pulled into it:
   `--force` undoes yours anyway, over theirs.
@@ -305,6 +308,9 @@ git board config set views.backlog.filter "is:open prio:p1"
 git board config set sprints.length_days 14
 git board config unset github-project.write
 git board config set board.view classic             # this clone's git config
+git board config schema                             # the file's schema version, and git-board's
+git board config upgrade --dry-run                  # the diff an upgrade writes
+git board config downgrade --to 1                   # for an older git-board
 ```
 
 A dotted key, like `github-project.owner` or `views.backlog.filter`, is
@@ -320,6 +326,10 @@ A key `board.<name>` is this clone's own, in git config: `board.view`,
 which `git board me` sets. `set` writes it with `--local`; `get` reads it
 at every level git does. A datastore URL is printed without its password.
 `get` of a key not set exits with code 3.
+
+`schema`, `upgrade` and `downgrade` (v0.12) move the file between the
+versions of its format: [The file's schema version](config-schema.md).
+`set` and `unset` write an older file upgraded, and say so.
 
 ## `forge status`, `forge login`: tokens
 
@@ -516,6 +526,98 @@ closed each week (the last `--weeks`, 8), the cycle time's median and
 view's issues alone, open and closed. `--json` prints what the page reads
 (`GET /api/insights`).
 
+## `sync`: git, the forges, the GitHub Project
+
+`git board sync [path...]` runs the whole sync on each path, as Settings ›
+Sync does: a git pull from the remote, the forge sync of every forge whose
+sync is on, the GitHub Project's fields when `[github-project]` names one,
+then a git push, which numbers the issues origin has. A failed pull stops
+the steps after it; a failed forge or Project step is told, and the push
+still runs. `--check` runs the same steps writing nothing; `--git` syncs
+with git alone, a pull then a push. With no path it syncs the current
+directory; it goes on past a path that fails and reports every failure at
+the end. Each step has its own commands: `fetch`, `pull` and `push` (the
+git remote), `forge pull|push|sync` and `project pull|push|sync`
+([Forges](forges.md#on-the-command-line)).
+
+```bash
+git board sync --check
+git board sync
+git board sync --git ../co2-calculator ../git-time
+```
+
+## `project`: the GitHub Project
+
+`git board project` keeps a GitHub Project's field values and the
+`ns:value` labels in step, on the issues a sync already linked to their
+GitHub issue: `pull` takes the Project's changes into the labels, `push`
+writes git-board's to the Project (with `write = true`), `sync` does both,
+and is the third step of `git board sync`. Each takes `--check`. A field
+is decided against the value both sides last agreed on: only one side
+changed, the other follows; both changed, it is a conflict, left alone
+until `resolve` takes a side. Assignees merge person by person. The
+fields, the table and the token: [Configuration › GitHub
+Project](configuration.md#github-project).
+
+```bash
+git board project configure --owner EPFL-ENAC --project 40
+git board project sync --check
+git board project sync
+git board project resolve 2605 status --theirs   # or --ours
+```
+
+## `lint`: drift between the issues and the file
+
+`git board lint` is read-only: it reports, and writes nothing. It checks
+the open issues against `.git-board.toml`: keys git-board doesn't read
+(`unknown-key`), two values of a single field (`double-single`), a value
+outside a field's `options` (`unknown-value`, with the option meant when
+only case or punctuation differs), two spellings of one value on a field
+without options (`near-value`), a single field with no value
+(`missing-value`), a `sprint:` label no sprint has (`orphan-sprint`), an
+option no issue carries, closed ones included (`dead-option`), with
+`[branches] kinds` an issue with two kinds, a title naming another kind
+or none at all (`two-kinds`, `kind-title`, `no-kind`), with `[labels]` a
+plain label outside the list (`label-outside`), and the labels' and issue
+templates' own problems. `--strict` exits 1
+when there are any, for CI. `--create-labels` is v0.11's, not in v0.12 yet.
+
+## `sprint`: the configured sprints
+
+```bash
+git board sprint ls                    # every sprint, with its computed dates
+git board sprint current               # the sprint @current resolves to (next, previous)
+git board sprint new q1-hardening --title "Q1 Hardening" --start 2026-10-05
+git board sprint report delivery       # its issues, open and closed, counted by status
+```
+
+A sprint's end is the next one's start, or `start + [sprints] length_days`
+for the last ([Sprints](configuration.md#sprints)). No sprint resolving is
+not an error: `current` says so and exits 0. `new` adds a
+`[[sprints.list]]` entry, keeping the file's comments and order, and
+refuses a slug already used or a date that isn't `YYYY-MM-DD`.
+
+## `tui`: the terminal browser
+
+```bash
+git board tui                  # is:open
+git board tui "is:open prio:p1"
+```
+
+| Key | Does |
+|---|---|
+| `↑`/`↓`, `/` | scroll, and a fuzzy search of titles and labels |
+| `enter` | the issue's fields |
+| `f` | a filter, in the grammar of `ls` |
+| `s` | a sort, as `ls --sort` (`prio desc`) |
+| `c` | a quick filter on the `cat` field's options, when the file has one |
+| `i`, then `o` | preview `git board project pull`, then apply it, decided again from the issues as they are then |
+| `e` | in an issue: edit a field, from its options or as text (`+value`, `-value`, as `set`) |
+| `esc`, `q` | back; `q` or `ctrl+c` on the list quits |
+
+The TUI shows an issue's fields; its description and comments are the
+web app's and `show`'s.
+
 ## JSON output
 
 ```bash
@@ -612,6 +714,30 @@ completion, which doesn't know this command's words. Tab then completes:
 
 A completion reads the board and `.git-board.toml`, writes nothing, and
 offers nothing when it can't read them.
+
+## Logs
+
+The server behind the web app (`git board`, `git board serve`) writes its
+logs to stderr: one line an event, its start, each request, what went
+wrong ([the HTTP API](../rewrite/api.md#logs)). v0.11 and before wrote a
+few lines with no level.
+
+```bash
+git board serve --log-level debug                     # the queries, each change event
+git board serve --log-format json 2> board.log        # one JSON object a line
+GIT_BOARD_LOG_LEVEL=warn git board                    # only what went wrong
+```
+
+| Level | What |
+|---|---|
+| `error` | a request that failed on the server's side, with its code; a sync that failed |
+| `warn` | a request refused (another site's page, a name that isn't this machine's); a request slower than a second; a sync's warnings; an issue that can't be read |
+| `info` (the default) | the start (version, board, datastore, address); a line a request (method, path, status, duration, bytes); a sync's start and end |
+| `debug` | a request's query, its secrets redacted; each change event |
+
+`--log-level` and `--log-format` (`text`, the default, or `json`) win
+over `GIT_BOARD_LOG_LEVEL` and `GIT_BOARD_LOG_FORMAT`. A line never holds
+a token, a cookie, a header or a request's body.
 
 ## Exit codes
 

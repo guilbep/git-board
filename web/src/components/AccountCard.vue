@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Person } from '@/api/board';
+import type { Person } from '@/api';
 import { themePref, type ThemePref } from '@/theme';
 import GbAvatar from '@/components/GbAvatar.vue';
 import GbIcon from '@/components/GbIcon.vue';

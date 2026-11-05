@@ -1,0 +1,48 @@
+[fields.status]
+single = true
+options = ["todo", "doing", "done"]
+colors = { todo = "Yellow" }
+descriptions = { todo = "to do" }
+project = { todo = "Todo" }
+[fields.prio]
+options=["p0","p1"]
+aliases = { p00 = "p0" }
+[roles]
+lead = "bob"
+[views.x]
+filter = "is:open"
+limits = { todo = 3 }
+[branches]
+base = "main"
+name = "{n}-{slug}"
+kinds = { bug = "bug" }
+[labels]
+list = ["urgent"]
+colors = { urgent = "red" }
+[repos]
+list = ["a/b"]
+assignees = "labels"
+[github-project]
+owner = "o"
+number = 3
+write = true
+[uploads]
+endpoint = "x"
+[template]
+name = "t"
+version = 2
+[release]
+environments = ["dev", "prod"]
+[experimental]
+features = ["agents"]
+[forges.gh]
+kind = "github"
+project = "o/r"
+[forges.gh.fields.status]
+to = "project"
+field = "Status"
+[cycle]
+ready = "todo"
+steps = ["intent", "code"]
+[sprints]
+length_days = 14

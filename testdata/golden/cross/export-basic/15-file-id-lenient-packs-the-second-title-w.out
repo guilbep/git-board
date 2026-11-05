@@ -1,0 +1,22 @@
+---
+id: ID
+title: 'Lenient packs: the second title wins'
+state: open
+fields:
+  prio:
+    - p3
+people:
+  author: Ada King
+created: 2025-03-03T23:00:00Z
+updated: 2025-03-03T23:15:00Z
+---
+
+Written by a later git-board.
+
+<!-- git-board comments -->
+
+### Bob · 2025-03-03T23:05:00Z
+
+keys in capitals
+
+<!-- git-board comment ID:0 -->

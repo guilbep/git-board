@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { WorkRow } from './api/board.ts';
-import { actionFor, ago, retroWords, sendWords, stepLabel, waitsFor } from './work.ts';
+import type { WorkRow } from './api/cycletypes.ts';
+import { actionFor, ago, stepLabel, waitsFor } from './work.ts';
 
 const now = new Date('2026-10-19T12:00:00Z');
 const before = (s: number) => new Date(now.getTime() - s * 1000).toISOString();
@@ -55,11 +55,4 @@ test('actionFor', () => {
 test('the small words', () => {
   assert.equal(stepLabel(6, 'Review'), '06 Review');
   assert.equal(stepLabel(0, 'Code'), 'Code');
-  assert.equal(sendWords(0), 'Nothing to send');
-  assert.equal(sendWords(1), '1 change');
-  assert.equal(sendWords(3), '3 changes');
-  assert.equal(retroWords({ sprint: 's1', corrections: 5 }), '5 agent corrections flagged in reviews.');
-  assert.equal(retroWords({ sprint: 's1', corrections: 1 }), '1 agent correction flagged in reviews.');
-  assert.equal(retroWords({ sprint: 's1', corrections: 0 }), 'No correction flagged this sprint.');
-  assert.equal(retroWords({ corrections: 0 }), 'No sprint is running: the retro counts from one. Set them in Settings › Sprints.');
 });

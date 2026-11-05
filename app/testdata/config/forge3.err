@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: [forges.a b]: a forge's name is letters, digits, - and _

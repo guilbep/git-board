@@ -72,7 +72,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import { changeLabels, patchIssue, type Issue } from '@/api/board';
+import { patchIssue, type Issue } from '@/api';
 import { colorClass } from '@/colors';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { message } from '@/issue';
@@ -129,8 +129,10 @@ async function apply(add: string[], remove: string[], patch?: string) {
   props.issue.labels = [...before.filter((l) => !remove.includes(l)), ...add.filter((l) => !before.includes(l))];
   editing.value = false;
   try {
-    if (patch !== undefined) await patchIssue(props.issue.id, { [props.name]: patch });
-    else await changeLabels(props.issue.id, add, remove);
+    const change = patch !== undefined ? { set: [`${props.name}=${patch}`] } : { labels: { add, remove } };
+    const t = await patchIssue(props.issue.id, props.issue.version, change);
+    props.issue.version = t.version;
+    props.issue.labels = t.labels;
     emit('saved');
   } catch (e) {
     props.issue.labels = before;

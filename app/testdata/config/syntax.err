@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: toml: line 2: expected '.' or ']' to end table name, but got '\n' instead

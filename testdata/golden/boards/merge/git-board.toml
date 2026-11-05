@@ -1,0 +1,44 @@
+[fields.status]
+single = true
+options = ["backlog", "ready", "in-progress", "in-review", "done"]
+
+[fields.prio]
+single = true
+options = ["p0", "p1", "p2", "p3"]
+
+[fields.est]
+single = true
+numeric = true
+
+[fields.assignee]
+single = false
+
+[fields.sprint]
+single = true
+
+[fields.reviewer]
+single = true
+
+[branches]
+kinds = { bug = "bug", feature = "feature" }
+
+[roles]
+reviewer = "chloe"
+
+[sprints]
+length_days = 14
+start_weekday = "monday"
+
+[[sprints.list]]
+slug = "s1"
+title = "Sprint 1"
+start = 2025-03-03
+
+[[sprints.list]]
+slug = "s2"
+title = "Sprint 2"
+start = 2025-03-17
+
+[views.ready]
+filter = "status:ready is:open"
+sort = "prio asc"

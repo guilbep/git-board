@@ -1,0 +1,15 @@
+[
+  {
+    "id": "29649619b3ac73ac63909ad8337db2684e472bd5",
+    "title": "A good issue",
+    "status": "open",
+    "labels": [],
+    "inherited": [
+      "reviewer:chloe"
+    ],
+    "shown_title": "A good issue",
+    "updated_at": "2025-03-03T09:00:00Z",
+    "created_at": "2025-03-03T09:00:00Z",
+    "comments": 0
+  }
+]

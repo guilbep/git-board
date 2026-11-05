@@ -1,6 +1,6 @@
-// The words of the Work page (pages/WorkPage.vue, api/board.ts WorkRow):
-// what a row waits for, the one action to press, how long ago.
-import type { WorkRow } from './api/board.ts';
+// The words of the Work page (pages/WorkPage.vue, api/cycletypes.ts
+// WorkRow): what a row waits for, the one action to press, how long ago.
+import type { WorkRow } from './api/cycletypes.ts';
 
 // ago: "just now", "12 min", "2 h", "3 d", "5 w"
 export function ago(iso: string, now: Date = new Date()): string {
@@ -54,15 +54,4 @@ export function actionFor(r: Pick<WorkRow, 'waits' | 'mine' | 'question' | 'acti
 // stepLabel: "06 Review"; the name alone before the list's first step
 export function stepLabel(step: number, name: string): string {
   return step ? `${String(step).padStart(2, '0')} ${name}` : name;
-}
-
-export function sendWords(pending: number): string {
-  if (pending === 0) return 'Nothing to send';
-  return `${pending} change${pending === 1 ? '' : 's'}`;
-}
-
-export function retroWords(retro: { sprint?: string; corrections: number }): string {
-  if (!retro.sprint) return 'No sprint is running: the retro counts from one. Set them in Settings › Sprints.';
-  if (retro.corrections === 0) return 'No correction flagged this sprint.';
-  return `${retro.corrections} agent correction${retro.corrections === 1 ? '' : 's'} flagged in reviews.`;
 }

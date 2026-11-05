@@ -40,7 +40,7 @@
 <script setup lang="ts">
 import { noteUse } from '@/keys';
 import { onMounted, ref } from 'vue';
-import { renderMarkdown, uploadFile, type Forge } from '@/api/board';
+import { renderMarkdown, upload, type Forge } from '@/api';
 import { message } from '@/issue';
 import { fillPlaceholder, insertAt, placeholderFor } from '@/attachtext';
 import { latestOnly } from '@/latest';
@@ -109,7 +109,7 @@ async function attach(files: File[]) {
       text.value = insertAt(text.value, area.value?.selectionStart ?? text.value.length, placeholder);
       uploadingName.value = file.name;
       try {
-        const up = await uploadFile(file);
+        const up = await upload(file);
         text.value = fillPlaceholder(text.value, placeholder, up.markdown);
       } catch (e) {
         text.value = text.value.replace(placeholder, '');

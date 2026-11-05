@@ -1,7 +1,7 @@
 // A board per role: the lanes it shows (a view's `lanes`: values of the
 // group field, in order), their limits, and picking several cards to move
 // at once. Pure, no "@/" imports: node runs lanes.test.ts on it.
-import type { Bucket } from './api/board';
+import type { Bucket } from './bucket.ts';
 import { rangeIds } from './tablecols.ts';
 
 // boardLanes keeps the buckets of the lanes, in their order, an empty one

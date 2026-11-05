@@ -30,10 +30,11 @@ Some features need more, and only those features:
 
 | Feature | Needs |
 | --- | --- |
-| GitHub Projects (`git board project`) | `gh`, logged in, with the `project` scope (`gh auth refresh -s project`) |
+| GitHub Projects (`git board project`) | the GitHub forge's token with the `read:project` scope, `project` to write ([Forges › Tokens](../guide/forges.md#tokens)) |
 | A board kept in PostgreSQL | a PostgreSQL database, tested with 16 ([Owning your issues](ownership.md#where-the-board-is-kept)) |
 | Attachments in comments | an S3 bucket, set where the server runs ([Configuration › Attachments](../guide/configuration.md)) |
-| The experimental cycle, agents and worktrees | see [Configuration › Experimental features](../guide/configuration.md#experimental-features) |
+| The experimental cycle | see [Configuration › Experimental features](../guide/configuration.md#experimental-features) |
+| Coding agents, each in its worktree | `git-board-agents` and [wtx](https://github.com/EPFL-ENAC/wtx): see [Configuration › Worktrees](../guide/configuration.md#worktrees) |
 
 ## Shell completion
 

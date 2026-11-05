@@ -4,7 +4,7 @@
 // The rules of what a place is are fieldtargets.ts's. Pure: node --test
 // imports it.
 import { fieldTarget, targetLabels, type ForgeMapping, type ForgeModel } from './fieldtargets.ts';
-import type { ConfigField } from './api/board.ts';
+import type { ConfigField } from './configparse.ts';
 
 // forge → field → its mapping (only overrides: a field on its default has none)
 export type Places = Record<string, Record<string, ForgeMapping>>;

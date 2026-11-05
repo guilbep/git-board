@@ -2,10 +2,7 @@
      stages; the stages' statuses (guessed from their names until set),
      the roles that hold the gates, the kinds' rules, and the suites:
      [cycle.tests.<name>] run at step 4, [cycle.checks.<name>] gate Mark
-     ready for review. "Propose from the project" reads lefthook.yml, the
-     Makefile and package.json and fills the checks with what they run
-     (GET /api/checks/setup). Off, every [cycle.*] table goes and the
-     issues open on the classic page. -->
+     ready for review. Off, every [cycle.*] table goes. -->
 <template>
   <div class="set-panel cs">
     <h2 class="h4">Cycle</h2>
@@ -58,12 +55,6 @@
             </div>
 
             <h3 class="h5">Checks — they gate Mark ready for review</h3>
-            <div class="cs-tools">
-              <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="proposing" @click="propose">
-                {{ proposing ? 'Reading the project…' : 'Propose from the project' }}
-              </button>
-              <span v-if="proposalNote" class="gb-hint">{{ proposalNote }}</span>
-            </div>
             <ConfigRows :rows="suiteRows('checks')" add-label="Add a check" @update="setSuites('checks', $event)" @add="addSuite('checks')">
               <template #row="{ row, set: setRow }">
                 <div class="cs-suite">
@@ -123,6 +114,7 @@
             @save="draft.save()"
             @discard="reset"
             @reload="draft.load()"
+            @overwrite="draft.save(true)"
           />
         </template>
 
@@ -136,7 +128,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { getChecksSetup, type ConfigSuite } from '@/api/board';
+import type { ConfigSuite } from '@/configparse';
 import { SectionDraft, configModel, configModelError, inputValue } from '@/configmodel';
 import { message } from '@/issue';
 import ConfigRefPanel from '@/components/configforms/ConfigRefPanel.vue';
@@ -260,38 +252,6 @@ function setSuites(family: 'tests' | 'checks', rows: SuiteRow[]) {
 function addSuite(family: 'tests' | 'checks') {
   const rows = suiteRows(family);
   setSuites(family, [...rows, { name: '', suite: { run: [] } }]);
-}
-
-// "Propose from the project": what lefthook.yml, the Makefile and
-// package.json run, as [cycle.checks] entries. The proposal's toml is its
-// own write (POST /api/checks/setup); here its checks land in the draft,
-// to save with the rest of the section.
-const proposing = ref(false);
-const proposalNote = ref('');
-
-async function propose() {
-  proposing.value = true;
-  proposalNote.value = '';
-  try {
-    const setup = await getChecksSetup();
-    if (setup.declared) {
-      proposalNote.value = '[cycle.checks] has entries already; edit them here.';
-      return;
-    }
-    if (!setup.checks || Object.keys(setup.checks).length === 0) {
-      proposalNote.value = 'Nothing to propose: no lefthook pre-commit, Makefile target or package.json script runs as a check.';
-      return;
-    }
-    setSuites(
-      'checks',
-      Object.entries(setup.checks).map(([name, suite]) => ({ name, suite: { ...suite, where: suite.where ?? 'worktree' } })),
-    );
-    proposalNote.value = `${Object.keys(setup.checks).length} check${Object.keys(setup.checks).length === 1 ? '' : 's'} proposed from ${setup.source} — review and save.`;
-  } catch (e) {
-    proposalNote.value = message(e);
-  } finally {
-    proposing.value = false;
-  }
 }
 
 const valid = computed(() => {

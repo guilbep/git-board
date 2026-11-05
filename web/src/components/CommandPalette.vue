@@ -61,14 +61,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { filterValues, getIssues, type Issue } from '@/api/board';
+import { listIssues, type Issue } from '@/api';
+import { values } from '@/colors';
 import { filtersHidden, helpAfterPalette, newIssueRequested, openShortcuts, paletteOpen, recentIssues, recordRecent } from '@/commands';
 import { message } from '@/issue';
-import { onLive } from '@/live';
 import { when } from '@/me';
-import { forgeNumbers } from '@/issuesync';
+import { forgeNumbers } from '@/idlabel';
 import { example, jumps, latest, numberName, rank, recentName } from '@/palette';
 import { suggest } from '@/viewfilter';
 import { helpOpen } from '@/shortcuts';
@@ -85,12 +85,9 @@ type Entry = { key: string; label: string; group: string; icon: IconName; hint?:
 const query = ref('');
 const active = ref(0);
 const input = ref<HTMLInputElement | null>(null);
-const all = ref<Issue[]>([]); // every issue, for the jumps by number or id
 const found = ref<Issue[] | null>(null); // the filter's answer; null: not yet
 const searching = ref(false);
 const error = ref('');
-const values = ref<Record<string, string[]>>({});
-void filterValues().then((v) => (values.value = v));
 
 // status: → status:ready, …: Tab takes the first, as the board's box offers them
 const suggestions = computed(() => suggest(query.value, values.value).slice(0, 4));
@@ -128,23 +125,12 @@ async function onShow() {
   active.value = 0;
   await nextTick();
   input.value?.focus();
-  if (!stale) return;
-  stale = false;
-  try {
-    all.value = (await getIssues('is:open,closed')).flatMap((b) => b.issues);
-  } catch {
-    all.value = [];
-    stale = true;
-  }
 }
 
-// every issue is asked once, and again only after they changed (a write
-// here or elsewhere, a sync): not on every ⌘K, a large board's whole list
-let stale = true;
-const offLive = onLive((e) => {
-  if (e.kind === 'issues') stale = true;
-}, { own: true });
-onBeforeUnmount(offLive);
+// the jumps by number or id are among what the filter finds: the server's
+// words find a number (2528), #2528 and an id's first 7 characters, so the
+// page never asks for every issue
+const all = computed<Issue[]>(() => found.value ?? []);
 
 // The filter runs on the server once typing pauses, on every issue (no
 // is:open added: the board shows the same issues for it); only the latest
@@ -164,7 +150,7 @@ watch(query, (typed) => {
   const mine = ++asked;
   timer = setTimeout(async () => {
     try {
-      const res = (await getIssues(f)).flatMap((b) => b.issues);
+      const res = (await listIssues({ filter: f, limit: 50 })).items;
       if (mine === asked) found.value = res;
     } catch (e) {
       if (mine === asked) {
@@ -207,7 +193,6 @@ const commands = computed<Entry[]>(() => [
     : []),
   { key: 'new', label: 'New issue', group: 'Commands', icon: 'plus', keys: ['c'], act: () => { newIssueRequested.value = true; if (route.path !== '/') void router.push('/'); } },
   ...props.views.map((v): Entry => ({ key: `view-${v}`, label: `View: ${v}`, group: 'Commands', icon: 'tag', act: () => void router.push({ path: '/', query: { view: v } }) })),
-  { key: 'insights', label: 'Insights', group: 'Commands', icon: 'chart', act: go('/insights') },
   { key: 'inbox', label: 'Inbox', group: 'Commands', icon: 'inbox', act: go('/inbox') },
   { key: 'settings', label: 'Settings', group: 'Commands', icon: 'settings', act: go('/settings') },
   { key: 'sync', label: 'Sync: where your issues go', group: 'Commands', icon: 'sync', act: go('/settings/sync') },

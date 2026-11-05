@@ -1,0 +1,15 @@
+[
+  {
+    "at": "2025-03-03T10:30:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "created",
+    "id": "6f03dc499fcb0452a97d6e24ced0267dfd068db0:0",
+    "title": "Made on b alone",
+    "body": "a creates its ref at b's head."
+  }
+]

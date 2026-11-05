@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: [cycle.kinds] bug: failing-test, per-criterion, none, not "x"

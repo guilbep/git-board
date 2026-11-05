@@ -1,7 +1,8 @@
 # Every pull request, and every push to main: set up Go and Node, then
-# `make ci`, the same run as on a developer's machine (web checks and build,
-# then Go build, vet, test, gofmt). Beside it, the e2e job: `make web-e2e`,
-# the browser tests, with Playwright's Chromium kept in a cache.
+# `make ci`, the same run as on a developer's machine (the web app's checks
+# and build, then Go build, vet, test, compat, gofmt). Beside it, the e2e
+# job: `make web-e2e`, the browser tests, with Playwright's Chromium kept
+# in a cache.
 name: ci
 
 on:
@@ -40,7 +41,7 @@ jobs:
       - run: make ci
 
   # The browser tests (web/e2e): web/e2e/serve.mjs builds the web app and
-  # the binary itself, so this job needs Go and Node, and the headless
+  # the binary itself, and serves throwaway boards, so this job needs Go and Node, and the headless
   # Chromium of the Playwright version web/package-lock.json pins.
   e2e:
     runs-on: ubuntu-latest

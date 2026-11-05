@@ -1,0 +1,10 @@
+{
+  "issue": "ID",
+  "title": "Label churn",
+  "undone": [
+    "ID:0"
+  ],
+  "what": [
+    "labels +bug"
+  ]
+}

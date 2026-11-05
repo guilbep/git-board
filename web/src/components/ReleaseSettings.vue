@@ -105,6 +105,7 @@
             @save="draft.save()"
             @discard="reset"
             @reload="draft.load()"
+            @overwrite="draft.save(true)"
           />
         </template>
 
@@ -118,7 +119,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
-import type { ConfigRelease } from '@/api/board';
+import type { ConfigRelease } from '@/configparse';
 import { releasePresets } from '@/configpresets';
 import { SectionDraft, configModel, configModelError, inputValue } from '@/configmodel';
 import ConfigPreset from '@/components/configforms/ConfigPreset.vue';

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Draft, EnvState, IssueEnvironment, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/board.ts';
-import { behindText, bump, checkIcon, cutHint, cutLabel, envLine, groupReleases, jobTitle, markClass, nextTag, older, olderFinals, plural, promotion, registryName, releaseBadge, releasePath, repoName, repoNames, setupLines, setupToml, sha7, splitParts, splitText, stepLabel, stepState, takenOf } from './releases.ts';
+import type { Draft, EnvState, ReleaseJob, ReleaseRow, ReleaseStep, TargetState } from './api/releases.ts';
+import { behindText, bump, checkIcon, cutHint, cutLabel, groupReleases, jobTitle, markClass, nextTag, older, olderFinals, plural, promotion, registryName, releaseBadge, releasePath, repoName, repoNames, sha7, splitParts, splitText, stepLabel, stepState, takenOf } from './releases.ts';
 
 function row(name: string): ReleaseRow {
   const [, major, minor, patch, rc] = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(name)!.map(Number);
@@ -57,7 +57,7 @@ test('splitText names each target', () => {
 
 test('stepState', () => {
   const step = (name: string, state: 'running' | 'done' | 'failed') => ({ name, detail: '', state });
-  const running: ReleaseJob = { kind: 'deploy', subject: 'dev', state: 'running', error: '', code: '', tag: '', steps: [step('frontend', 'done'), step('backend', 'running')], started: '', ended: null };
+  const running: ReleaseJob = { kind: 'deploy', subject: 'dev', state: 'running', steps: [step('frontend', 'done'), step('backend', 'running')], started_at: '' };
   assert.equal(stepState(running, 0), 'done');
   assert.equal(stepState(running, 1), 'now');
   assert.equal(stepState(running, 2), 'todo');
@@ -81,7 +81,7 @@ test('promotion: a candidate in the environment before last', () => {
 });
 
 test('jobTitle', () => {
-  const job: ReleaseJob = { kind: 'rollback', subject: 'prod to v1.4.19', state: 'running', error: '', code: '', tag: '', steps: [], started: '', ended: null };
+  const job: ReleaseJob = { kind: 'rollback', subject: 'prod to v1.4.19', state: 'running', steps: [], started_at: '' };
   assert.equal(jobTitle(job), 'Rolling back prod to v1.4.19');
   assert.equal(jobTitle({ ...job, state: 'done' }), 'Rolled back prod to v1.4.19');
   assert.equal(jobTitle({ ...job, kind: 'cut', subject: '', state: 'failed' }), 'The cut of a release stopped');
@@ -166,21 +166,6 @@ test('the small helpers', () => {
   assert.deepEqual(repoNames([env({ targets: [target('enack8s', 'v1'), target('openshift', 'v1')] })]), { enack8s: 'enack8s', openshift: 'openshift' });
 });
 
-test('envLine: in, in with a version, not in', () => {
-  const envs: IssueEnvironment[] = [
-    { name: 'dev', version: '1.4.21-dev.7.g8c41d2e', in: true },
-    { name: 'stage', version: 'v1.4.20-rc.2', in: true },
-    { name: 'prod', version: '', in: false },
-  ];
-  assert.deepEqual(envLine(envs), [
-    { text: 'in dev', mark: 'dev' },
-    { text: 'in stage · v1.4.20-rc.2', mark: 'stage' },
-    { text: 'not in prod', mark: 'off' },
-  ]);
-  // a final in the last environment: its mark, and its version
-  assert.deepEqual(envLine([{ name: 'prod', version: 'v1.4.20', in: true }]), [{ text: 'in prod · v1.4.20', mark: 'prod' }]);
-});
-
 test('olderFinals: the finals before what the environment runs, not yanked', () => {
   const yanked = { ...row('v1.4.18'), record: { yanked: 'broken' } as ReleaseRow['record'] };
   const rows = [row('v1.4.21-rc.1'), row('v1.4.20'), row('v1.4.20-rc.2'), row('v1.4.19'), yanked, row('v1.4.17')];
@@ -218,19 +203,6 @@ test('registryName and repoName say them short', () => {
   assert.equal(registryName('localhost:5000/app'), 'localhost:5000');
   assert.equal(repoName('git@github.com:EPFL-ENAC/enack8s-app-config.git'), 'enack8s-app-config');
   assert.equal(repoName('https://github.com/EPFL-ENAC/co2-calculator/'), 'co2-calculator');
-});
-
-test('setupLines says what a binary cut does', () => {
-  const s = { binaries: ['./cmd/git-board'], platforms: ['linux/amd64', 'darwin/arm64'], build: 'make dist', repo: 'acme/app' };
-  assert.deepEqual(setupLines(s), [
-    'Build ./cmd/git-board for linux/amd64 and darwin/arm64',
-    'Run “make dist” in a clean checkout of the tag; its dist/ is what ships',
-    'Publish them as a GitHub release on acme/app, with the notes drafted from the issues',
-    "Record what shipped in git, on the release's record",
-  ]);
-  assert.equal(setupLines({ ...s, build: '' })[1], 'Go builds, CGO off, stripped; a .tar.gz per platform, .zip for windows, with checksums.txt');
-  assert.equal(setupToml(s), '[release]\nbinaries = ["./cmd/git-board"]\nplatforms = ["linux/amd64", "darwin/arm64"]\nbuild = "make dist"\n');
-  assert.equal(setupToml({ ...s, build: '' }), '[release]\nbinaries = ["./cmd/git-board"]\nplatforms = ["linux/amd64", "darwin/arm64"]\n');
 });
 
 test('stepLabel names the build and publish steps', () => {

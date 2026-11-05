@@ -1,14 +1,25 @@
-// Field value colors, resolved by the server (config.Color): asked again
-// with every load of the issues, so a new value gets its color.
+// Field value colors (valuecolors.ts), from the fields' configured colors
+// (GET /api/fields) and the values in use (GET /api/labels): asked again
+// with the board's config, so a new value gets its color.
 import { ref } from 'vue';
-import { getColors } from '@/api/board';
-import { hexRules } from '@/labels';
+import { getFields, getLabels, type FieldConfig } from '@/api';
+import { hexRules, valueColors } from '@/valuecolors';
 
 export const colors = ref<Record<string, Record<string, string>>>({});
+// the values in use, field → values: what the filter boxes suggest
+// (viewfilter.suggest)
+export const values = ref<Record<string, string[]>>({});
 
-export async function loadColors(): Promise<void> {
+// fields: the page's, when it has them already (else asked)
+export async function loadColors(given?: Record<string, FieldConfig>): Promise<void> {
   try {
-    colors.value = await getColors();
+    const [fields, labels] = await Promise.all([given ?? getFields(), getLabels('')]);
+    const inUse: Record<string, string[]> = {};
+    for (const l of labels) if (l.field) (inUse[l.field] ??= []).push(l.value);
+    values.value = inUse;
+    const all = { ...inUse };
+    for (const [name, f] of Object.entries(fields)) all[name] = [...new Set([...(all[name] ?? []), ...(f.options ?? [])])];
+    colors.value = valueColors(fields, all);
   } catch {
     // values stay plain
   }

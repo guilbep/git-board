@@ -1,0 +1,86 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-new-cross-write-one-prio-p1-b-a-body-wit	0	new "Cross write one" prio=p1 -b "a body, with ünicode"
+02-new-cross-write-two-status-ready-kind-bu	2	new "Cross write two" status=ready kind:bug assignee=bob
+03-comment-26a4ba8-b-a-comment-from-the-cro	0	comment 26a4ba8 -b "a comment from the cross test"
+04-comment-22d74e7-b-another	0	comment 22d74e7 -b "another"
+05-comment-22d74e7-edit-last-b-another-edit	0	comment 22d74e7 --edit-last -b "another, edited"
+06-edit-398523d-title-retitled-by-the-cross	0	edit 398523d --title "Retitled by the cross test"
+07-edit-398523d-title-retitled-by-the-cross	0	edit 398523d --title "Retitled by the cross test"
+08-edit-398523d-b-a-new-body	0	edit 398523d -b "a new body"
+09-set-26a4ba8-prio-p0-est-3	0	set 26a4ba8 prio=p0 est=3
+10-set-26a4ba8-prio-p9	2	set 26a4ba8 prio=p9
+11-set-26a4ba8-nosuch-x	2	set 26a4ba8 nosuch=x
+12-set-26a4ba8-assignee-chloe	0	set 26a4ba8 assignee=+chloe
+13-set-26a4ba8-assignee-chloe	0	set 26a4ba8 assignee=-chloe
+14-move-26a4ba8-in-review	0	move 26a4ba8 in-review
+15-move-22d74e7-next	0	move 22d74e7 --next
+16-move-22d74e7-prev	0	move 22d74e7 --prev
+17-move-398523d-prev	0	move 398523d --prev
+18-close-999eab2-c-closing-it-reason-not-pl	0	close 999eab2 -c "closing it" --reason not-planned
+19-close-22d74e7-duplicate-of-9062b9a	0	close 22d74e7 --duplicate-of 9062b9a
+20-close-22d74e7-duplicate-of-22d74e7	2	close 22d74e7 --duplicate-of 22d74e7
+21-reopen-999eab2-c-back-again	0	reopen 999eab2 -c "back again"
+22-set-398523d-assignee-me-status-done	0	set 398523d assignee=+@me status=done
+23-set-398523d-status-ready	0	set 398523d status=ready
+24-set-22c49b4-est	0	set 22c49b4 est=
+25-set-22c49b4-kind-bug	0	set 22c49b4 kind=bug
+26-new	2	new
+27-new-bad-field-prio-p9	2	new "Bad field" prio=p9
+28-comment-9062b9a-b	1	comment 9062b9a -b ""
+29-comment-999eab2-delete-nosuch-yes	3	comment 999eab2 --delete nosuch --yes
+30-delete-427cb1b-yes	0	delete 427cb1b --yes
+31-comment-427cb1b-b-on-a-deleted-issue	3	comment 427cb1b -b "on a deleted issue"
+32-set-427cb1b-prio-p1	3	set 427cb1b prio=p1
+33-comment-427cb1b-edit-last-b-on-a-deleted	3	comment 427cb1b --edit-last -b "on a deleted issue"
+34-delete-0000000-yes	3	delete 0000000 --yes
+35-undo-26a4ba8	0	undo 26a4ba8
+36-undo-26a4ba8	0	undo 26a4ba8
+37-undo-26a4ba8	0	undo 26a4ba8
+38-undo-999eab2	0	undo 999eab2
+39-undo-999eab2-force	0	undo 999eab2 --force
+40-undo-22c49b4	0	undo 22c49b4
+41-undo-json	0	undo --json
+42-undo	0	undo
+43-undo-e958491	2	undo e958491
+44-follow-9062b9a	0	follow 9062b9a
+45-unfollow-26a4ba8	0	unfollow 26a4ba8
+46-follow-22c49b4-auto	0	follow 22c49b4 --auto
+47-follow-0000000	3	follow 0000000
+48-follow-398523d-json	0	follow 398523d --json
+49-labels	0	labels
+50-me	0	me
+51-config-set-views-ready-filter-status-rea	0	config set views.ready.filter "status:ready is:open prio:p0"
+52-config-set-views-mine-filter-assignee-me	0	config set views.mine.filter "assignee:@me"
+53-config-set-views-mine-sort-updated-desc	0	config set views.mine.sort "updated desc"
+54-config-set-sprints-length-days-21	0	config set sprints.length_days 21
+55-config-set-sprints-length-days-two	2	config set sprints.length_days two
+56-config-set-fields-prio-options-p0-p1-p2	2	config set fields.prio.options '["p0", "p1", "p2", "p3", "p4"]'
+57-config-set-fields-nope-colors-1	0	config set fields.nope.colors 1
+58-config-set-roles-reviewer-bob	2	config set roles.reviewer @bob
+59-config-set-github-project-owner-guilbep	0	config set github-project.owner guilbep
+60-config-unset-sprints-start-weekday	0	config unset sprints.start_weekday
+61-config-get-views-mine-filter	0	config get views.mine.filter
+62-config-get-github-project-number	3	config get github-project.number
+63-config-get-sprints-length-days	0	config get sprints.length_days
+64-view-mine	0	view mine
+65-numbers	1	numbers
+66-numbers-init-prefix-gb-start-1	1	numbers init --prefix GB --start 1
+67-set-filter-prio-p0-prio-p2	0	set --filter "prio:p0" prio=p2
+68-set-filter-prio-p0-is-open-closed-prio-p	0	set --filter "prio:p0 is:open,closed" prio=p2 assignee=+@me --apply
+69-set-filter-is-open-nosuch-x	2	set --filter "is:open" nosuch=x
+70-set-filter-status-nope-prio-p1	0	set --filter "status:nope" prio=p1
+71-set-26a4ba8-prio-p1-apply	2	set 26a4ba8 prio=p1 --apply
+72-set-filter-is-open-status-done-apply	0	set --filter "is:open" status=done --apply
+73-labels-rename-prio-p2-prio-p3	0	labels rename prio:p2 prio:p3
+74-labels-rename-nosuch-other	3	labels rename nosuch other
+75-labels-rename-same-same	2	labels rename same same
+76-labels-rename-prio-p3-spaced	2	labels rename prio:p3 " spaced"
+77-comment-9062b9a-delete-6a8541a-yes-json	0	comment 9062b9a --delete 6a8541a --yes --json id,deleted
+78-comment-9062b9a-delete-d3ad24b-yes-templ	0	comment 9062b9a --delete d3ad24b --yes --template "{{.ref}} {{.deleted}}"
+79-get-26a4ba8	0	get 26a4ba8
+80-get-0000000	3	get 0000000
+81-ls-is-open-closed-json	0	ls "is:open,closed" --json
+82-labels-json	0	labels --json
+83-ls-follows-me-is-open-closed-json	0	ls "follows:@me is:open,closed" --json
+84-config-list-json	0	config list --json
+85-view-ready-json	0	view ready --json

@@ -1,0 +1,15 @@
+[
+  {
+    "at": "2025-03-03T09:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "created",
+    "id": "29649619b3ac73ac63909ad8337db2684e472bd5:0",
+    "title": "A good issue",
+    "body": "Lists."
+  }
+]

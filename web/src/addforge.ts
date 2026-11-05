@@ -1,25 +1,23 @@
-// Add a forge, in four steps: the forge, the project, the token, the
-// check (POST /api/bridges, where the forge checks the token sees the
-// project before anything is kept). Pure, no "@/" imports: node runs
-// addforge.test.ts on it.
-import type { Credential } from './api/board';
+// Add a forge no git remote names: the forge, then the project and a
+// token, sent to POST /api/forges (api.md, 33), which writes its
+// [forges.<name>] table and gives the token to git's credential helper,
+// never the file (ADR 0010).
+// Pure, no "@/" imports: node runs addforge.test.ts on it.
 
-// the two forges the sync supports (the server refuses the others); GET
-// /api/forges lists forges, not their kinds (token: what docs/guide/forges.md
-// says it needs, in short)
+// the two forges the sync supports (token: what docs/guide/forges.md says
+// it needs, in short)
 export const forges = [
   { target: 'github', name: 'GitHub', short: 'gh', placeholder: 'https://github.com/owner/repo', token: 'a classic token with the repo scope' },
   { target: 'gitlab', name: 'GitLab', short: 'gl', placeholder: 'https://gitlab.epfl.ch/group/project', token: 'a token with the api scope' },
 ];
 
-export const forgeSteps = ['Forge', 'Project', 'Token', 'Check'];
+export const forgeSteps = ['Forge', 'Project'];
 
 export interface ForgeDraft {
   target: string;
   url: string;
-  name: string; // empty: the server picks gh, gh2…
-  credential: string; // a stored one's id, or empty for a pasted token
-  token: string;
+  name: string; // empty: gh, gh2… the first free
+  token: string; // empty: none stored
 }
 
 function parse(u: string): URL | null {
@@ -42,28 +40,12 @@ export function guessForge(url: string): string {
   return '';
 }
 
-// matchingCredentials are the stored tokens of the forge, of its instance
-// once the address says it
-export function matchingCredentials(creds: Credential[], target: string, url: string): Credential[] {
-  const host = target === 'github' ? 'github.com' : hostOf(url);
-  return creds.filter((c) => c.target === target && (!host || c.host === host));
-}
-
-const bridgeName = /^[A-Za-z0-9][A-Za-z0-9_-]*$/; // as store.AddBridge
+const forgeName = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 // canGoOn says whether a step is filled enough for the next one
 export function canGoOn(step: number, d: ForgeDraft): boolean {
-  switch (step) {
-    case 0:
-      return forges.some((f) => f.target === d.target);
-    case 1: {
-      const u = parse(d.url);
-      const project = u && /^https?:$/.test(u.protocol) && u.pathname.split('/').filter(Boolean).length >= 2;
-      return !!project && (!d.name.trim() || bridgeName.test(d.name.trim()));
-    }
-    case 2:
-      return !!d.credential || !!d.token.trim();
-    default:
-      return true;
-  }
+  if (step === 0) return forges.some((f) => f.target === d.target);
+  const u = parse(d.url);
+  const project = u && /^https?:$/.test(u.protocol) && u.pathname.split('/').filter(Boolean).length >= 2;
+  return !!project && (!d.name.trim() || forgeName.test(d.name.trim()));
 }

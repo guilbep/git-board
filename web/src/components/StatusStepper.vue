@@ -30,16 +30,15 @@
     <button v-if="next" type="button" class="gb-stepper-arrow" :class="`is-${next.icon}`" :aria-label="next.label" :title="next.label" :disabled="moving || busy" @click="step(next)">
       <GbIcon :name="next.icon" />
     </button>
-    <span v-if="waiting" class="gb-stepper-note" role="status">Waits for the sync…</span>
     <span v-if="error" class="gb-stepper-error" role="alert"><GbIcon name="error" small /> Not saved. {{ error }}</span>
   </span>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { ApiError, patchIssue } from '@/api/board';
+import { inject } from 'vue';
 import { formatValue, type Fields } from '@/fields';
-import { untilSyncEnds } from '@/forges';
+import { issueWriter } from '@/issuewrite';
 import { message } from '@/issue';
 import { nextStep, type NextStep } from '@/nextstep';
 import GbIcon from '@/components/GbIcon.vue';
@@ -63,21 +62,12 @@ const choices = computed(() => (props.current && !options.value.includes(props.c
 const next = computed(() => nextStep(options.value, props.current, props.closed));
 
 const moving = ref(false);
-const waiting = ref(false);
 const error = ref('');
 
+const writer = inject(issueWriter, null);
 async function patch(value: string) {
-  for (;;) {
-    try {
-      await patchIssue(props.id, { status: value });
-      return;
-    } catch (e) {
-      if (!(e instanceof ApiError && e.code === 'syncing')) throw e;
-      waiting.value = true;
-      await untilSyncEnds();
-      waiting.value = false;
-    }
-  }
+  const why = (await writer?.set([`status=${value}`])) ?? 'no issue open to write to';
+  if (why) throw new Error(why);
 }
 
 async function run(fn: () => Promise<unknown>) {
@@ -91,7 +81,6 @@ async function run(fn: () => Promise<unknown>) {
     error.value = message(e);
   } finally {
     moving.value = false;
-    waiting.value = false;
   }
 }
 

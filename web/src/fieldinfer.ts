@@ -1,5 +1,5 @@
-// What a field is, inferred the way the server's config.TypeOf infers it
-// (internal/config/types.go): the explicit type; else numeric; else what
+// What a field is, inferred the way v1's config.TypeOf inferred it
+// (internal/config/types.go; domain/issues/fields.go now): the explicit type; else numeric; else what
 // the name says (sprint, assignee, due…); else what every value parses
 // as (dates, issue references); else select. The fields editor shows the
 // inference instead of a dead "guessed", and goes into its numbers UI

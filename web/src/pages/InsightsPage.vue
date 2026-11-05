@@ -1,8 +1,8 @@
 <!-- Insights: the issues' history, which git-bug keeps operation by
-     operation, replayed day by day (internal/insights): how the work
+     operation, replayed day by day (tools/insights): how the work
      flowed, how fast it closes, how long it takes, the sprint's burn-up,
-     and the board as it was on any day. Each chart says its finding in
-     one sentence. -->
+     and the board as it was on any day (GET /api/insights). Each chart
+     says its finding in one sentence. -->
 <template>
   <AppHeader :views="viewNames" />
   <main class="gb-page ins">
@@ -135,8 +135,9 @@
 import SprintReportDialog from '@/components/SprintReportDialog.vue';
 import { debounced, onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { getFields, getInsights, getViews, type FieldConfig, type InsightsReport } from '@/api/board';
+import { getFields, getInsights, type FieldConfig, type InsightsReport } from '@/api';
 import { colorClass, loadColors } from '@/colors';
+import { configModel, loadConfigModel } from '@/configmodel';
 import { displayName } from '@/fields';
 import { message } from '@/issue';
 import AppHeader from '@/components/AppHeader.vue';
@@ -146,7 +147,7 @@ import FlowChart from '@/components/FlowChart.vue';
 import DonutChart from '@/components/DonutChart.vue';
 import { valueIcon } from '@/valueicons';
 
-const viewNames = ref<string[]>([]);
+const viewNames = computed(() => configModel.value?.view_order ?? []);
 const fields = ref<Record<string, FieldConfig>>({});
 const view = ref('');
 const field = ref('status');
@@ -166,7 +167,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const [rep] = await Promise.all([getInsights(field.value, days.value, view.value), loadColors()]);
+    const rep = await getInsights(field.value, days.value, view.value);
     r.value = rep;
     tm.value = Math.max(0, Math.min(tm.value || Infinity, rep.days.length - 1));
   } catch (e) {
@@ -180,14 +181,14 @@ watch([view, field, days], () => void load());
 // the sprint report, and a new replay when the issues changed elsewhere
 const reportOpen = ref(false);
 const replay = debounced(() => void load(), 2000);
-const offLive = onLive((e) => (e.kind === 'issues' || e.kind === 'sync') && replay());
+const offLive = onLive((e) => (e.kind === 'issue' || e.kind === 'resync') && replay());
 onBeforeUnmount(offLive);
 
 onMounted(async () => {
   try {
-    const [v, f] = await Promise.all([getViews(), getFields()]);
-    viewNames.value = Object.keys(v);
+    const [f] = await Promise.all([getFields(), loadConfigModel()]);
     fields.value = f;
+    await loadColors(f);
   } catch {
     // the defaults still work
   }

@@ -2,9 +2,8 @@
      19): the title alone, on one line where it can; the fields line, the
      status and its next step first, "by #N" for what blocks it, the top
      fields (a person's as faces, an empty one to fill), "+N more" or
-     "More fields", the one way to the others; the branch line; then Spec
-     and Linked
-     issues while they have something to say. The identity (number,
+     "More fields", the one way to the others. (The branch line, the
+     spec's verdict and the linked issues are the cycle's, M6.) The identity (number,
      forges, bell) is the bar's. A value opens its own editor, dense
      (FieldEditor); "+N more" lists every field (FieldPanel). -->
 <template>
@@ -50,9 +49,6 @@
       </GbPopover>
     </div>
 
-    <BranchLine :id="thread.id" :labels="thread.labels" :title="thread.title" />
-
-    <IssueSide class="gb-head-extra" :linked="refs.in" :spec="spec" :reviewer="reviewer" @open="(id) => emit('open', id)" />
   </div>
 </template>
 
@@ -60,19 +56,15 @@
 import GbAvatar from '@/components/GbAvatar.vue';
 import { personByLogin } from '@/people';
 import { computed, onMounted, ref, watch } from 'vue';
-import { getRefs, type IssueRefs, type Thread } from '@/api/board';
+import type { Thread } from '@/api';
 import { displayName, fieldValues, formatValue, typeOf, type Fields } from '@/fields';
 import { fieldLine, labelLine } from '@/headfields';
 import { labelList, loadLabelList } from '@/labellist';
-import { me } from '@/me';
-import type { SpecState } from '@/spec';
-import { syncStatus } from '@/sync';
-import BranchLine from '@/components/BranchLine.vue';
+import { me, people } from '@/me';
 import FieldPanel from '@/components/FieldPanel.vue';
 import LabelPicker from '@/components/LabelPicker.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import GbPopover from '@/components/GbPopover.vue';
-import IssueSide from '@/components/IssueSide.vue';
 import StatusStepper from '@/components/StatusStepper.vue';
 import ValueMark from '@/components/ValueMark.vue';
 
@@ -84,8 +76,6 @@ const props = defineProps<{
   titleId: string;
   renaming: boolean;
   setStatus: (s: 'open' | 'closed') => Promise<boolean>;
-  spec?: SpecState | undefined;
-  reviewer?: { name: string; role?: string | undefined } | undefined;
 }>();
 const emit = defineEmits<{ changed: []; labels: [add: string[], remove: string[]]; open: [id: string] }>();
 
@@ -110,12 +100,13 @@ const slots = computed(() =>
 const allFields = computed(() => props.names.filter((n) => n !== 'status'));
 const said = (name: string, values: string[]) => values.map((v) => (typeOf(name, props.fields) === 'person' ? nameOf(v) : formatValue(name, v, props.fields))).join(', ');
 // a person field holds logins: their names, as the identities say them
-const nameOf = (login: string) => personByLogin(me.value?.identities, login)?.name ?? login;
-const avatarOf = (login: string) => personByLogin(me.value?.identities, login)?.avatar_url;
+const nameOf = (login: string) => personByLogin(people.value, login)?.name ?? login;
+const avatarOf = (login: string) => personByLogin(people.value, login)?.avatar_url;
 const myLogin = computed(() => me.value?.me?.login ?? '');
 
 // a conflict with the GitHub Project the last check held on this field
-const held = (name: string) => !!syncStatus.value?.last?.conflicts.some((c) => c.bug_id === props.thread.id && c.field === name);
+// a field held by a GitHub Project conflict: the bridge's (M6)
+const held = (_name: string) => false;
 const statusFlag = computed(() => (held('status') ? 'held' : line.value.blockedBy.length ? 'blocked' : ''));
 
 // the issues its issue fields name, and those naming it: read once for the
@@ -123,23 +114,11 @@ const statusFlag = computed(() => (held('status') ? 'held' : line.value.blockedB
 // issue field's editor (out) and Linked issues (in). known: the last read
 // is of these labels, so a value it has no issue for names none here; one
 // failed or on its way leaves the last read, and known false.
-const refsKey = computed(() => `${props.thread.id} ${props.thread.labels.join(' ')}`);
-const read = ref<{ key: string; id: string; refs: IssueRefs } | null>(null);
-watch(
-  refsKey,
-  async (key) => {
-    const id = props.thread.id;
-    try {
-      const refs = await getRefs(id);
-      if (key === refsKey.value) read.value = { key, id, refs }; // else a newer read is on its way
-    } catch {
-      // the last read stays
-    }
-  },
-  { immediate: true },
-);
-const refs = computed<IssueRefs>(() => (read.value?.id === props.thread.id ? read.value.refs : { out: {}, in: {} }));
-const refsKnown = computed(() => read.value?.key === refsKey.value);
+// an issue's links through its issue fields (parent, blocked-by) come with
+// the cycle's read (M6: GET /api/issues/{id}/cycle); until then none
+interface IssueRef { value: string; id?: string; title?: string }
+const refs = computed<{ out: Record<string, IssueRef[]>; in: Record<string, IssueRef[]> }>(() => ({ out: {}, in: {} }));
+const refsKnown = computed(() => false);
 // what blocks it, to open: the issue named in blocked-by
 const blocker = (v: string) => refs.value.out['blocked-by']?.find((r) => r.value === v);
 function openBlocker(v: string) {

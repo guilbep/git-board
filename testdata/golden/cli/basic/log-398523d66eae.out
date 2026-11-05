@@ -1,0 +1,56 @@
+[
+  {
+    "at": "2025-03-03T16:00:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "created",
+    "id": "398523d66eaebdebff64257a35e73c84d5c31f47:0",
+    "title": "Export CSV (#13)",
+    "body": "Export the board as CSV."
+  },
+  {
+    "at": "2025-03-03T16:00:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "labels",
+    "id": "398523d66eaebdebff64257a35e73c84d5c31f47:1",
+    "added": [
+      "prio:p2",
+      "est:0.5",
+      "kind:feature",
+      "status:done"
+    ]
+  },
+  {
+    "at": "2025-03-03T17:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "comment",
+    "id": "9e34cd8aad8d3d513925b48a390a3ea1c9aa6452:0",
+    "body": "Done in 4e5f6a7."
+  },
+  {
+    "at": "2025-03-03T17:01:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "state",
+    "id": "e3444425dc904ea167008f03f2cf5241df791e96:0",
+    "state": "closed"
+  }
+]

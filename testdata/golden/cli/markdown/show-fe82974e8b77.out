@@ -1,0 +1,54 @@
+{
+  "id": "fe82974e8b7769405ecb048265e59a511263796b",
+  "title": "Ünïcödé 日本語 🚀",
+  "status": "closed",
+  "labels": [],
+  "shown_title": "Ünïcödé 日本語 🚀",
+  "number": "MD-2",
+  "counted": true,
+  "updated_at": "2025-03-03T11:05:00Z",
+  "created_at": "2025-03-03T11:00:00Z",
+  "closed_at": "2025-03-03T11:05:00Z",
+  "comments": 0,
+  "author": {
+    "id": "c2c767e89eb76626f8a9d76bdec5ec1acef93f53",
+    "name": "Chloé Dubois-Ångström",
+    "login": "chloe",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+  },
+  "edited_at": "2025-03-03T11:05:00Z",
+  "participants": [
+    {
+      "id": "c2c767e89eb76626f8a9d76bdec5ec1acef93f53",
+      "name": "Chloé Dubois-Ångström",
+      "login": "chloe",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "fe82974e8b7769405ecb048265e59a511263796b:0",
+      "author": {
+        "id": "c2c767e89eb76626f8a9d76bdec5ec1acef93f53",
+        "name": "Chloé Dubois-Ångström",
+        "login": "chloe",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+      },
+      "at": "2025-03-03T11:00:00Z",
+      "body": "é é"
+    },
+    {
+      "kind": "status",
+      "id": "01a710f8431c3d2bb4c89ef90ee8e8fd07000e15:0",
+      "author": {
+        "id": "c2c767e89eb76626f8a9d76bdec5ec1acef93f53",
+        "name": "Chloé Dubois-Ångström",
+        "login": "chloe",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+      },
+      "at": "2025-03-03T11:05:00Z",
+      "status": "closed"
+    }
+  ]
+}

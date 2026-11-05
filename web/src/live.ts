@@ -1,21 +1,16 @@
 // Live updates: one stream per page (GET /api/events, Server-Sent Events)
-// tells what changed elsewhere — issues, the configuration, a sync,
-// settings — and each part of the page reloads what it shows. A change
-// this page made itself (clientId) comes back too and is skipped: the page
-// already shows it, unless the listener asks for its own ({ own: true }):
-// the board, for a write from a panel closed since, whose changed never
-// came; the header, for what now waits to send. The browser reconnects by
-// itself; after a break, listeners hear an "issues" event, since some may
-// have been missed.
+// tells what changed, here or elsewhere (a command, a fetch, a sync): an
+// issue, a person, the configuration, who writes, the inbox, a sync run
+// and its progress. Each part of the page reloads what it shows. A change
+// this page made itself (clientId, the event's `by`) comes back too and is
+// skipped: the page already shows it, unless the listener asks for its own
+// ({ own: true }). A page that falls behind is dropped by the server and
+// reconnects (retry): it may have missed events, so the listeners hear a
+// `resync`, and reload.
 import { ref } from 'vue';
-import { API_BASE, clientId, type SyncStep } from '@/api/board';
+import { clientId, eventsURL, type ChangeEvent } from '@/api';
 
-export interface LiveEvent {
-  kind: 'issues' | 'config' | 'sync' | 'settings' | 'inbox' | 'releases' | 'progress' | 'cycle'; // cycle: a step 4 run ended
-  id?: string; // the issue, when the change named one
-  by?: string;
-  step?: SyncStep; // progress: where a forge run is
-}
+export type LiveEvent = ChangeEvent | { kind: 'resync'; id?: undefined; by?: undefined; step?: undefined; version?: undefined };
 
 type Listener = (e: LiveEvent) => void;
 const listeners = new Map<Listener, boolean>(); // → hears this page's own changes
@@ -25,10 +20,10 @@ const listeners = new Map<Listener, boolean>(); // → hears this page's own cha
 export const lastLive = ref(0);
 
 let source: EventSource | null = null;
-let broken = false;
+let opened = false;
 
 function tell(e: LiveEvent) {
-  const own = e.by === clientId;
+  const own = !!e.by && e.by === clientId;
   if (e.kind !== 'progress' && !own) lastLive.value = Date.now();
   for (const [l, hearsOwn] of [...listeners]) if (!own || hearsOwn) l(e);
 }
@@ -36,20 +31,18 @@ function tell(e: LiveEvent) {
 export function onLive(fn: Listener, opts: { own?: boolean } = {}): () => void {
   listeners.set(fn, !!opts.own);
   if (!source && typeof EventSource !== 'undefined') {
-    source = new EventSource(API_BASE + '/api/events');
+    source = new EventSource(eventsURL());
     source.onmessage = (m) => {
-      let e: LiveEvent;
       try {
-        e = JSON.parse(m.data) as LiveEvent;
+        tell(JSON.parse(m.data) as ChangeEvent);
       } catch {
-        return;
+        // not an event
       }
-      tell(e);
     };
-    source.onerror = () => (broken = true);
+    // every open after the first is a reconnection: what was missed is unknown
     source.onopen = () => {
-      if (broken) tell({ kind: 'issues' });
-      broken = false;
+      if (opened) tell({ kind: 'resync' });
+      opened = true;
     };
   }
   return () => {

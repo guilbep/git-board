@@ -1,0 +1,11 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+ls	0	ls --json
+show-703c1742e99c	3	show 703c1742e99c4a051717252d930498965e40fd6e --json
+log-703c1742e99c	3	log 703c1742e99c4a051717252d930498965e40fd6e --json
+show-c82cfa32f1da	0	show c82cfa32f1daaec8c30ddf695bdce9ce34259cd1 --json
+log-c82cfa32f1da	0	log c82cfa32f1daaec8c30ddf695bdce9ce34259cd1 --json
+show-fe82974e8b77	0	show fe82974e8b7769405ecb048265e59a511263796b --json
+log-fe82974e8b77	0	log fe82974e8b7769405ecb048265e59a511263796b --json
+cmd01-ls-is-open-closed-json	0	ls "is:open,closed" --json
+cmd02-ls-md-1-json	0	ls "MD-1" --json
+cmd03-ls-folder-json	0	ls "folder" --json

@@ -1,0 +1,33 @@
+missing-value:
+  26a4ba85 Search hides closed issues by default: no reviewer value
+  9062b9a3 Thread with a deleted comment: no est value
+  9062b9a3 Thread with a deleted comment: no prio value
+  9062b9a3 Thread with a deleted comment: no reviewer value
+  9062b9a3 Thread with a deleted comment: no sprint value
+  9062b9a3 Thread with a deleted comment: no status value
+  999eab2e Ünïcödé: 日本語のタイトル 🚀 — שלום & <b> (renamed): no est value
+  999eab2e Ünïcödé: 日本語のタイトル 🚀 — שלום & <b> (renamed): no prio value
+  999eab2e Ünïcödé: 日本語のタイトル 🚀 — שלום & <b> (renamed): no reviewer value
+  999eab2e Ünïcödé: 日本語のタイトル 🚀 — שלום & <b> (renamed): no sprint value
+  22d74e73 Crash on empty report: no est value
+  22d74e73 Crash on empty report: no prio value
+  22d74e73 Crash on empty report: no reviewer value
+  22d74e73 Crash on empty report: no sprint value
+  427cb1bd Lenient packs: the second title wins: no est value
+  427cb1bd Lenient packs: the second title wins: no reviewer value
+  427cb1bd Lenient packs: the second title wins: no sprint value
+  427cb1bd Lenient packs: the second title wins: no status value
+  e9584910 Bare: no est value
+  e9584910 Bare: no prio value
+  e9584910 Bare: no reviewer value
+  e9584910 Bare: no sprint value
+  e9584910 Bare: no status value
+  22c49b4c Label churn: no prio value
+  22c49b4c Label churn: no reviewer value
+dead-option:
+  prio:p1: no issue carries it
+  status:ready: no issue carries it
+no-kind:
+  5 open issues have none of [branches] kinds (bug, feature)
+
+summary: 28 finding(s) (missing-value: 25, dead-option: 2, no-kind: 1)

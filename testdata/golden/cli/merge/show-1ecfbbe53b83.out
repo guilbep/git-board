@@ -1,0 +1,191 @@
+{
+  "id": "1ecfbbe53b83841189ad211b4ef0b3f11bfd483b",
+  "title": "Edited on two clones (title from b)",
+  "status": "open",
+  "labels": [
+    "prio:p1",
+    "prio:p2",
+    "status:in-progress"
+  ],
+  "github_url": "https://github.com/acme/merge/issues/2",
+  "forges": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/acme/merge/issues/2",
+      "number": "2"
+    }
+  ],
+  "shown_title": "Edited on two clones (title from b)",
+  "updated_at": "2025-03-03T10:05:00Z",
+  "created_at": "2025-03-03T09:00:00Z",
+  "comments": 2,
+  "author": {
+    "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+    "name": "Ada King",
+    "login": "ada-l",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+  },
+  "edited_at": "2025-03-03T10:05:00Z",
+  "participants": [
+    {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "1ecfbbe53b83841189ad211b4ef0b3f11bfd483b:0",
+      "author": {
+        "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+        "name": "Ada King",
+        "login": "ada-l",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2025-03-03T09:00:00Z",
+      "body": "The body, as clone a wrote it.",
+      "edited": true,
+      "history": [
+        {
+          "id": "1ecfbbe53b83841189ad211b4ef0b3f11bfd483b:0",
+          "author": {
+            "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+            "name": "Ada King",
+            "login": "ada-l",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+          },
+          "at": "2025-03-03T09:00:00Z",
+          "body": "The first body."
+        },
+        {
+          "id": "5c234b6a37920c18cd91446884f01ff35fa3dfbc:0",
+          "author": {
+            "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+            "name": "Bob",
+            "login": "bobby",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+          },
+          "at": "2025-03-03T10:06:00Z",
+          "body": "The body, as clone b wrote it."
+        },
+        {
+          "id": "f271b3938dcb81bd08fd998de66a5c73a04aad54:0",
+          "author": {
+            "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+            "name": "Ada King",
+            "login": "ada-l",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+          },
+          "at": "2025-03-03T10:05:00Z",
+          "body": "The body, as clone a wrote it."
+        }
+      ]
+    },
+    {
+      "kind": "labels",
+      "id": "1ecfbbe53b83841189ad211b4ef0b3f11bfd483b:1",
+      "author": {
+        "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+        "name": "Ada King",
+        "login": "ada-l",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2025-03-03T09:00:00Z",
+      "added": [
+        "status:ready"
+      ]
+    },
+    {
+      "kind": "title",
+      "id": "4167164e30b391b9138cdaea6b33ca23e3b2287d:0",
+      "author": {
+        "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+        "name": "Bob",
+        "login": "bobby",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2025-03-03T10:01:00Z",
+      "pending": [
+        "GitHub"
+      ],
+      "title": "Edited on two clones (title from b)",
+      "was": "Edited on two clones"
+    },
+    {
+      "kind": "comment",
+      "id": "4167164e30b391b9138cdaea6b33ca23e3b2287d:1",
+      "author": {
+        "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+        "name": "Bob",
+        "login": "bobby",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2025-03-03T10:01:00Z",
+      "body": "Written on clone b.",
+      "pending": [
+        "GitHub"
+      ]
+    },
+    {
+      "kind": "comment",
+      "id": "7790c7e102b935eb9049306da4fb2eee0695eab6:0",
+      "author": {
+        "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+        "name": "Ada King",
+        "login": "ada-l",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2025-03-03T10:00:00Z",
+      "body": "Written on clone a.",
+      "pending": [
+        "GitHub"
+      ]
+    },
+    {
+      "kind": "labels",
+      "id": "5c234b6a37920c18cd91446884f01ff35fa3dfbc:1",
+      "author": {
+        "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+        "name": "Bob",
+        "login": "bobby",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2025-03-03T10:06:00Z",
+      "pending": [
+        "GitHub"
+      ],
+      "added": [
+        "status:in-progress",
+        "prio:p2"
+      ]
+    },
+    {
+      "kind": "labels",
+      "id": "f271b3938dcb81bd08fd998de66a5c73a04aad54:1",
+      "author": {
+        "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+        "name": "Ada King",
+        "login": "ada-l",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2025-03-03T10:05:00Z",
+      "pending": [
+        "GitHub"
+      ],
+      "added": [
+        "prio:p1"
+      ],
+      "removed": [
+        "status:ready"
+      ]
+    }
+  ]
+}

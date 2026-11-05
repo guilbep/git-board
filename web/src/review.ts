@@ -1,60 +1,7 @@
-// The Changes tab's logic (docs/prd/work-unit.md, M4), kept out of the
-// components so node --test reaches it: which files open, the unified diff
-// as rows, line comments as threads, viewed marks.
-import type { Cycle, FileStat, GatePR, IssueEvent, Review } from './api/board.ts';
-
-export type Group = 'review' | 'large' | 'generated';
-
-const changed = (f: FileStat) => f.added + f.deleted;
-
-// Generated files fold whatever their size; past 3000 changed lines a
-// file is "large" and loads on demand.
-export function groupOf(f: FileStat): Group {
-  if (f.generated) return 'generated';
-  return changed(f) > 3000 ? 'large' : 'review';
-}
-
-export function autoOpens(f: FileStat): boolean {
-  return groupOf(f) === 'review' && !f.binary && changed(f) < 1000;
-}
-
-// A large file's "Load the first 5,000 lines".
-export const LARGE_LIMIT = 5000;
-
-const shellQuote = (s: string) => (/^[\w./@:+-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`);
-
-// The command that shows the same diff in a terminal.
-export function diffCommand(from: string, to: string, path: string): string {
-  return `git diff ${from.slice(0, 12)} ${to.slice(0, 12)} -- ${shellQuote(path)}`;
-}
-
-export type Row = { op: ' ' | '-' | '+' | '@'; old?: number; new?: number; text: string };
-
-// parseUnified reads one file's git diff: hunk headers as '@' rows, each
-// line numbered on its side(s); the file header before the first hunk and
-// "\ No newline at end of file" are left out.
-export function parseUnified(diff: string): Row[] {
-  const rows: Row[] = [];
-  let old = 0;
-  let neu = 0;
-  let inHunk = false;
-  for (const l of diff.split('\n')) {
-    const h = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(l);
-    if (h) {
-      [old, neu, inHunk] = [Number(h[1]), Number(h[2]), true];
-      rows.push({ op: '@', text: l });
-    } else if (!inHunk || l === '' || l.startsWith('\\')) {
-      continue;
-    } else if (l[0] === '-') {
-      rows.push({ op: '-', old: old++, text: l.slice(1) });
-    } else if (l[0] === '+') {
-      rows.push({ op: '+', new: neu++, text: l.slice(1) });
-    } else {
-      rows.push({ op: ' ', old: old++, new: neu++, text: l.slice(1) });
-    }
-  }
-  return rows;
-}
+// A thread's review comments (the cycle's, M6: a line comment is a comment
+// with review metadata): grouped under their first comment, and what each
+// did, as a comment's header says it. Pure: node runs review.test.ts.
+import type { IssueEvent } from './api/types.ts';
 
 export type ReviewThread = { root: IssueEvent; replies: IssueEvent[]; resolved: boolean };
 
@@ -78,58 +25,6 @@ export function threadsOf(events: IssueEvent[], branch?: string): ReviewThread[]
   return [...threads.values()];
 }
 
-export function reviewsOf(events: IssueEvent[], branch?: string): IssueEvent[] {
-  return events.filter((e) => e.review?.state && onBranch(e, branch));
-}
-
-export function lastReviewBy(events: IssueEvent[], who: string, branch?: string): IssueEvent | undefined {
-  return reviewsOf(events, branch)
-    .filter((e) => e.author.id === who)
-    .at(-1);
-}
-
-// approvers is who approved, each person's last verdict: the pull
-// request's reviews, then the issue's own (the step's Approve, and the PR's
-// as the sync brought them in), by login. ponytail: the forge's reviews
-// carry no time, so the issue's win; a time on GateReview if that misleads
-export function approvers(pr: GatePR | null | undefined, events: IssueEvent[] = []): string[] {
-  const last = new Map<string, boolean>();
-  for (const r of pr?.reviews ?? []) if (r.state !== 'COMMENTED' && r.state !== 'PENDING') last.set(r.login, r.state === 'APPROVED');
-  for (const e of reviewsOf(events)) if (e.review!.state !== 'COMMENT') last.set(e.author.login || e.author.name, e.review!.state === 'APPROVE');
-  return [...last].filter(([, ok]) => ok).map(([who]) => who);
-}
-
-// approvalsNeeded: one, a second human's when the risk is structural
-// (docs/prd/dev-cycle.md, per risk class).
-export const approvalsNeeded = (risk?: string) => (risk === 'structural' ? 2 : 1);
-
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
-
-// reviewLine is step 6's cell while it is current: "0 of 1 approval · 1
-// thread open".
-export function reviewLine(c: Cycle, events: IssueEvent[]): string {
-  const need = approvalsNeeded(c.risk ?? c.evidence?.risk);
-  const k = approvers(c.evidence?.pr, events).length;
-  const open = threadsOf(events).filter((t) => !t.resolved).length;
-  return `${k} of ${need} approval${need === 1 ? '' : 's'} · ${plural(open, 'thread')} open`;
-}
-
-// checksLine: "3 of 3 checks pass", '' without checks.
-export function checksLine(pr: GatePR | null | undefined): string {
-  const n = pr?.checks?.length ?? 0;
-  return n ? `${pr!.checks.filter((k) => k.state === 'success').length} of ${n} checks pass` : '';
-}
-
-// reviewGate is the review's rule as the footer says it, three sentences.
-export function reviewGate(c: Cycle): string[] {
-  const risk = c.risk ?? c.evidence?.risk ?? 'normal';
-  return [
-    `${risk.charAt(0).toUpperCase()}${risk.slice(1)}: ${approvalsNeeded(risk) === 2 ? 'a second human approval' : 'one approval'}`,
-    `The reviewer role: ${c.evidence?.people?.review || 'anyone'}.`,
-    'Merging the PR opens step 7.',
-  ];
-}
-
 // editable: a plain comment. A review comment is the pull request's: the
 // sync sends it once and never its edits.
 export const editable = (e: IssueEvent) => !e.review;
@@ -144,56 +39,4 @@ export function verbOf(e: IssueEvent): string {
   if (r?.reply_to) return 'replied';
   if (r?.path) return 'commented on a line';
   return r?.pr ? `commented on pull request #${r.pr.split('#')[1]}` : 'commented';
-}
-
-// shownRange: the commits a view compares: base…head, my last review…head
-// (base…head without one), or one commit against its first parent (the
-// newest-first list isn't a chain: a merge brings the other side's commits).
-export function shownRange(c: { base: string; head: string; commits: { sha: string }[] }, view: string, mine?: string) {
-  if (view === 'mine' && mine) return { from: mine, to: c.head };
-  if (!c.commits.some((x) => x.sha === view)) return { from: c.base, to: c.head };
-  return { from: `${view}^`, to: view };
-}
-
-// lineIn is the line a comment sits on in a view ending at `to`: where the
-// line is at head (the server's head_line) when the view ends at head, the
-// line as written when it ends at the comment's commit; null otherwise,
-// outdated or not annotated: the file's box above the diff.
-export function lineIn(r: Review, to: string, head: string): number | null {
-  if (to === head) return r.outdated || !r.head_line ? null : r.head_line;
-  return to === r.commit && r.line ? r.line : null;
-}
-
-// commitsAgo: how far a commit is from head in the newest-first list.
-export function commitsAgo(sha: string, commits: { sha: string }[]): number | null {
-  const i = commits.findIndex((c) => c.sha === sha);
-  return i < 0 ? null : i;
-}
-
-// Viewed marks, path → the file's blob when viewed: a push un-views only
-// the files it changed. Kept in this browser, per issue and branch.
-export type Viewed = Record<string, string>;
-
-const viewedKey = (issue: string, branch: string) => `gb-viewed:${issue}:${branch}`;
-
-export function loadViewed(issue: string, branch: string): Viewed {
-  try {
-    return JSON.parse(localStorage.getItem(viewedKey(issue, branch)) ?? '{}') as Viewed;
-  } catch {
-    return {};
-  }
-}
-
-export function saveViewed(issue: string, branch: string, v: Viewed) {
-  try {
-    localStorage.setItem(viewedKey(issue, branch), JSON.stringify(v));
-  } catch {
-    // private window: the marks last until reload
-  }
-}
-
-// viewedCount is [viewed, of], generated files left out.
-export function viewedCount(files: FileStat[], viewed: Viewed): [number, number] {
-  const counted = files.filter((f) => !f.generated);
-  return [counted.filter((f) => viewed[f.path] === f.blob).length, counted.length];
 }

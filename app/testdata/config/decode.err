@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: toml: line 2 (last key "sprints.length_days"): incompatible types: TOML value has type string; destination has type integer

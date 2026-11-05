@@ -1,4 +1,4 @@
-<!-- Roll an environment back (internal/release Rollback) to a final older
+<!-- Roll an environment back (tools/ship Rollback) to a final older
      than what it runs: its images and chart, no tag moving, and why, for
      the record of what it ran. Rolling back starts a job: the dialog closes
      into the page's ReleaseJob. The States board's "Roll back prod". -->
@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { rollbackEnvironment, type EnvState, type ReleaseJob, type ReleaseRow } from '@/api/board';
+import { rollbackEnvironment, type EnvState, type ReleaseJob, type ReleaseRow } from '@/api';
 import { message } from '@/issue';
 import { byVersion, checkIcon, olderFinals, registryName, tagPattern } from '@/releases';
 import { when } from '@/when';

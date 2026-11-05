@@ -1,0 +1,146 @@
+[
+  {
+    "label": "a",
+    "value": "a",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "d",
+    "value": "d",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "étiquette",
+    "value": "étiquette",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "area:données",
+    "field": "area",
+    "value": "données",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "assignee:ada",
+    "field": "assignee",
+    "value": "ada",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "assignee:bobby",
+    "field": "assignee",
+    "value": "bobby",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "assignee:chloe",
+    "field": "assignee",
+    "value": "chloe",
+    "open": 2,
+    "closed": 0
+  },
+  {
+    "label": "est:0.5",
+    "field": "est",
+    "value": "0.5",
+    "open": 0,
+    "closed": 1
+  },
+  {
+    "label": "est:3",
+    "field": "est",
+    "value": "3",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "est:8",
+    "field": "est",
+    "value": "8",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "kind:bug",
+    "field": "kind",
+    "value": "bug",
+    "open": 2,
+    "closed": 0
+  },
+  {
+    "label": "kind:feature",
+    "field": "kind",
+    "value": "feature",
+    "open": 0,
+    "closed": 1
+  },
+  {
+    "label": "prio:p0",
+    "field": "prio",
+    "value": "p0",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "prio:p2",
+    "field": "prio",
+    "value": "p2",
+    "open": 0,
+    "closed": 1
+  },
+  {
+    "label": "prio:p3",
+    "field": "prio",
+    "value": "p3",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "sprint:s1",
+    "field": "sprint",
+    "value": "s1",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "sprint:s2",
+    "field": "sprint",
+    "value": "s2",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "status:backlog",
+    "field": "status",
+    "value": "backlog",
+    "open": 2,
+    "closed": 0
+  },
+  {
+    "label": "status:done",
+    "field": "status",
+    "value": "done",
+    "open": 0,
+    "closed": 1
+  },
+  {
+    "label": "status:in-progress",
+    "field": "status",
+    "value": "in-progress",
+    "open": 1,
+    "closed": 0
+  },
+  {
+    "label": "status:in-review",
+    "field": "status",
+    "value": "in-review",
+    "open": 1,
+    "closed": 0
+  }
+]

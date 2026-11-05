@@ -1,0 +1,31 @@
+---
+id: ID
+number: GB-7
+title: Crash on empty report
+state: open
+fields:
+  kind:
+    - bug
+  status:
+    - backlog
+people:
+  author: octocat
+created: 2025-03-03T21:30:00Z
+updated: 2025-03-03T22:10:00Z
+---
+
+Steps: open an empty report.
+
+<!-- git-board comments -->
+
+### octocat · 2025-03-03T22:00:00Z
+
+Still happens on 0.3 (edited through the second id).
+
+<!-- git-board comment ID:0 -->
+
+### Ada King · 2025-03-03T22:05:00Z
+
+Confirmed.
+
+<!-- git-board comment ID:1 -->

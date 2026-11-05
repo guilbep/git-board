@@ -1,9 +1,9 @@
 // What the filter's words are, and examples for this board
 // (docs/prd/header-help.md, 5): the "How filtering works" popover and the
-// Filter box's list read it. The grammar is internal/filter's (its package
+// Filter box's list read it. The grammar is domain/issues/filter.go's (its package
 // comment, and docs/guide/configuration.md's Filters table): change one,
 // change the others. Pure: node --test imports it.
-import type { FieldConfig } from './api/board';
+import type { FieldConfig } from './api/types.ts';
 
 export interface Word {
   term: string; // as the help shows it
@@ -58,7 +58,7 @@ export function examples(fields: Record<string, FieldConfig>, myLogin: string): 
   return res.slice(0, 5);
 }
 
-// the tricks of the words that aren't a field (internal/filter)
+// the tricks of the words that aren't a field (domain/issues/filter.go)
 const DATES = '>2026-10-01, >=@today-7d, 2026-10-01..2026-10-31';
 const QUALIFIERS: Record<string, string> = {
   created: DATES,

@@ -1,204 +1,91 @@
 <!-- Settings › Numbers: the project's own numbers, GB-39
-     (docs/guide/configuration.md, Numbers). Not on yet: what they are, then a
-     form beside its guidelines: a prefix from the repository's name, a
-     start above every number known (GitHub asked), what the issues
-     become, and a confirm naming what is pushed where. On: where they
-     stand, and Number them now for what origin has without one. -->
+     (docs/guide/configuration.md, Numbers). Start them: a prefix from the
+     repository's name, a start above the forges' numbers (POST
+     /api/numbers {prefix, start}); then number the issues that have none
+     ({}). Where they stand (GET /api/numbers) comes later (api.md, 37):
+     `git board numbers` says it meanwhile. -->
 <template>
   <div class="set-panel nb">
     <h2 class="h4">Numbers</h2>
-    <p class="nb-lead">
-      One number per issue, the same on every forge: <b>{{ numberExample(n) }}</b>.
-      <template v-if="n?.kept">The counter is kept in {{ n.kept }}, beside the board, where every writer reads it.</template>
-      <template v-else>The counter is kept in git, on origin, where every clone reads it.</template>
-    </p>
-    <p v-if="n?.missing" class="epfl-alert epfl-alert-info" role="note">{{ n.missing }}. <router-link to="/settings/datastore">Datastore</router-link></p>
-    <p v-if="n?.waits" class="epfl-alert epfl-alert-info" role="note">{{ n.waits }}.</p>
+    <p class="nb-lead">One number per issue, the same on every forge: <b>{{ prefixErr ? 'ABC' : prefix }}-{{ start || 123 }}</b>. The counter is kept on origin in git, or beside the board in PostgreSQL, where every writer reads it.</p>
+    <p v-if="datastore && !datastore.counter" class="epfl-alert epfl-alert-info" role="note">The board is kept in {{ datastore.name }}, which hands out no project numbers: the issues go by the forges' numbers. <router-link to="/settings/datastore">Datastore</router-link></p>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
     <p v-if="result" class="epfl-alert epfl-alert-success" role="status">{{ result }}</p>
 
-    <p v-if="!n && !error" class="nb-muted">Loading…</p>
-
-    <template v-if="n?.on">
-      <p v-if="n.ahead" class="epfl-alert epfl-alert-warning" role="alert">
-        <b>This clone's numbers aren't on origin yet.</b> The switch keyed them again here: the next
-        <router-link to="/settings/sync">Sync</router-link> sends them first. If origin's numbers moved on meanwhile, it refuses: run <code>git board switch --apply</code> again.
-      </p>
-      <div class="nb-tiles">
-        <div class="gb-value gb-value-agreed"><span class="gb-value-label">Prefix</span><span class="gb-value-val">{{ n.prefix }}</span></div>
-        <div class="gb-value gb-value-agreed"><span class="gb-value-label">Start</span><span class="gb-value-val">{{ n.start }}</span></div>
-        <div class="gb-value gb-value-agreed"><span class="gb-value-label">Next</span><span class="gb-value-val">{{ n.prefix }}-{{ n.next }}</span></div>
-        <div class="gb-value gb-value-agreed"><span class="gb-value-label">Numbered</span><span class="gb-value-val">{{ issues(n.numbered) }}</span></div>
-      </div>
-      <section v-if="n.waiting" class="nb-wait" aria-labelledby="nb-wait">
-        <p id="nb-wait"><b>{{ issues(n.waiting) }}{{ n.kept ? "" : " on origin" }} without a number.</b> {{ n.waiting === 1 ? 'It takes' : 'They take' }} {{ span(n.prefix!, n.next!, n.waiting) }}.</p>
-        <div v-if="confirming" class="nb-confirm" role="alert">
-          <p v-if="n.kept"><b>This writes the counter in {{ n.kept }}.</b> Nothing else goes anywhere.</p>
-          <p v-else><b>This pushes refs/board/seq to origin ({{ where }}).</b> Nothing else goes anywhere.</p>
-          <div class="nb-actions">
-            <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="run">{{ busy ? 'Numbering…' : `Number ${n.waiting === 1 ? 'it' : 'them'}` }}</button>
-            <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="confirming = false">Cancel</button>
-          </div>
-        </div>
-        <button v-else type="button" class="epfl-btn epfl-btn-primary nb-start-btn" :disabled="!!n.waits" :title="n.waits || undefined" @click="confirming = true">Number them now</button>
-      </section>
-      <p v-if="n.unpushed">
-        {{ issues(n.unpushed) }} not on origin yet: pushed and numbered with the next <router-link to="/settings/sync">Sync</router-link>.
-      </p>
-      <p v-if="!n.waiting && !n.unpushed" class="nb-muted">Every issue has its number.</p>
-    </template>
-
-    <div v-else-if="n && !n.missing" class="nb-setup">
+    <div class="nb-setup">
       <form class="nb-form" @submit.prevent="confirming = true">
-        <p>
-          Today your issues go by their forge numbers. GitHub's stay the issues' own below the start (#41 is {{ prefixErr ? 'ABC' : prefix }}-41); every other issue, made here or
-          imported later, takes the next number.
-        </p>
-        <p v-if="!reachable" class="epfl-alert epfl-alert-warning" role="alert">
-          No origin remote: the counter lives on origin. Add one (<code>git remote add origin &lt;url&gt;</code>), push your issues with a
-          <router-link to="/settings/sync">Sync</router-link>, then come back.
-        </p>
         <div>
           <label class="nb-label" for="nb-prefix">Prefix</label>
-          <input
-            id="nb-prefix"
-            v-model.trim="prefix"
-            class="epfl-input nb-prefix"
-            autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false"
-            :disabled="!reachable || confirming"
-            :aria-invalid="!!prefixErr"
-            aria-describedby="nb-prefix-hint"
-          />
-          <p id="nb-prefix-hint" class="gb-hint" :class="{ 'nb-bad': prefixErr }">{{ prefixErr || `Suggested from the repository's name, ${n.name || 'unknown'}.` }}</p>
+          <input id="nb-prefix" v-model.trim="prefix" class="epfl-input nb-prefix" autocomplete="off" :aria-invalid="!!prefixErr" />
+          <p class="gb-hint" :class="{ 'nb-bad': prefixErr }">{{ prefixErr || 'From the repository’s name: its initials.' }}</p>
         </div>
         <div>
           <label class="nb-label" for="nb-start">Start</label>
-          <input
-            id="nb-start"
-            v-model.number="start"
-            class="epfl-input nb-start"
-            type="number" min="1" step="1"
-            :disabled="!reachable || confirming"
-            :aria-invalid="!!startErr"
-            aria-describedby="nb-start-hint"
-          />
-          <p id="nb-start-hint" class="gb-hint" :class="{ 'nb-bad': startErr }">{{ startErr || startHint }}</p>
-          <p v-if="n.github?.error" class="gb-hint">
-            Could be higher on GitHub: pull requests count too.
-            <a :href="n.github.issues" target="_blank" rel="noopener noreferrer">See the repository's issues</a>
-          </p>
+          <input id="nb-start" v-model.number="start" class="epfl-input nb-start" type="number" min="1" />
+          <p class="gb-hint">Above every number an issue has on a forge: below it, an issue keeps its forge number (#41 is {{ prefixErr ? 'ABC' : prefix }}-41).</p>
         </div>
-        <p v-if="reachable && !prefixErr && !startErr" class="nb-preview" role="status">{{ preview }}</p>
         <div v-if="confirming" class="nb-confirm" role="alert">
-          <p v-if="n.kept"><b>This writes the counter in {{ n.kept }}.</b> Then it numbers every issue there. Nothing else goes anywhere: no issue, no forge.</p>
-          <p v-else><b>This pushes refs/board/seq to origin ({{ where }}).</b> Then it numbers what origin has, with a second push of it. Nothing else goes anywhere: no issue, no forge.</p>
+          <p><b>This starts the counter at {{ prefix }}-{{ start }}</b>, on origin (a push of refs/board/seq) or in PostgreSQL. Nothing else goes anywhere.</p>
           <div class="nb-actions">
-            <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="init">{{ busy ? 'Starting…' : 'Start numbering' }}</button>
-            <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="confirming = false">Back</button>
+            <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy" @click="begin">{{ busy ? 'Starting…' : 'Start numbering' }}</button>
+            <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy" @click="confirming = false">Cancel</button>
           </div>
         </div>
-        <button v-else type="submit" class="epfl-btn epfl-btn-primary nb-start-btn" :disabled="!ready || !!n.waits" :title="n.waits || undefined">Start numbering…</button>
+        <button v-else type="submit" class="epfl-btn epfl-btn-primary nb-start-btn" :disabled="!!prefixErr || !start || datastore?.counter === false">Start numbering…</button>
       </form>
-
-      <aside class="nb-help" aria-labelledby="nb-help-title">
-        <h3 id="nb-help-title" class="nb-help-title">Before you start</h3>
+      <aside class="nb-help">
+        <h3 class="nb-help-title">Once started</h3>
         <ul>
-          <li><b>Choose the prefix once.</b> Once issues carry it, it stays: branches, commits and messages name them by it.</li>
-          <li><b>2 to 5 capitals</b> is usual: CO2, GB, INFRA.</li>
-          <li><b>Start above every GitHub issue and pull request number.</b> They share one sequence: at or below one, a later import collides with a number already given.</li>
-          <li><b>Numbers go out only with a push you ask for</b>: Start numbering, Number them now, a Sync, <code>git board numbers</code>. Only issues origin has get one.</li>
-          <li><b>Nothing pushes on its own</b>: not creating an issue, not a forge sync.</li>
+          <li>Every issue made here, or imported later, takes the next number when it reaches origin.</li>
+          <li>The issues origin has without one take theirs at once: <button type="button" class="gb-linkbtn" :disabled="busy || datastore?.counter === false" @click="numberAll">Number them now</button>.</li>
+          <li>In a terminal: <code>git board numbers</code>.</li>
         </ul>
-        <p>From a terminal: <code>git board numbers init --prefix {{ prefixErr ? 'ABC' : prefix }} --start {{ startErr ? 100 : start }}</code>.</p>
       </aside>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { getNumbers, numberIssues, startNumbers, type Numbers } from '@/api/board';
-import { debounced, onLive } from '@/live';
-import { message } from '@/issue';
-import { numbered, numberExample, numbersPreview, prefixProblem, startProblem, suggestPrefix, suggestStart } from '@/numbers';
+import { computed, onMounted, ref } from 'vue';
+import { message, numbers } from '@/api';
+import { board } from '@/me';
+import { datastore, loadDatastore } from '@/kept';
+import { prefixProblem, suggestPrefix } from '@/numbers';
 
-// changed: what a start or a numbering left, for the menu's line
-const emit = defineEmits<{ changed: [n: Numbers] }>();
-const n = ref<Numbers | null>(null);
 const prefix = ref('');
-const start = ref(0);
-const confirming = ref(false);
+const start = ref(1);
 const busy = ref(false);
 const error = ref('');
 const result = ref('');
-
-const issues = (k: number) => `${k} issue${k === 1 ? '' : 's'}`;
-const span = (p: string, from: number, count: number) => (count === 1 ? `${p}-${from}` : `${p}-${from} … ${p}-${from + count - 1}`);
-
-// above every number known: the issues' forge numbers, GitHub's when it answered
-const above = computed(() => Math.max(n.value?.highest ?? 0, n.value?.github?.highest ?? 0));
+const confirming = ref(false);
 const prefixErr = computed(() => prefixProblem(prefix.value));
-const startErr = computed(() => startProblem(start.value, above.value));
-// the counter's home is there: origin, or the shared datastore
-const reachable = computed(() => !!n.value?.origin || !!n.value?.kept);
-const ready = computed(() => reachable.value && !prefixErr.value && !startErr.value);
-const where = computed(() => n.value?.origin?.push_urls.join(', ') ?? '');
-const preview = computed(() => numbersPreview(prefix.value, start.value, n.value?.github_numbers ?? [], n.value?.unpushed ?? 0));
-const startHint = computed(() => {
-  const mine = n.value?.highest ?? 0;
-  const gh = n.value?.github;
-  if (gh && !gh.error && gh.highest >= mine) {
-    return `Suggested: one above #${gh.highest}, GitHub's newest issue or pull request.${mine ? ` Your issues go up to #${mine}.` : ''}`;
-  }
-  return mine ? `Suggested: one above #${mine}, the highest forge number your issues have.` : 'No issue has a forge number yet.';
-});
 
-let filled = false;
-function take(fresh: Numbers) {
-  // a reload keeps what GitHub said: it is asked once
-  n.value = { ...fresh, github: fresh.github ?? n.value?.github };
-  if (!fresh.on && !filled) {
-    filled = true;
-    prefix.value = suggestPrefix(fresh.name);
-    start.value = suggestStart(fresh.highest, fresh.github?.highest);
-  }
-}
-
-async function load(github = false) {
-  try {
-    take(await getNumbers(github));
-  } catch (e) {
-    error.value = message(e);
-  }
-}
-
-async function act(what: () => Promise<Numbers>, done: (r: Numbers) => string) {
+async function act(fn: () => Promise<string>) {
   busy.value = true;
-  error.value = result.value = '';
+  error.value = '';
+  result.value = '';
   try {
-    const r = await what();
-    take(r);
-    emit('changed', r);
-    result.value = done(r);
-    error.value = r.error ?? '';
+    result.value = await fn();
     confirming.value = false;
   } catch (e) {
     error.value = message(e);
-    confirming.value = false;
-    void load(); // someone else may have started or numbered meanwhile
   } finally {
     busy.value = false;
   }
 }
+const begin = () => act(async () => {
+  const r = await numbers({ prefix: prefix.value, start: start.value });
+  return `Numbering started at ${prefix.value}-${start.value}${r.where ? `, the counter ${r.where}` : ''}.`;
+});
+const numberAll = () => act(async () => {
+  const r = await numbers();
+  return r.numbered ? `${r.numbered} issue${r.numbered === 1 ? '' : 's'} numbered.` : 'No issue needed a number.';
+});
 
-const init = () => act(() => startNumbers(prefix.value, start.value), (r) => `Numbering as ${r.prefix}-N from ${r.start}. ${numbered(r.prefix!, r.next!, r.done)}`);
-const run = () => act(numberIssues, (r) => numbered(r.prefix!, r.next!, r.done));
-
-onMounted(() => void load(true));
-// an issue made, or pushed with a Sync: the counts move
-const reload = debounced(() => void load());
-const offLive = onLive((e) => (e.kind === 'issues' || e.kind === 'sync') && reload());
-onBeforeUnmount(offLive);
+onMounted(() => {
+  void loadDatastore();
+  prefix.value = suggestPrefix(board.value?.dir.split('/').filter(Boolean).at(-1) ?? '');
+});
 </script>
 
 <style scoped>

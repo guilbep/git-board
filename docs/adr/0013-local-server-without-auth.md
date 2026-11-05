@@ -74,6 +74,30 @@ Bad, and accepted:
 - `git-board html` publishes a static, unauthenticated view in the same
   spirit (`README.md`).
 
+## Amendment (2026-11-05): no code runs from beyond loopback
+
+A review of v2's server found that two JSON requests ran any shell
+command: `PATCH /api/config` set `[release] build`, and `POST
+/api/releases` ran it with `sh -c`, from any client of a server started
+with `--addr 0.0.0.0`. "Anyone who can reach the port can write every
+issue" was accepted above; running code as the user never was, and
+`--addr`'s help says it exposes the board and the forge tokens, not a
+shell.
+
+**The rule:** a request that makes this machine run code, or changes
+what code a later run runs, passes one gate, v1's `localWrite`
+(`internal/server/refs.go`), now in v2 too (`next/surface/http/guard.go`
+`runsCode`, `code.go` `codeKeys`). It is refused when the server
+listens beyond loopback, whoever asks, and otherwise asks a same-host
+`Origin`, the board's own page (a script without an `Origin` is refused
+too). In v2 it gates the releases' cut, promotion, adoption, deploy and
+rollback, and a config write that changes `[release]`, `[cycle.tests]`,
+`[cycle.checks]` or `cycle.signers` (docs/rewrite/api.md, "The code
+gate"); in v1 the tests' run, the checks' setup and a branch made (as
+before), and since v0.11.7 the release routes and a config write that
+changes such a key. A server shown on a network serves the board; the
+releases are cut from the machine's own page.
+
 ## Left open
 
 - **A hosted git-board** (ADR 0002 › Context: "a hosted git-board", "people

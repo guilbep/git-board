@@ -1,0 +1,56 @@
+{
+  "id": "c134519fc7135586952f39382889dfa85966bfcf",
+  "title": "Appended on the other clone",
+  "status": "open",
+  "labels": [],
+  "shown_title": "Appended on the other clone",
+  "updated_at": "2025-03-03T10:20:00Z",
+  "created_at": "2025-03-03T09:10:00Z",
+  "comments": 1,
+  "author": {
+    "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+    "name": "Ada King",
+    "login": "ada-l",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+  },
+  "edited_at": "2025-03-03T10:20:00Z",
+  "participants": [
+    {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "c134519fc7135586952f39382889dfa85966bfcf:0",
+      "author": {
+        "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+        "name": "Ada King",
+        "login": "ada-l",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2025-03-03T09:10:00Z"
+    },
+    {
+      "kind": "comment",
+      "id": "8f4cef74c4660f5d2c6dfa6f398d02bdbbd8e939:0",
+      "author": {
+        "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+        "name": "Bob",
+        "login": "bobby",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2025-03-03T10:20:00Z",
+      "body": "Only b wrote this: a fast-forwards."
+    }
+  ]
+}

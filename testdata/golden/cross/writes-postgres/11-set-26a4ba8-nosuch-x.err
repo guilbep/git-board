@@ -1,0 +1,2 @@
+error: not allowed by .git-board.toml: unknown field "nosuch", not configured and on no issue (fields: status, prio, est, assignee, sprint, reviewer, kind)
+nothing written; --force writes it anyway

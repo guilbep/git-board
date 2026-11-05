@@ -14,6 +14,11 @@ pre-commit:
     vet:
       glob: "*.go"
       run: go vet ./...
+    # contrib/board-agents is a module of its own: the vet above stops at it
+    agents-vet:
+      root: contrib/board-agents/
+      glob: "*.go"
+      run: go vet ./...
     typecheck:
       root: web/
       glob: "*.{ts,vue}"

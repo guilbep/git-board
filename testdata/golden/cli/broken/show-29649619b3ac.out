@@ -1,0 +1,39 @@
+{
+  "id": "29649619b3ac73ac63909ad8337db2684e472bd5",
+  "title": "A good issue",
+  "status": "open",
+  "labels": [],
+  "shown_title": "A good issue",
+  "updated_at": "2025-03-03T09:00:00Z",
+  "created_at": "2025-03-03T09:00:00Z",
+  "comments": 0,
+  "author": {
+    "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+    "name": "Ada King",
+    "login": "ada-l",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+  },
+  "edited_at": "2025-03-03T09:00:00Z",
+  "participants": [
+    {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "29649619b3ac73ac63909ad8337db2684e472bd5:0",
+      "author": {
+        "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+        "name": "Ada King",
+        "login": "ada-l",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2025-03-03T09:00:00Z",
+      "body": "Lists."
+    }
+  ]
+}

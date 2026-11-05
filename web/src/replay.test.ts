@@ -1,7 +1,7 @@
 // Run with: node --test web/src/replay.test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { IssueEvent } from './api/board';
+import type { IssueEvent } from './api/types.ts';
 import { asOf, stateAfter, steps, wordDiff } from './replay.ts';
 import { bodyThreads } from './flow.ts';
 import { stateOf, versions } from './sections.ts';

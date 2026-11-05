@@ -1,0 +1,5 @@
+.: git fetch from origin...
+.: the forges: skipped, no forge has its sync on
+.: the GitHub Project: skipped, no [github-project] in .git-board.toml
+.: git push to origin: skipped, a check pushes nothing: the fetch compared
+.: checked: nothing written

@@ -1,0 +1,113 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+ls	0	ls --json
+show-22c49b4cb2f9	0	show 22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71 --json
+log-22c49b4cb2f9	0	log 22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71 --json
+show-22d74e739794	0	show 22d74e73979498ba69c554da1bf1cc1014cb013d --json
+log-22d74e739794	0	log 22d74e73979498ba69c554da1bf1cc1014cb013d --json
+show-26a4ba85e9ef	0	show 26a4ba85e9ef4a8ff1b61f228dd598c8b3667905 --json
+log-26a4ba85e9ef	0	log 26a4ba85e9ef4a8ff1b61f228dd598c8b3667905 --json
+show-398523d66eae	0	show 398523d66eaebdebff64257a35e73c84d5c31f47 --json
+log-398523d66eae	0	log 398523d66eaebdebff64257a35e73c84d5c31f47 --json
+show-427cb1bd1c4a	0	show 427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42 --json
+log-427cb1bd1c4a	0	log 427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42 --json
+show-4f38a4b0d275	3	show 4f38a4b0d2759be1e6acd8594134ab29f542de51 --json
+log-4f38a4b0d275	3	log 4f38a4b0d2759be1e6acd8594134ab29f542de51 --json
+show-9062b9a381ed	0	show 9062b9a381ed0075abb7c2b22261a9be88f7a685 --json
+log-9062b9a381ed	0	log 9062b9a381ed0075abb7c2b22261a9be88f7a685 --json
+show-999eab2e4a22	0	show 999eab2e4a22d1af3d62abffe7e62e79db7d12ac --json
+log-999eab2e4a22	0	log 999eab2e4a22d1af3d62abffe7e62e79db7d12ac --json
+show-e9584910eb05	0	show e9584910eb0517fe61a9a45e4cfaa53dff219957 --json
+log-e9584910eb05	0	log e9584910eb0517fe61a9a45e4cfaa53dff219957 --json
+cmd01-ls-is-closed-json	0	ls is:closed --json
+cmd02-ls-is-open-closed-json	0	ls "is:open,closed" --json
+cmd03-ls-status-ready-in-review-json	0	ls "status:ready,in-review" --json
+cmd04-ls-status-in-progress-is-open-json	2	ls "-status:in-progress is:open" --json
+cmd05-ls-status-in-progress-is-open-json	2	ls -- "-status:in-progress is:open" --json
+cmd06-ls-assignee-chloe-json	0	ls "assignee:chloe" --json
+cmd07-ls-assignee-me-json	0	ls "assignee:@me" --json
+cmd08-ls-author-bob-json	0	ls "author:bob" --json
+cmd09-ls-involves-bobby-json	0	ls "involves:bobby" --json
+cmd10-ls-label-tiquette-json	0	ls "label:étiquette" --json
+cmd11-ls-no-prio-json	0	ls "no:prio" --json
+cmd12-ls-prio-p0-p2-is-closed-json	0	ls "prio:p0,p2 is:closed" --json
+cmd13-ls-kind-bug-json	0	ls "kind:bug" --json
+cmd14-ls-title-search-json	0	ls "title:*search*" --json
+cmd15-ls-closed-json	0	ls closed --json
+cmd16-ls-unless-the-query-json	0	ls "\"unless the query\"" --json
+cmd17-ls-inbox-in-comments-json	0	ls "inbox in:comments" --json
+cmd18-ls-json	0	ls "日本語" --json
+cmd19-ls-12-json	0	ls "#12" --json
+cmd20-ls-gb-7-json	0	ls "GB-7" --json
+cmd21-ls-comments-2-json	0	ls "comments:>=2" --json
+cmd22-ls-est-1-json	0	ls "est:>1" --json
+cmd23-ls-created-2025-03-03-json	0	ls "created:2025-03-03" --json
+cmd24-ls-created-2025-03-03t12-00-created-2025	0	ls "created:>=2025-03-03T12:00 created:<2025-03-04" --json
+cmd25-ls-updated-2025-03-03-2025-03-03-json	0	ls "updated:2025-03-03..2025-03-03" --json
+cmd26-ls-closed-2025-03-03-json	0	ls "closed:2025-03-03" --json
+cmd27-ls-created-today-1d-at-2025-03-04-json	0	ls "created:>=@today-1d" --at 2025-03-04 --json
+cmd28-ls-sprint-current-at-2025-03-05-json	0	ls "sprint:@current" --at 2025-03-05 --json
+cmd29-ls-at-2025-03-03t10-00-json	0	ls --at 2025-03-03T10:00 --json
+cmd30-ls-sort-prio-asc-json	0	ls --sort "prio asc" --json
+cmd31-ls-is-open-closed-sort-updated-desc-limi	0	ls "is:open,closed" --sort "updated desc" --limit 3 --json
+cmd32-ls-json-id-title-number-forges	0	ls --json id,title,number,forges
+cmd33-ls-is-open-closed-json-number-jq-number	0	ls "is:open,closed" --json number --jq ".[].number"
+cmd34-ls-nosuchfield-x-json	0	ls "nosuchfield:x" --json
+cmd35-ls-created-yesterday-json	1	ls "created:yesterday" --json
+cmd36-view-ready-json	0	view ready --json
+cmd37-show-26a4ba8-at-2025-03-03t03-15-json	3	show 26a4ba8 --at 2025-03-03T03:15 --json
+cmd38-show-26a4ba8-at-2025-03-03t11-15-json	0	show 26a4ba8 --at 2025-03-03T11:15 --json
+cmd39-show-gb-100-json	0	show GB-100 --json
+cmd40-show-7-json	0	show "#7" --json
+cmd41-show-22d74e7-no-comments-json	0	show 22d74e7 --no-comments --json
+cmd42-show-999eab2-md	0	show 999eab2 --md
+cmd43-show-0000000-json	3	show 0000000 --json
+cmd44-log-26a4ba8-field-status-json	0	log 26a4ba8 --field status --json
+cmd45-log-26a4ba8-since-2025-03-03t04-00-json	2	log 26a4ba8 --since 2025-03-03T04:00 --json
+cmd46-log-26a4ba8-since-2025-03-04-json	0	log 26a4ba8 --since 2025-03-04 --json
+cmd47-log-398523d-field-prio-json	0	log 398523d --field prio --json
+cmd48-labels-json	0	labels --json
+cmd49-me-ls-json	0	me --ls --json
+cmd50-sprint-ls	0	sprint ls
+cmd51-sprint-report-s1	0	sprint report s1
+cmd52-sprint-report-nope	1	sprint report nope
+cmd53-sprint-new-s9	1	sprint new s9
+cmd54-branch-26a4ba8	0	branch 26a4ba8
+cmd55-branch-398523d	0	branch 398523d
+cmd56-branch-0000000	3	branch 0000000
+cmd57-verify	1	verify
+cmd58-insights-days-0	2	insights --days 0
+cmd59-insights-view-nope	2	insights --view nope
+cmd60-diff-26a4ba8-since-2025-03-03t04-00	0	diff 26a4ba8 --since 2025-03-03T04:00
+cmd61-diff-26a4ba8-since-2025-03-03-json	0	diff 26a4ba8 --since 2025-03-03 --json
+cmd62-diff-9062b9a-since-2020-01-01-json	0	diff 9062b9a --since 2020-01-01 --json
+cmd63-diff-9062b9a-since-2020-01-01	0	diff 9062b9a --since 2020-01-01
+cmd64-diff-999eab2-since-2025-03-04	0	diff 999eab2 --since 2025-03-04
+cmd65-diff-999eab2-since-2030-01-01-json-id-cr	0	diff 999eab2 --since 2030-01-01 --json id,created,added
+cmd66-diff-26a4ba8	2	diff 26a4ba8
+cmd67-diff-26a4ba8-since-nope	2	diff 26a4ba8 --since nope
+cmd68-diff-0000000-since-2025-03-03	3	diff 0000000 --since 2025-03-03
+cmd69-get-26a4ba8	0	get 26a4ba8
+cmd70-get-gb-100	0	get GB-100
+cmd71-get-0000000	3	get 0000000
+cmd72-complete-show	0	__complete show ""
+cmd73-complete-show-gb-10	0	__complete show GB-10
+cmd74-complete-show-26	0	__complete show 26
+cmd75-complete-set-26a4ba8	0	__complete set 26a4ba8 ""
+cmd76-complete-set-26a4ba8-prio	0	__complete set 26a4ba8 prio=
+cmd77-complete-set-26a4ba8-assignee	0	__complete set 26a4ba8 assignee=+
+cmd78-complete-set-26a4ba8-label	0	__complete set 26a4ba8 label=
+cmd79-complete-set-26a4ba8-sprint	0	__complete set 26a4ba8 sprint=
+cmd80-complete-set-filter-is-open-st	0	__complete set --filter "is:open st"
+cmd81-complete-move-26a4ba8	0	__complete move 26a4ba8 ""
+cmd82-complete-new-a-title-k	0	__complete new "A title" k
+cmd83-complete-ls	0	__complete ls ""
+cmd84-complete-ls-is-open-prio	0	__complete ls "is:open -prio:"
+cmd85-complete-ls-no	0	__complete ls "no:"
+cmd86-complete-ls-group	0	__complete ls --group ""
+cmd87-complete-ls-sort	0	__complete ls --sort ""
+cmd88-complete-ls-json-id-t	0	__complete ls --json=id,t
+cmd89-complete-log-26a4ba8-field	0	__complete log 26a4ba8 --field ""
+cmd90-complete-view	0	__complete view ""
+cmd91-complete-me	0	__complete me ""
+cmd92-sync-migrate-nosuch	1	sync --migrate nosuch
+cmd93-sync-migrate-prio	0	sync --migrate prio

@@ -1,0 +1,1 @@
+error: parsing .git-board.toml: [forges] discover: toml: line 2 (last key "forges.discover"): incompatible types: TOML value has type string; destination has type boolean

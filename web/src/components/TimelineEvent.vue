@@ -28,7 +28,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { IssueEvent } from '@/api/board';
+import type { IssueEvent } from '@/api';
 import { displayName, formatValue, type Fields } from '@/fields';
 import { describeLabels } from '@/history';
 import { when } from '@/me';

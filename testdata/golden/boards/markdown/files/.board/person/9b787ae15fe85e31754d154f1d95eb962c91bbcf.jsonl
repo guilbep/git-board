@@ -1,0 +1,4 @@
+{"clock":1,"nonce":"0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b","ops":[{"kind":"create","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740826800,"data":{"email":"bob@example.com","name":"Bob"}},{"kind":"add-account","author":"2070bfafe7adfed74d38940e023d8d0f756bb6db","time":1740826800,"data":{"id":"1002","login":"bob","server":"github.com"}}]}
+{"clock":2,"ops":[{"kind":"set-email","author":"9b787ae15fe85e31754d154f1d95eb962c91bbcf","time":1740830400,"data":{"email":""}}]}
+{"clock":3,"ops":[{"kind":"remove-account","author":"9b787ae15fe85e31754d154f1d95eb962c91bbcf","time":1740830460,"data":{"id":"1002","server":"github.com"}}]}
+{"clock":4,"ops":[{"kind":"add-account","author":"9b787ae15fe85e31754d154f1d95eb962c91bbcf","time":1740830520,"data":{"id":"1003","login":"bobby","server":"github.com"}},{"kind":"remove-account","author":"9b787ae15fe85e31754d154f1d95eb962c91bbcf","time":1740830520,"data":{"id":"404","server":"gitlab.com"}}]}

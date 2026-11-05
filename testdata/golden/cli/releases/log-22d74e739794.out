@@ -1,0 +1,67 @@
+[
+  {
+    "at": "2025-03-03T21:30:00Z",
+    "author": {
+      "id": "cc95ba8767d57b185ceed564f2994c827dc4911f",
+      "name": "octocat",
+      "login": "octocat",
+      "avatar_url": "https://avatars.githubusercontent.com/u/583231?s=88"
+    },
+    "kind": "created",
+    "id": "22d74e73979498ba69c554da1bf1cc1014cb013d:0",
+    "title": "Crash on empty report",
+    "body": "Steps: open an empty report."
+  },
+  {
+    "at": "2025-03-03T21:30:00Z",
+    "author": {
+      "id": "cc95ba8767d57b185ceed564f2994c827dc4911f",
+      "name": "octocat",
+      "login": "octocat",
+      "avatar_url": "https://avatars.githubusercontent.com/u/583231?s=88"
+    },
+    "kind": "labels",
+    "id": "22d74e73979498ba69c554da1bf1cc1014cb013d:1",
+    "added": [
+      "kind:bug",
+      "status:backlog"
+    ]
+  },
+  {
+    "at": "2025-03-03T22:00:00Z",
+    "author": {
+      "id": "cc95ba8767d57b185ceed564f2994c827dc4911f",
+      "name": "octocat",
+      "login": "octocat",
+      "avatar_url": "https://avatars.githubusercontent.com/u/583231?s=88"
+    },
+    "kind": "comment",
+    "id": "56f05fb6176682e80c3df0136d37e7227647700e:0",
+    "body": "Still happens on 0.3."
+  },
+  {
+    "at": "2025-03-03T22:05:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "comment",
+    "id": "a205cef1076c09755e10a87de6a4f4b8f9191ec3:1",
+    "body": "Confirmed."
+  },
+  {
+    "at": "2025-03-03T22:10:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "edit",
+    "id": "d04332a384f59fcdd1fe2cc5233c4cf3fd8a7440:0",
+    "target": "56f05fb6176682e80c3df0136d37e7227647700e:0",
+    "body": "Still happens on 0.3 (edited through the second id)."
+  }
+]

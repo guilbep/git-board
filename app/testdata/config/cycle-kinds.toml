@@ -1,0 +1,4 @@
+[experimental]
+features = ["cycle"]
+[cycle.kinds]
+bug = "x"

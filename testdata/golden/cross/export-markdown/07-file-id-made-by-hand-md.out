@@ -1,0 +1,13 @@
+---
+id: ID
+title: Made by hand
+state: open
+people:
+  author: Alice
+created: 2025-06-01T09:00:00Z
+updated: 2025-06-01T09:00:00Z
+---
+
+Its body.
+
+<!-- git-board comments -->

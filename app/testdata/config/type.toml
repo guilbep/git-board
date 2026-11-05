@@ -1,0 +1,2 @@
+[fields.status]
+type = "enum"

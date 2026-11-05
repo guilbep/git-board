@@ -47,7 +47,7 @@
       <h2 v-if="group" class="group-title">
         <ValueMark :field="group" :value="bucket.group" />
         {{ groupLabel(bucket.group) }}
-        <span class="group-count">{{ bucket.issues.length }}</span>
+        <span class="group-count">{{ (bucket.total ?? bucket.issues.length).toLocaleString() }}</span>
       </h2>
       <div class="table-scroll">
         <table class="issue-table" :class="{ 'lead-sticky': cols[0] === 'id' && cols[1] === 'title' }">
@@ -76,11 +76,14 @@
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody :ref="(el) => bodies.set(bucket.group, el as HTMLElement | null)">
+            <!-- a long list's rows off screen: their height, not them
+                 (windowrows.ts) -->
+            <tr v-if="win(bucket)[0] > 0" class="row-spacer" aria-hidden="true" :style="{ height: `${win(bucket)[0] * rowHeight}px` }" />
             <!-- The whole row opens the issue, but its box and its field
                  cells (edited in place); the title button is the keyboard
                  entry point (its click bubbles up to the row). -->
-            <tr v-for="issue in bucket.issues" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)">
+            <tr v-for="issue in bucket.issues.slice(...win(bucket))" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)">
               <td class="cell-pick" @click.stop>
                 <input type="checkbox" :aria-label="`Select ${issue.shown_title}`" :checked="selected.has(issue.id)" @click="toggleRow(issue.id, $event)" />
               </td>
@@ -97,6 +100,13 @@
                 <FieldCell v-else :issue="issue" :name="key" :fields="fields" @saved="emit('changed')" />
               </template>
             </tr>
+            <tr v-if="win(bucket)[1] < bucket.issues.length" class="row-spacer" aria-hidden="true" :style="{ height: `${(bucket.issues.length - win(bucket)[1]) * rowHeight}px` }" />
+            <!-- the list's next page, asked as its end comes near -->
+            <tr v-if="bucket.next" v-near="() => emit('more', bucket)" class="row-more">
+              <td :colspan="cols.length + 1">
+                <button type="button" class="gb-linkbtn" @click="emit('more', bucket)">{{ ((bucket.total ?? 0) - bucket.issues.length).toLocaleString() }} more</button>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -107,8 +117,11 @@
 
 <script setup lang="ts">
 import { safeHref } from '@/links';
-import { computed, reactive, ref } from 'vue';
-import { changeLabels, patchIssue, setStatus, type Bucket, type Issue } from '@/api/board';
+import { computed, onUpdated, reactive, ref, watch } from 'vue';
+import { scrollerOf, vNear } from '@/near';
+import { LONG, useScroll, windowRange } from '@/windowrows';
+import { patchIssue, type Issue, type IssueChange } from '@/api';
+import type { Bucket } from '@/bucket';
 import type { Sort } from '@/facets';
 import { displayName, formatValue, otherLabels, typeOf, type Fields } from '@/fields';
 import { message } from '@/issue';
@@ -127,7 +140,45 @@ const props = defineProps<{
   sort: Sort | null;
   columns?: string[] | undefined;
 }>();
-const emit = defineEmits<{ open: [issue: Issue]; sort: [key: string]; changed: []; 'update:columns': [columns: string[] | undefined] }>();
+const emit = defineEmits<{ open: [issue: Issue]; sort: [key: string]; changed: []; more: [bucket: Bucket]; 'update:columns': [columns: string[] | undefined] }>();
+
+// windowed rows (windowrows.ts): each group's body, where it is on screen
+// as the page scrolls, and the rows' height, measured once some show. A
+// group's range changes only when its rows do: a scroll within them
+// renders nothing.
+const bodies = new Map<string, HTMLElement | null>();
+const scrollers = new WeakMap<HTMLElement, Element | null>();
+const scroll = useScroll();
+const rowHeight = ref(41);
+const ranges = ref<Record<string, [number, number]>>({});
+function rangeOf(b: Bucket): [number, number] {
+  if (b.issues.length <= LONG) return [0, b.issues.length];
+  const body = bodies.get(b.group);
+  if (!body) return [0, LONG];
+  if (!scrollers.has(body)) scrollers.set(body, scrollerOf(body));
+  // the rows' top, from the top of what shows them: the table's box, cut
+  // to the window
+  const box = scrollers.get(body)?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+  const from = Math.max(box.top, 0);
+  const to = Math.min(box.bottom, window.innerHeight);
+  return windowRange(b.issues.length, body.getBoundingClientRect().top - from, Math.max(to - from, 0), rowHeight.value);
+}
+watch(
+  [scroll, () => props.buckets, rowHeight],
+  () => {
+    for (const b of props.buckets) {
+      const r = rangeOf(b);
+      const was = ranges.value[b.group];
+      if (!was || was[0] !== r[0] || was[1] !== r[1]) ranges.value = { ...ranges.value, [b.group]: r };
+    }
+  },
+  { flush: 'post', immediate: true },
+);
+const win = (b: Bucket): [number, number] => ranges.value[b.group] ?? [0, Math.min(b.issues.length, LONG)];
+onUpdated(() => {
+  const row = [...bodies.values()].find(Boolean)?.querySelector<HTMLElement>('tr:not(.row-spacer):not(.row-more)');
+  if (row?.offsetHeight) rowHeight.value = row.offsetHeight;
+});
 
 const cols = computed(() => shownColumns(props.columns, props.names));
 const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'On the forge' };
@@ -202,10 +253,10 @@ function bulkSet(field: string, e: Event) {
   if (v === '(none)') {
     void runBulk(`Clearing ${displayName(field)}`, (i) => {
       const old = i.labels.filter((l) => l.startsWith(`${field}:`));
-      return old.length ? changeLabels(i.id, [], old) : Promise.resolve();
+      return old.length ? write(i, { labels: { remove: old } }) : Promise.resolve();
     });
   } else {
-    void runBulk(`Setting ${displayName(field)}`, (i) => patchIssue(i.id, { [field]: v }));
+    void runBulk(`Setting ${displayName(field)}`, (i) => write(i, { set: [`${field}=${v}`] }));
   }
 }
 
@@ -213,11 +264,19 @@ function bulkAssign(field: string) {
   const v = (assign[field] ?? '').trim();
   if (!v) return;
   assign[field] = '';
-  void runBulk(`Adding to ${displayName(field)}`, (i) => patchIssue(i.id, { [field]: v }));
+  void runBulk(`Adding to ${displayName(field)}`, (i) => write(i, { set: [`${field}=+${v}`] }));
 }
 
 function bulkClose() {
-  void runBulk('Closing', (i) => (i.status === 'closed' ? Promise.resolve() : setStatus(i.id, 'closed')));
+  void runBulk('Closing', (i) => (i.status === 'closed' ? Promise.resolve() : write(i, { status: 'closed' })));
+}
+
+// one issue's write, from the version the row was read at
+async function write(i: Issue, change: IssueChange) {
+  const t = await patchIssue(i.id, i.version, change);
+  i.version = t.version;
+  i.labels = t.labels;
+  i.status = t.status;
 }
 </script>
 
@@ -336,4 +395,5 @@ function bulkClose() {
 .bulk-clear { padding: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: var(--fs-sm); text-decoration: underline; cursor: pointer; }
 .bulk-status { font-size: var(--fs-sm); color: var(--fg-muted); }
 .bulk-error { flex-basis: 100%; margin: 0; font-size: var(--fs-sm); color: var(--danger-fg); }
+.row-more td { text-align: center; }
 </style>

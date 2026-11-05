@@ -1,0 +1,8 @@
+ID GB-100 Search hides closed issues by default: +status:done -status:in-progress, closed
+ID GB-101 Retitled by the cross test: +status:done -status:ready, closed
+ID GB-104 Thread with a deleted comment: +status:done, closed
+ID GB-102 Ünïcödé: 日本語のタイトル 🚀 — שלום & <b> (renamed): +status:done -status:backlog, closed
+ID GB-105 Bare: +status:done, closed
+ID GB-103 Label churn: +status:done -status:in-review, closed
+ID GB-106 Cross write one: +status:done, closed
+7 issues changed

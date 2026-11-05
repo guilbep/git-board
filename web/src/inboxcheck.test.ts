@@ -1,34 +1,11 @@
-import { test } from 'node:test';
+// Run with: node --test src/inboxcheck.test.ts
 import assert from 'node:assert/strict';
-import { FRESH, bellState, checkFailure, followLine, followingLine, mergeRows, toCheck, toPull } from './inboxcheck.ts';
-import type { InboxRow, Remote } from './api/board';
+import { test } from 'node:test';
+import { bellState, followLine, mergeRows } from './inboxcheck.ts';
+import type { InboxRow } from './api/types.ts';
 
-const remote = (name: string, checked: string | undefined, receive = 0): Remote => ({
-  name, url: '', push_urls: [], tracked: true, issues: { send: 0, receive }, people: { send: 0, receive: 0 }, ...(checked ? { checked } : {}),
-});
-
-test('opening the inbox checks the remotes not checked lately; Refresh checks them all', () => {
-  const now = Date.parse('2026-10-17T10:00:00Z');
-  const rs = [
-    remote('origin', new Date(now - FRESH + 1000).toISOString()), // a minute ago: a reload
-    remote('upstream', new Date(now - FRESH - 1000).toISOString()),
-    remote('backup', undefined), // never checked
-  ];
-  assert.deepEqual(toCheck(rs, now, false), ['upstream', 'backup']);
-  assert.deepEqual(toCheck(rs, now, true), ['origin', 'upstream', 'backup']);
-});
-
-test('a remote with issues to receive offers Pull', () => {
-  assert.deepEqual(toPull([remote('origin', undefined, 3), remote('upstream', undefined, 0)]), [{ name: 'origin', issues: 3 }]);
-});
-
-// Review Focus 5: a forge sync holds the remotes; the page says so.
-test('a check refused during a forge sync says so', () => {
-  assert.equal(checkFailure('origin', 'syncing', 'a sync with the forges is running'), 'origin: a forge sync is running: check again when it ends');
-  assert.equal(checkFailure('upstream', '', 'fetch upstream: ssh: handshake failed'), "upstream: couldn't check: fetch upstream: ssh: handshake failed");
-});
-
-const row = (id: string, latest: string) => ({ issue: { id }, latest }) as unknown as InboxRow;
+const row = (id: string, latest: string): InboxRow =>
+  ({ issue: { id, title: id, shown_title: id, status: 'open', labels: [], updated_at: latest, created_at: latest, comments: 0, version: 'v' }, reasons: [], news: [], who: [], latest, first: '' });
 
 test('a row you read stays dimmed until Refresh, and is unread again when something new happens', () => {
   const read = new Map([['x', '2026-10-17T10:00:00Z']]);
@@ -49,11 +26,6 @@ test('the side column says why you follow an issue, or that a project role bring
   assert.deepEqual(followLine({ following: false, reasons: [], set: null }), { state: 'Not following', because: "You're not in it." });
   assert.deepEqual(followLine({ following: true, reasons: ['followed'], set: true }), { state: 'Following', because: 'You follow it.' });
   assert.deepEqual(followLine({ following: false, reasons: ['assignee'], set: false }), { state: 'Not following', because: 'You unfollowed it.' });
-});
-
-test('the empty inbox says what you follow, project roles included', () => {
-  assert.equal(followingLine(1, [], []), 'Following 1 open issue');
-  assert.equal(followingLine(102, ['backend'], ['lead-dev']), 'Following 102 open issues · view backend · lead-dev of the project: its new and closed issues');
 });
 
 test('the bell: its shape and tone from the follow line', () => {

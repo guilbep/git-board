@@ -26,7 +26,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { getReport, renderMarkdown, type SprintReport } from '@/api/board';
+import { getReport, renderMarkdown, type SprintReport } from '@/api';
 import { message } from '@/issue';
 import GbIcon from '@/components/GbIcon.vue';
 

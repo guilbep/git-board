@@ -76,7 +76,8 @@
 import { safeHref } from '@/links';
 import GbAvatar from '@/components/GbAvatar.vue';
 import { computed, ref, useId } from 'vue';
-import { ApiError, type Forge, type IssueEvent, type StageStep } from '@/api/board';
+import { ApiError, type Forge, type IssueEvent } from '@/api';
+import type { StageStep } from '@/api/cycletypes';
 import { on, when } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import MarkdownBody from '@/components/MarkdownBody.vue';

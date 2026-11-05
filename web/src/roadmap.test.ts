@@ -35,9 +35,3 @@ test('span covers the marks and today, padded; ticks are weeks or months', () =>
   assert.ok(monthly.length >= 11 && monthly.every((t) => new Date(t.at).getDate() === 1), 'first days');
 });
 
-test('niceTicks are round', async () => {
-  const { niceTicks } = await import('./chartsize.ts');
-  assert.deepEqual(niceTicks(198), [0, 50, 100, 150, 200]);
-  assert.deepEqual(niceTicks(25), [0, 10, 20, 30]);
-  assert.deepEqual(niceTicks(0), [0, 1]);
-});

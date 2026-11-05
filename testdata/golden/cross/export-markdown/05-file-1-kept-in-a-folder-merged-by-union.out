@@ -1,0 +1,41 @@
+---
+id: ID
+number: MD-1
+title: Kept in a folder, merged by union
+state: open
+fields:
+  kind:
+    - bug
+  prio:
+    - p1
+  status:
+    - ready
+labels:
+  - plain
+people:
+  author: Ada King
+  assignees:
+    - ada
+created: 2025-03-03T09:00:00Z
+updated: 2025-03-03T14:00:00Z
+---
+
+A body with a heading:
+
+### not a comment · 2025-01-01T00:00:00Z
+
+still the body.
+
+<!-- git-board comments -->
+
+### Bob · 2025-03-03T10:00:00Z
+
+A comment.
+
+<!-- git-board comment ID:0 -->
+
+### Chloé Dubois-Ångström · 2025-03-03T14:00:00Z
+
+Written on the branch side.
+
+<!-- git-board comment ID:0 -->

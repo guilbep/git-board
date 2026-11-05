@@ -1,7 +1,8 @@
 <!-- New issue: title, description, fields prefilled from the board's
      filter (the fields it picks one value of, e.g. the sprint of
-     sprint:@current), "Create" or "Create and open another". The issue is created, then its fields are set as the
-     panel sets them (aliases like @current and @me resolve there). -->
+     sprint:@current), "Create" or "Create and open another". The issue and
+     its fields are one request, checked by the server (aliases like
+     @current and @me resolve there). -->
 <template>
   <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="new-issue-title">
     <header class="gb-dialog-head">
@@ -41,11 +42,6 @@
         </div>
       </div>
       <p v-if="error" class="gb-save-error" role="alert"><GbIcon name="error" small /> {{ error }}</p>
-      <div v-if="created" class="gb-save-error gb-created" role="alert">
-        <p><GbIcon name="error" small /> Created <b>{{ created.title }}</b>, without these fields:</p>
-        <ul><li v-for="f in created.failed" :key="f">{{ f }}</li></ul>
-        <p><button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="emit('created', created.id, false)">Open it to set them</button></p>
-      </div>
     </form>
 
     <footer v-if="!(me && !me.me)" class="gb-dialog-foot">
@@ -58,11 +54,10 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { createIssue } from '@/api/board';
+import { createIssue } from '@/api';
 import { displayName, formatValue, type Fields } from '@/fields';
-import { patchField } from '@/fieldwrite';
 import { message } from '@/issue';
-import { fieldWrites } from '@/newissue';
+import { assignments } from '@/newissue';
 import { me } from '@/me';
 import GbIcon from '@/components/GbIcon.vue';
 import IdentityChooser from '@/components/IdentityChooser.vue';
@@ -78,8 +73,6 @@ const busy = ref(false);
 const uploading = ref(false); // a file uploads in the editor: sending waits for it (MarkdownEditor)
 const error = ref('');
 const titleInput = ref<HTMLInputElement | null>(null);
-// an issue created with fields the server refused: said, and opened from here
-const created = ref<{ id: string; title: string; failed: string[] } | null>(null);
 
 // the fields the board's filter picks one value of (the server's facets)
 const from = props.prefill ?? {};
@@ -105,44 +98,26 @@ function hint(name: string): string {
   return isMulti(name) ? 'a, b, …' : '';
 }
 
+// one request: the issue and its fields together (POST /api/issues with
+// set), checked by the server; a refused field creates nothing, and the
+// dialog says which, its fields kept to fix
 async function create(another: boolean) {
   if (!title.value.trim() || busy.value || uploading.value) return;
   busy.value = true;
   error.value = '';
-  created.value = null;
-  let issue: { id: string; title: string };
   try {
     const labels = plain.value.split(',').map((l) => l.trim()).filter(Boolean);
-    issue = await createIssue(title.value, body.value, labels);
+    const issue = await createIssue({ title: title.value, body: body.value, labels, set: assignments(values, isMulti) });
+    emit('created', issue.id, another);
+    if (another) {
+      title.value = '';
+      body.value = '';
+      titleInput.value?.focus();
+    }
   } catch (e) {
     error.value = `Not created: ${message(e)}`;
+  } finally {
     busy.value = false;
-    return;
-  }
-  // The issue exists from here: whatever a field write says, the board
-  // gets it, and the form starts over, so a second Create is a new issue
-  // on purpose, never the same one again. The fields as the panel sets
-  // them (aliases resolve, single/multi apply), each on its own: a
-  // refused one names itself, the others still go in, and a forge sync
-  // running makes them wait for its end (fieldwrite.ts).
-  const failed: string[] = [];
-  for (const w of fieldWrites(values, isMulti)) {
-    try {
-      await patchField(issue.id, w.name, w.value);
-    } catch (e) {
-      failed.push(`${displayName(w.name)} ${w.value}: ${message(e)}`);
-    }
-  }
-  busy.value = false;
-  if (failed.length) {
-    // stay open on what went wrong, the board reloaded behind
-    emit('created', issue.id, true);
-    created.value = { id: issue.id, title: issue.title, failed };
-  } else emit('created', issue.id, another);
-  if (another || failed.length) {
-    title.value = '';
-    body.value = '';
-    titleInput.value?.focus();
   }
 }
 
@@ -154,9 +129,5 @@ onMounted(() => titleInput.value?.focus());
 .gb-dialog-body { display: grid; gap: .375rem; }
 .gb-gap { margin-top: 1rem; }
 .gb-save-error { display: flex; gap: .375rem; align-items: center; margin: .75rem 0 0; padding: .5rem .75rem; color: var(--danger-fg); background: var(--danger-bg); font-size: .875rem; }
-.gb-created { display: block; }
-.gb-created p, .gb-created ul { margin: 0; }
-.gb-created ul { padding-left: 1.25rem; }
-.gb-created p + ul, .gb-created ul + p { margin-top: .375rem; }
 @media (max-width: 47.99rem) { .gb-fieldgrid { grid-template-columns: minmax(0, 1fr); } }
 </style>

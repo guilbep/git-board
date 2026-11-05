@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Bucket, Issue } from './api/board';
+import type { Issue } from './api/types.ts';
+import type { Bucket } from './bucket.ts';
 import { boardLanes, laneChoices, limitState, noneFirst, pickCards, toggleLane } from './lanes.ts';
 
-const issue = (id: string): Issue => ({ id, title: id, shown_title: id, status: 'open', labels: [] });
+const issue = (id: string): Issue => ({ id, title: id, shown_title: id, status: 'open', labels: [], updated_at: '', created_at: '', comments: 0, version: '' });
 const b = (group: string, ...ids: string[]): Bucket => ({ group, issues: ids.map(issue) });
 
 test('boardLanes shows the lanes in order and counts the rest', () => {

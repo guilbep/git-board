@@ -1,0 +1,33 @@
+[
+  {
+    "at": "2025-03-03T09:00:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "labels",
+    "id": "26a4ba85e9ef4a8ff1b61f228dd598c8b3667905:1",
+    "added": [
+      "status:ready"
+    ]
+  },
+  {
+    "at": "2025-03-03T12:30:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "labels",
+    "id": "ded2634ad4a8ae77229036d8d744c05d8d98f3aa:0",
+    "added": [
+      "status:in-progress"
+    ],
+    "removed": [
+      "status:ready"
+    ]
+  }
+]

@@ -1,8 +1,8 @@
-<!-- Releases (internal/server/releases.go): what runs where, a column per
-     environment in order, and every release, candidates under their
-     version. A job (deploy, cut, promote, rollback) runs on the server, one
-     at a time, and says each step as a `releases` event: the page reloads
-     on it. The canvas's Releases board; its alerts from the States board. -->
+<!-- Releases (GET /api/releases, tools/ship): what runs where, a
+     column per environment in order, and every release, candidates under
+     their version. A job (deploy, cut, promote, rollback) runs on the
+     server, one at a time, and says each step as a `release` event: the
+     page reloads on it. -->
 <template>
   <AppHeader :views="viewNames" />
   <main class="gb-page">
@@ -22,26 +22,8 @@
 
     <section v-if="data && !data.enabled" aria-labelledby="setup">
       <h2 id="setup" class="gb-h2 gb-rel-setup">No releases here yet</h2>
-      <template v-if="setup && setup.binaries.length && !setup.note">
-        <p>git-board can cut binary releases of this repository from here. It found:</p>
-        <ul class="gb-plain-list">
-          <li v-for="l in setupLines(setup)" :key="l">{{ l }}</li>
-        </ul>
-        <details class="gb-rel-toml">
-          <summary>What it writes to .git-board.toml</summary>
-          <pre class="gb-mono">{{ setupToml(setup) }}</pre>
-        </details>
-        <p class="gb-hint">Publishing needs the gh CLI, signed in: <span class="gb-mono">gh auth login</span>.</p>
-        <div class="gb-actions">
-          <button type="button" class="epfl-btn epfl-btn-primary" :disabled="pending" @click="enable">Enable binary release</button>
-          <router-link class="epfl-btn epfl-btn-secondary" to="/settings/advanced">Edit .git-board.toml instead</router-link>
-        </div>
-      </template>
-      <template v-else>
-        <p v-if="setup?.note" class="epfl-alert epfl-alert-info" role="status">{{ setup.note }}</p>
-        <div v-if="doc" class="gb-md" v-html="doc" />
-        <p><router-link to="/settings/release">Set up the release in Settings</router-link></p>
-      </template>
+      <p>A <span class="gb-mono">[release]</span> table in .git-board.toml says what this repository releases: its environments and their overlays, or the binaries git-board builds and publishes.</p>
+      <p><router-link to="/settings/release">Set up the release in Settings</router-link></p>
     </section>
 
     <template v-else-if="data">
@@ -60,7 +42,7 @@
         </template>
       </ReleaseJob>
 
-      <AdoptPanel v-if="envs.some((e) => !e.adopted && e.targets.length)" :envs="envs" :busy="busy" :adopt="adopt" />
+      <AdoptPanel v-if="envs.some((e) => !e.adopted && e.targets.length)" :envs="envs" :proposals="data.proposals" :busy="busy" :adopt="adopt" />
 
       <section aria-labelledby="where">
         <h2 id="where" class="gb-sr">What runs where</h2>
@@ -157,20 +139,18 @@ import CutReleaseDialog from '@/components/CutReleaseDialog.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import ReleaseJob from '@/components/ReleaseJob.vue';
 import RollbackDialog from '@/components/RollbackDialog.vue';
-import { adoptOverlays, cutRelease, deployEnvironment, enableRelease, getConfigDocs, getDraft, getReleaseSetup, getReleases, getViews, promoteRelease, type CutRequest, type ReleaseJob as Job, type Proposal, type ReleaseRow, type ReleaseSetup, type Releases } from '@/api/board';
+import { adoptOverlays, cutRelease, deployEnvironment, getDraft, getReleases, promoteRelease, type CutRequest, type ReleaseJob as Job, type Proposal, type ReleaseRow, type Releases } from '@/api';
+import { configModel, loadConfigModel } from '@/configmodel';
 import { message } from '@/issue';
 import { debounced, onLive } from '@/live';
-import { behindText, byVersion, envMark, groupReleases, markClass, newest, promotion, releasePath, repoNames, runs, setupLines, setupToml, sha7, splitParts, tagPattern } from '@/releases';
-import { repo } from '@/remotes';
+import { behindText, byVersion, envMark, groupReleases, markClass, newest, promotion, releasePath, repoNames, runs, sha7, splitParts, tagPattern } from '@/releases';
 import { on, when } from '@/when';
 
-const viewNames = ref<string[]>([]);
+const viewNames = computed(() => configModel.value?.view_order ?? []);
 const data = ref<Releases | null>(null);
 const error = ref('');
 const actionError = ref('');
 const pending = ref(false); // an action sent, its answer not back yet
-const doc = ref(''); // docs/guide/configuration.md's ## Release, without [release]
-const setup = ref<ReleaseSetup | null>(null); // what Enable binary release proposes, without [release]
 const showAll = ref(false);
 // a job this page saw running stays shown once done; a failed one always
 const watched = ref(false);
@@ -247,10 +227,6 @@ async function reload(local = false) {
     else actionError.value = ''; // a refusal while a job ran is stale once none runs
     data.value = r;
     error.value = '';
-    if (!r.enabled) {
-      setup.value = await getReleaseSetup();
-      if ((setup.value.note || !setup.value.binaries.length) && !doc.value) doc.value = (await getConfigDocs()).find((d) => d.id === 'release')?.html ?? '';
-    }
   } catch (e) {
     if (!local) error.value = message(e); // the fetch says what's wrong, if it is
   } finally {
@@ -267,22 +243,6 @@ async function start(f: () => Promise<Job>) {
     const job = await f();
     watched.value = true;
     if (data.value) data.value.job = job;
-  } catch (e) {
-    actionError.value = message(e);
-  } finally {
-    pending.value = false;
-  }
-}
-
-// Enable binary release: the server writes [release] and runs it
-async function enable() {
-  const s = setup.value;
-  if (!s) return;
-  actionError.value = '';
-  pending.value = true;
-  try {
-    await enableRelease(s);
-    await reload();
   } catch (e) {
     actionError.value = message(e);
   } finally {
@@ -326,26 +286,21 @@ async function adopt(ps: Proposal[]) {
   await reload();
 }
 
-// a job's steps; while one runs, "issues" too: live.ts says it after a
-// reconnect, when a step may have been missed; config: [release] changed
+// a job's steps; resync: live.ts says it after a reconnect, when a step
+// may have been missed; config: [release] changed
 const reloadSoon = debounced(() => void reload());
-const offLive = onLive((e) => (e.kind === 'releases' || e.kind === 'config' || (e.kind === 'issues' && running.value)) && reloadSoon());
+// own: a job this page started tells its steps by this page
+const offLive = onLive((e) => (e.kind === 'release' || e.kind === 'config' || e.kind === 'resync') && reloadSoon(), { own: true });
 onBeforeUnmount(offLive);
 
 onMounted(async () => {
-  void getViews().then(
-    (v) => (viewNames.value = Object.keys(v)),
-    () => {},
-  );
+  void loadConfigModel();
   await reload(true); // this clone's, at once
   await reload(); // then origin's and the overlays'
 });
 </script>
 
 <style scoped>
-.gb-rel-toml { margin: 0.75rem 0; }
-.gb-rel-toml summary { cursor: pointer; }
-.gb-rel-toml pre { margin: 0.5rem 0 0; padding: 0.75rem; background: var(--gb-surface-2, #f5f5f5); border-radius: 4px; }
 .gb-rel-setup { margin: .75rem 0 1.5rem; }
 .gb-env-link { text-decoration: none; }
 .gb-rel-all { margin-top: 2.5rem; }

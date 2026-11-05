@@ -1,7 +1,7 @@
 // Run with: node --test web/src/timeline.test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { IssueEvent } from './api/board';
+import type { IssueEvent } from './api/types.ts';
 import { steps } from './replay.ts';
 import { timeline } from './timeline.ts';
 import { segments } from './flow.ts';

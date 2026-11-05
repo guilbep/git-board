@@ -1,0 +1,57 @@
+# The timed budgets (docs/guide/performance.md, v2): `make perf` makes
+# boardgen's boards of 5,000 and 20,000 issues (kept in a cache), times
+# the CLI and the server on them, and fails when a median is over its
+# budget (testdata/perf/budgets.txt). Nightly, and on a pull request
+# labelled perf: not on every push, where a shared runner's noise would
+# be read as a regression. The complexity guards, which count work, run
+# in every `go test` (ci.yml).
+name: perf
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  pull_request:
+    types: [labeled, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perf:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'perf')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Git identity for the boards
+        run: |
+          git config --global user.name ci
+          git config --global user.email ci@example.com
+
+      # the boards, by what makes them: cmd/boardgen and tools/boardgen
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/git-board/perf
+          key: perf-boards-v2-${{ runner.os }}-${{ hashFiles('cmd/boardgen/**', 'tools/boardgen/**') }}
+
+      - run: make perf
+
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-results
+          path: perf-results/
+          retention-days: 30
+
+      - if: always()
+        run: test -f perf-results/report.md && cat perf-results/report.md >> "$GITHUB_STEP_SUMMARY" || true

@@ -1,0 +1,125 @@
+{
+  "id": "74712f7d588741052d79ff3da89ad01452f53099",
+  "title": "Date cache deploy when endpoint login user should (5)",
+  "status": "open",
+  "labels": [
+    "area:data",
+    "assignee:dev3",
+    "cat:bug",
+    "est:3",
+    "prio:p2",
+    "status:ready"
+  ],
+  "shown_title": "Date cache deploy when endpoint login user should (5)",
+  "updated_at": "2024-01-07T16:53:36Z",
+  "created_at": "2024-01-01T14:30:00Z",
+  "comments": 1,
+  "author": {
+    "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+    "name": "Developer 0",
+    "login": "dev0",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+  },
+  "edited_at": "2024-01-07T16:53:36Z",
+  "participants": [
+    {
+      "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+      "name": "Developer 0",
+      "login": "dev0",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+    },
+    {
+      "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+      "name": "Developer 3",
+      "login": "dev3",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "74712f7d588741052d79ff3da89ad01452f53099:0",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-01T14:30:00Z",
+      "body": "Import factor request energy unit database purchase admin lines for crashes production need travel shows role the modal backend. The no request slowly cache missing filter upload retry. Check field wrong field form table. To date api file loads invoice should building dialog energy slowly travel slowly.\n\nFor on cache module migration test energy unit deploy upload missing sort. Sort should export export chart cache filter. Filter calculation the backend table when button scope message api chart login wrong spinner.\n\nError after wrong module error date slowly save validation would request file migration factor user. Missing endpoint slowly upload save french value purchase modal database no permission filter validation import total lines. Filter report timeout has sort database production error for after database token lines file request export loads. Invoice retry need column unit deploy scope export endpoint admin module. Login building column token cache lines session.",
+      "edited": true,
+      "history": [
+        {
+          "id": "74712f7d588741052d79ff3da89ad01452f53099:0",
+          "author": {
+            "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+            "name": "Developer 0",
+            "login": "dev0",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+          },
+          "at": "2024-01-01T14:30:00Z",
+          "body": "File admin modal role translation table unit crashes year database could form wrong no. Query french admin column session unit query role fix translation laboratory cache error. Loads modal invoice check test translation refactor token translation filter request when. Should to user file deploy upload query field we loads staging emissions french cache page token french sort session.\n\nReport upload role factor need retry. Query loads index year shows loads when.\n\nForm index for response translation has import refactor save need chart crashes api message shows factor upload database permission. No building on energy to energy timeout chart returns for token date check total user modal form."
+        },
+        {
+          "id": "df5fb87e42088e66de2b38ad5cf3b9cc385a0eea:0",
+          "author": {
+            "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+            "name": "Developer 4",
+            "login": "dev4",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+          },
+          "at": "2024-01-05T19:28:26Z",
+          "body": "Import factor request energy unit database purchase admin lines for crashes production need travel shows role the modal backend. The no request slowly cache missing filter upload retry. Check field wrong field form table. To date api file loads invoice should building dialog energy slowly travel slowly.\n\nFor on cache module migration test energy unit deploy upload missing sort. Sort should export export chart cache filter. Filter calculation the backend table when button scope message api chart login wrong spinner.\n\nError after wrong module error date slowly save validation would request file migration factor user. Missing endpoint slowly upload save french value purchase modal database no permission filter validation import total lines. Filter report timeout has sort database production error for after database token lines file request export loads. Invoice retry need column unit deploy scope export endpoint admin module. Login building column token cache lines session."
+        }
+      ]
+    },
+    {
+      "kind": "labels",
+      "id": "74712f7d588741052d79ff3da89ad01452f53099:1",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-01T14:30:00Z",
+      "added": [
+        "status:validated",
+        "prio:p2",
+        "cat:bug",
+        "assignee:dev3",
+        "area:data",
+        "est:3"
+      ]
+    },
+    {
+      "kind": "comment",
+      "id": "737fffc58826d5ace6e14ef80e8929b882c23f6b:0",
+      "author": {
+        "id": "5d5ebbabe94f7f73f67409484d111bebc7b5773d",
+        "name": "Developer 3",
+        "login": "dev3",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+      },
+      "at": "2024-01-03T14:15:02Z",
+      "body": "Loads error response missing total when fix on factor should column loads english admin permission. Api import missing table endpoint database refactor we crashes shows wrong test. Staging token the modal total filter english dialog translation crashes."
+    },
+    {
+      "kind": "labels",
+      "id": "5356ba6b5da8c513463d8d0970b4292fde141937:0",
+      "author": {
+        "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+        "name": "Developer 4",
+        "login": "dev4",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+      },
+      "at": "2024-01-07T16:53:36Z",
+      "added": [
+        "status:ready"
+      ],
+      "removed": [
+        "status:validated"
+      ]
+    }
+  ]
+}

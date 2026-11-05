@@ -1,0 +1,19 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-export	1	export
+02-import-md-nope	0	import --md nope
+03-export-md-md	0	export --md md
+04-export-md-md	0	export --md md
+05-import-md-md	0	import --md md
+06-import-md-md	0	import --md md
+07-import-md-md	0	import --md md
+08-export-md-md	0	export --md md
+09-file-100-edited-by-hand-md	0	file 100-edited-by-hand.md
+10-file-101-export-csv-13-md	0	file 101-export-csv-13.md
+11-file-102-n-c-d-b-renamed-md	0	file 102-n-c-d-b-renamed.md
+12-file-103-label-churn-md	0	file 103-label-churn.md
+13-file-7-crash-on-empty-report-md	0	file 7-crash-on-empty-report.md
+14-file-id-bare-md	0	file ID-bare.md
+15-file-id-lenient-packs-the-second-title-w	0	file ID-lenient-packs-the-second-title-wins.md
+16-file-id-made-by-hand-md	0	file ID-made-by-hand.md
+17-file-id-thread-with-a-deleted-comment-md	0	file ID-thread-with-a-deleted-comment.md
+18-file-readme-md	0	file README.md

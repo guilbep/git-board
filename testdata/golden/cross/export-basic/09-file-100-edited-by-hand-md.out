@@ -1,0 +1,58 @@
+---
+id: ID
+number: GB-100
+title: Edited by hand
+state: open
+fields:
+  est:
+    - "3"
+  kind:
+    - bug
+  prio:
+    - p0
+  sprint:
+    - s1
+  status:
+    - in-progress
+people:
+  author: Ada King
+  assignees:
+    - ada
+    - bobby
+created: 2025-03-03T09:00:00Z
+updated: 2025-06-01T10:00:00Z
+---
+
+Searching for a closed issue finds nothing, unless the query says is:closed.
+
+<!-- git-board comments -->
+
+### Bob · 2025-03-03T10:00:00Z
+
+It finds them with `is:closed`, and `-is:open`.
+
+<!-- git-board comment ID:0 -->
+
+### Chloé Dubois-Ångström · 2025-03-03T10:30:00Z
+
+This line looks wrong.
+
+<!-- git-board comment ID:0 -->
+
+### Ada King · 2025-03-03T15:00:00Z
+
+@bobby can you check the inbox counts too?
+
+<!-- git-board comment ID:0 -->
+
+### Alice · 2025-06-01T10:00:00Z
+
+A comment by hand.
+
+<!-- git-board comment ID:1 -->
+
+### Alice · 2025-06-01T10:00:00Z
+
+A comment by hand.
+
+<!-- git-board comment ID:0 -->

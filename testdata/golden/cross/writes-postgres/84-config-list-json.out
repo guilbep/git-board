@@ -1,0 +1,112 @@
+[
+  {
+    "key": "branches.kinds.bug",
+    "source": ".git-board.toml",
+    "value": "\"bug\""
+  },
+  {
+    "key": "branches.kinds.feature",
+    "source": ".git-board.toml",
+    "value": "\"feature\""
+  },
+  {
+    "key": "fields.assignee.single",
+    "source": ".git-board.toml",
+    "value": "false"
+  },
+  {
+    "key": "fields.est.numeric",
+    "source": ".git-board.toml",
+    "value": "true"
+  },
+  {
+    "key": "fields.est.single",
+    "source": ".git-board.toml",
+    "value": "true"
+  },
+  {
+    "key": "fields.nope.colors",
+    "source": ".git-board.toml",
+    "value": "1"
+  },
+  {
+    "key": "fields.prio.options",
+    "source": ".git-board.toml",
+    "value": "[\"p0\", \"p1\", \"p2\", \"p3\"]"
+  },
+  {
+    "key": "fields.prio.single",
+    "source": ".git-board.toml",
+    "value": "true"
+  },
+  {
+    "key": "fields.reviewer.single",
+    "source": ".git-board.toml",
+    "value": "true"
+  },
+  {
+    "key": "fields.sprint.single",
+    "source": ".git-board.toml",
+    "value": "true"
+  },
+  {
+    "key": "fields.status.options",
+    "source": ".git-board.toml",
+    "value": "[\"backlog\", \"ready\", \"in-progress\", \"in-review\", \"done\"]"
+  },
+  {
+    "key": "fields.status.single",
+    "source": ".git-board.toml",
+    "value": "true"
+  },
+  {
+    "key": "github-project.owner",
+    "source": ".git-board.toml",
+    "value": "\"guilbep\""
+  },
+  {
+    "key": "roles.reviewer",
+    "source": ".git-board.toml",
+    "value": "\"chloe\""
+  },
+  {
+    "key": "sprints.length_days",
+    "source": ".git-board.toml",
+    "value": "21"
+  },
+  {
+    "key": "sprints.list",
+    "source": ".git-board.toml",
+    "value": "[{slug = \"s1\", start = 2025-03-03, title = \"Sprint 1\"}, {slug = \"s2\", start = 2025-03-17, title = \"Sprint 2\"}]"
+  },
+  {
+    "key": "views.mine.filter",
+    "source": ".git-board.toml",
+    "value": "\"assignee:@me\""
+  },
+  {
+    "key": "views.mine.sort",
+    "source": ".git-board.toml",
+    "value": "\"updated desc\""
+  },
+  {
+    "key": "views.ready.filter",
+    "source": ".git-board.toml",
+    "value": "\"status:ready is:open prio:p0\""
+  },
+  {
+    "key": "views.ready.sort",
+    "source": ".git-board.toml",
+    "value": "\"prio asc\""
+  },
+  {
+    "key": "board.me",
+    "source": "local",
+    "value": "ID"
+  },
+  {
+    "key": "board.datastore",
+    "source": "local",
+    "value": ""
+  }
+]

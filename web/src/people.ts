@@ -1,7 +1,7 @@
 // The conversation's people, at the end of the tab row (README 16f): the
 // author, then each commenter by their latest comment, newest first; the
 // viewer marked. Pure: PeopleButton draws them.
-import type { IssueEvent, Person } from './api/board';
+import type { IssueEvent, Person } from './api/types.ts';
 
 export interface PersonRow {
   person: Person;
@@ -22,7 +22,7 @@ export function peopleOf(author: Person, events: IssueEvent[], meId: string): Pe
 export const peopleLabel = (n: number) => `${n} in this conversation`;
 
 // personByLogin is the person a person field's login names (assignee:alice,
-// @alice), among the identities /api/me lists: case doesn't matter, a
+// @alice), among the people GET /api/people lists: case doesn't matter, a
 // leading @ neither. Unknown: undefined, and the page shows the login.
 export function personByLogin(identities: Person[] | null | undefined, login: string): Person | undefined {
   const l = login.replace(/^@/, '').toLowerCase();

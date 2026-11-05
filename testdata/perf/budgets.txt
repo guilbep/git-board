@@ -1,0 +1,51 @@
+# The timed budgets (make perf; docs/guide/performance.md, v2): the
+# median of a benchmark on boardgen's board (-seed 1), on the reference
+# machine (2 CPUs, Xeon 2.1 GHz, Linux), measured where it's quiet.
+# make perf fails when a median is over its budget by more than the
+# tolerance (15%). A budget moves down when the code gets faster; up only
+# with a reason written here (a feature that must cost more), never to
+# make a slower commit pass.
+#
+# name                    budget  why
+
+# 20,000 issues: design.md, section 4's targets where they hold; where
+# they don't yet, what holds now, the target named.
+20k/cli/Ls                100ms   ls, view fresh: design.md's target
+20k/cli/LsFields          100ms   ls with field terms: the terms narrow first, no more than ls
+20k/cli/LsText            250ms   ls with free text, its index built (design.md: no target; v1 2.0 s)
+20k/cli/LsFirst           4s      ls on a clone, no view (design.md's target 3 s: not met, the first build's cost)
+20k/cli/LsTextFirst       7s      the first free-text ls builds the index (design.md's target 5 s: not met)
+20k/cli/Show              30ms    show: design.md's target
+20k/cli/Comment           50ms    a write: design.md's target
+20k/cli/Set               50ms    a write: design.md's target
+20k/cli/New               55ms    a write (design.md's target 50 ms: the counter and the view's insert)
+20k/http/ListOpen         60ms    GET /api/issues, a first page: the list's budget
+20k/http/ListColumn       60ms    a board's column, filtered and sorted
+20k/http/ListAll          120ms   every issue at once (design.md's target 60 ms: not met, the JSON of 20,000)
+20k/http/Facets           60ms    GET /api/labels, the filters panel's counts
+20k/http/Thread           40ms    one issue's thread (design.md's target 10 ms: not met)
+20k/http/EventsFanOut     70ms    a comment told to 50 pages
+20k/http/WorkTeam         300ms   the Work page, every open issue (12,000), unpaged: 71 s before its rows were kept
+20k/http/WorkTeamPage     300ms   the Work page's first page (limit=100): the task's budget
+20k/http/WorkTeamFirst    3.5s    the Work page's first request, every open thread read (the server reads it in the background)
+
+# 5,000 issues: a quarter of the work, so a regression that grows with
+# the board shows on both.
+5k/cli/Ls                 35ms    ls, view fresh
+5k/cli/LsFields           30ms    ls with field terms
+5k/cli/LsText             65ms    ls with free text, its index built
+5k/cli/LsFirst            1s      ls on a clone, no view
+5k/cli/LsTextFirst        2s      the first free-text ls builds the index
+5k/cli/Show               15ms    show
+5k/cli/Comment            30ms    a write
+5k/cli/Set                40ms    a write
+5k/cli/New                30ms    a write
+5k/http/ListOpen          15ms    GET /api/issues, a first page
+5k/http/ListColumn        20ms    a board's column
+5k/http/ListAll           35ms    every issue at once
+5k/http/Facets            20ms    the filters panel's counts
+5k/http/Thread            15ms    one issue's thread
+5k/http/EventsFanOut      45ms    a comment told to 50 pages
+5k/http/WorkTeam          60ms    the Work page, unpaged
+5k/http/WorkTeamPage      60ms    the Work page's first page
+5k/http/WorkTeamFirst     1s      the Work page's first request

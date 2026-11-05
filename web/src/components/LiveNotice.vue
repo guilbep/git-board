@@ -1,5 +1,5 @@
-<!-- Live updates for what every page shares: the header's sync link and
-     who you write as; and a small notice when something changed elsewhere,
+<!-- Live updates for what every page shares: who you write as and the
+     features on; and a small notice when something changed elsewhere,
      the page having reloaded it. -->
 <template>
   <transition name="gb-live">
@@ -9,22 +9,13 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue';
-import { loadForges } from '@/forges';
 import { lastLive, onLive } from '@/live';
 import { loadMe } from '@/me';
-import { loadSyncStatus } from '@/sync';
 import GbIcon from '@/components/GbIcon.vue';
 
+// who writes, or the experimental features (the file's), changed
 const off = onLive((e) => {
-  if (e.kind === 'sync') {
-    void loadForges();
-    void loadSyncStatus();
-  }
-  if (e.kind === 'settings') {
-    void loadForges();
-    void loadMe();
-  }
-  if (e.kind === 'config') void loadMe(); // a [cycle] table saved or gone: the issue page's view
+  if (e.kind === 'me' || e.kind === 'config') void loadMe();
 });
 onBeforeUnmount(off);
 

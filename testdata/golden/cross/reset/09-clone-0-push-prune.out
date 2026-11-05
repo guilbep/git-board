@@ -1,0 +1,2 @@
+pushed to origin, and deleted there 19 refs this clone doesn't have
+  origin's board as it was: <bundle>; git fetch <bundle> 'refs/board-pruned/*:refs/board/*' brings it here

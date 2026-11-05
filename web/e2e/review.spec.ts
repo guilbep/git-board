@@ -1,5 +1,6 @@
 // The UI review's fixes (docs/prd/ui-review.md), one test each where the
-// page shows the change: a count, a word, a state.
+// page shows the change: a count, a word, a state. (D-23, Labels' lint, is
+// git board lint's, a tool v2 serves with M6.)
 import { expect, test, type Page } from '@playwright/test';
 
 function errors(page: Page): Error[] {
@@ -82,19 +83,6 @@ test('C-34: one way to the command palette, the header’s', async ({ page }) =>
   await page.goto('/#/');
   await expect(page.getByRole('button', { name: 'Filter or jump to' })).toHaveCount(1);
   await expect(page.getByRole('button', { name: /Filter or jump ⌘K|Filter or jump Ctrl/ })).toHaveCount(0);
-});
-
-test('D-23: Labels in three parts, lint a line per field', async ({ page }) => {
-  const errs = errors(page);
-  await page.goto('/#/settings/labels');
-  await expect(page.getByRole('button', { name: 'Add a label' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Lint' }).click();
-  await expect(page.getByRole('button', { name: 'Add a label' })).toBeHidden();
-  // the e2e board has no issue: every option is dead, one line per field
-  await expect(page.getByText('status: no issue carries backlog, ready, in-progress, done')).toBeVisible();
-  await page.getByRole('tab', { name: 'On GitHub' }).click();
-  await expect(page.getByRole('heading', { name: /outside the project's labels/ })).toBeVisible();
-  expect(errs).toEqual([]);
 });
 
 test('D-39: a half-typed term neither filters the board nor offers to save the view', async ({ page }) => {

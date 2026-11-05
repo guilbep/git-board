@@ -1,0 +1,14 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-in-out-init	1	in out: init
+02-in-a-init	0	in a: init
+03-in-a-init	1	in a: init
+04-in-a-sub-init	1	in a/sub: init
+05-in-b-init-template-nope	1	in b: init --template nope
+06-in-b-init-template-enac	0	in b: init --template enac
+07-in-c-init-template-bad-toml	1	in c: init --template ../bad.toml
+08-in-c-init-template-good-toml	0	in c: init --template ../good.toml
+09-in-d-init-template-missing-toml	1	in d: init --template ../missing.toml
+10-file-a-git-board-toml	0	file a/.git-board.toml
+11-file-b-git-board-toml	0	file b/.git-board.toml
+12-file-c-git-board-toml	0	file c/.git-board.toml
+13-file-d-git-board-toml	0	file d/.git-board.toml

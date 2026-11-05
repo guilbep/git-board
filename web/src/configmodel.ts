@@ -1,37 +1,52 @@
 // The project file's sections as the settings' forms hold them. One load
-// for the page (GET /api/config/model), one save per tab (PUT
-// /api/config/section/<name>): a tab drafts its own section and never
-// holds the file's other lines — the server patches those, comments kept.
-// A tab that is dirty says so in its row; leaving with a draft asks.
-import { computed, ref, watch } from 'vue';
-import { ApiError, getConfigModel, saveConfigSection, type ConfigModel } from '@/api/board';
-import { message } from '@/issue';
+// for the page (GET /api/config, parsed here: configparse.ts), one save per
+// tab (PATCH /api/config, sectionpatch.ts): a tab drafts its own section
+// and sends its keys alone, from the version it read — the server writes
+// those lines, comments kept, or answers 412 stale when the file moved
+// since: the tab offers to reload, or to overwrite. A tab that is dirty
+// says so in its row; leaving with a draft asks.
+import { computed, ref, shallowRef, watch } from 'vue';
+import { getConfig, isStale, message, patchConfig, putConfig, type ConfigFile } from '@/api';
+import { board } from '@/me';
+import { loadSync, syncStatus } from '@/sync';
+import { modelOf, type ConfigModel } from '@/configparse';
+import { sectionPatch } from '@/sectionpatch';
+import { reorderTables } from '@/tomlorder';
 
-export const configModel = ref<ConfigModel | null>(null);
-export const configModelError = ref('');
-const loaded = ref(false);
+// the file as last read or written; the model is it parsed, with the
+// forges GET /api/sync finds and the features GET /api/board says are on,
+// as their stores have them (the board page needs neither: it doesn't
+// wait for them)
+const file = shallowRef<ConfigFile | null>(null);
+export const configModel = computed<ConfigModel | null>(() =>
+  file.value ? modelOf({ text: file.value.text, version: file.value.version, exists: file.value.exists, forges: syncStatus.value?.forges ?? [], on: board.value?.experimental ?? [] }) : null,
+);
+const readError = ref('');
+export const configModelError = computed(() => readError.value || configModel.value?.error || (file.value?.problems ?? []).map((p) => `${p.table}: ${p.message}`).join('; '));
 let pending: Promise<void> | null = null;
 
-// loadConfigModel reads the file's sections once; a save refreshes. The
-// same promise for everyone calling while the first is in the air.
+// loadConfigModel reads the file; a save refreshes. The same promise for
+// everyone calling while the first is in the air.
 export function loadConfigModel(): Promise<void> {
   if (pending) return pending;
-  pending = getConfigModel().then(
-    (m) => {
-      configModel.value = m;
-      configModelError.value = m.error ?? '';
-      loaded.value = true;
+  pending = getConfig().then(
+    (f) => {
+      takeFile(f);
       pending = null;
     },
     (e) => {
-      configModelError.value = message(e);
+      readError.value = message(e);
       pending = null;
     },
   );
   return pending;
 }
 
-export const configModelReady = computed(() => loaded.value);
+// takeFile keeps the file a read or a write answered
+export function takeFile(f: ConfigFile) {
+  readError.value = '';
+  file.value = f;
+}
 
 // inputValue reads a native input's or select's value out of its event:
 // on a plain element @input and @change hand the event, not the value
@@ -95,8 +110,10 @@ export class SectionDraft<T> {
     this.saved.value = false;
   }
 
+  // the file, and the forges (a field's places are theirs): a draft made
+  // before they came would differ from the model they make
   load(): Promise<void> {
-    return loadConfigModel().then(() => {
+    return Promise.all([loadConfigModel(), syncStatus.value ? null : loadSync()]).then(() => {
       if (configModel.value) this.reset(configModel.value);
     });
   }
@@ -113,20 +130,31 @@ export class SectionDraft<T> {
     return this.dirtyOf(this.from(m), this.value.value) || this.removed.value.length > 0;
   });
 
-  async save(): Promise<boolean> {
-    if (this.value.value === undefined || !this.base.value) return false;
+  // save writes the section from the version it read; overwrite, after a
+  // 412, writes it over whatever the file is now
+  async save(overwrite = false): Promise<boolean> {
+    const m = configModel.value;
+    if (this.value.value === undefined || !this.base.value || !m) return false;
     this.saving.value = true;
     this.saveError.value = '';
     this.conflict.value = false;
     try {
-      const r = await saveConfigSection(this.section, this.bodyOf(this.value.value, this.removed.value), this.base.value);
-      configModel.value = r.model;
-      this.reset(r.model);
+      const body = this.bodyOf(this.value.value, this.removed.value) as { order?: string[] };
+      const set = sectionPatch(this.section, body, m);
+      let f = await patchConfig(set, overwrite ? '' : this.base.value);
+      // a new order of the tables is the text's: put whole, from the
+      // version the patch answered (tomlorder.ts)
+      if (body.order) {
+        const text = reorderTables(f.text, this.section, body.order);
+        if (text !== f.text) f = await putConfig(text, f.version);
+      }
+      takeFile(f);
+      this.reset(configModel.value!);
       this.saved.value = true;
       return true;
     } catch (e) {
-      this.conflict.value = e instanceof ApiError && e.code === 'changed';
-      this.saveError.value = message(e);
+      this.conflict.value = isStale(e);
+      this.saveError.value = this.conflict.value ? '' : message(e);
       return false;
     } finally {
       this.saving.value = false;

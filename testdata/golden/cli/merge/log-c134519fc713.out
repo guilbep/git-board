@@ -1,0 +1,26 @@
+[
+  {
+    "at": "2025-03-03T09:10:00Z",
+    "author": {
+      "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
+      "name": "Ada King",
+      "login": "ada-l",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    },
+    "kind": "created",
+    "id": "c134519fc7135586952f39382889dfa85966bfcf:0",
+    "title": "Appended on the other clone"
+  },
+  {
+    "at": "2025-03-03T10:20:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "comment",
+    "id": "8f4cef74c4660f5d2c6dfa6f398d02bdbbd8e939:0",
+    "body": "Only b wrote this: a fast-forwards."
+  }
+]

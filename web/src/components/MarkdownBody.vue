@@ -1,4 +1,4 @@
-<!-- Issue text: the server's clean HTML (internal/markdown), then #123 and
+<!-- Issue text: the server's clean HTML (surface/http/markdown.go), then #123 and
      @name as links (richtext.ts). A click on #123 is the parent's to take
      (open that issue here) before the browser follows it to the forge. -->
 <template>
@@ -8,7 +8,7 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue';
-import { apiURL, type Forge } from '@/api/board';
+import { API_BASE, type Forge } from '@/api';
 import { enhance } from '@/richtext';
 import { forgeBase } from '@/links';
 import ImageLightbox, { type LightboxImage } from '@/components/ImageLightbox.vue';
@@ -31,7 +31,7 @@ function apply() {
   enhance(el.value, {
     refHref: (n) => (b?.refs ? b.refs + n : undefined),
     mentionHref: (login) => (b ? b.people + login : undefined),
-    mediaURL: apiURL,
+    mediaURL: (path: string) => API_BASE + path,
   });
   for (const img of el.value.querySelectorAll('img')) frame(img);
 }

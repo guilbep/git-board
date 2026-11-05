@@ -1,4 +1,4 @@
-// Issue text arrives as clean HTML from the server (internal/markdown).
+// Issue text arrives as clean HTML from the server (surface/http/markdown.go).
 // This adds what needs the page: #123 and @name as links, and the image
 // proxy's address in dev. DOM calls only, never HTML strings: the server
 // stays the one place text becomes HTML.
@@ -8,7 +8,7 @@ import { safeHref } from './links.ts';
 export type RefToken = { text: string; ref?: string; mention?: string };
 
 // #123 not glued to a word; @name as git-bug's sync recognises it
-// (bridge/core/render.go mentionRe): not in an email or a path, not ending
+// (git-bug's bridge/core/render.go mentionRe): not in an email or a path, not ending
 // with punctuation.
 const refRe = /(^|[^\w&/#])#(\d+)\b|(^|[^\w.\-/@`])@([A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?)/g;
 

@@ -1,0 +1,16 @@
+[
+  {
+    "at": "2025-03-03T16:00:00Z",
+    "author": {
+      "id": "9b787ae15fe85e31754d154f1d95eb962c91bbcf",
+      "name": "Bob",
+      "login": "bobby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88"
+    },
+    "kind": "labels",
+    "id": "398523d66eaebdebff64257a35e73c84d5c31f47:1",
+    "added": [
+      "prio:p2"
+    ]
+  }
+]

@@ -21,7 +21,7 @@
 <script setup lang="ts">
 import GbAvatar from '@/components/GbAvatar.vue';
 import { computed } from 'vue';
-import type { IssueEvent, Person } from '@/api/board';
+import type { IssueEvent, Person } from '@/api';
 import { me } from '@/me';
 import { peopleLabel, peopleOf } from '@/people';
 import GbPopover from '@/components/GbPopover.vue';

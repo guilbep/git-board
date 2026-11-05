@@ -17,17 +17,11 @@
       <button v-if="!reviewing" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok" @click="review">Save…</button>
       <template v-else>
         <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="reviewing = false">Keep editing</button>
-        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok || saving" @click="save">{{ saving ? 'Saving…' : 'Save and apply' }}</button>
+        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="!dirty || !check?.ok || saving" @click="save()">{{ saving ? 'Saving…' : 'Save and apply' }}</button>
       </template>
     </div>
 
-    <div v-if="file && !file.exists && !text && file.default" class="cfg-start">
-      <p class="gb-hint">No project file yet: every <code>ns:value</code> label is a field, in no order. The default declares the statuses, priorities, kinds and estimates, branch names and four views (all, backlog, board, mine), each explained in a comment.</p>
-      <p class="cfg-start-do">
-        <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" @click="startFromDefault">Start from the default</button>
-        <span class="gb-hint">or, in a terminal, <code>git board init</code></span>
-      </p>
-    </div>
+    <p v-if="file && !file.exists && !text" class="gb-hint">No project file yet: every <code>ns:value</code> label is a field, in no order. In a terminal, <code>git board init</code> writes the default one, each key explained in a comment.</p>
 
     <div v-if="reviewing && dirty" class="cfg-diff" aria-label="Changes to save">
       <div v-for="(h, i) in hunks" :key="i" :class="`cfg-d cfg-d${h.op === ' ' ? 'same' : h.op === '+' ? 'add' : h.op === '-' ? 'del' : 'skip'}`">
@@ -37,7 +31,10 @@
 
     <p v-if="saveError" class="epfl-alert epfl-alert-danger" role="alert">
       {{ saveError }}
-      <button v-if="conflict" type="button" class="gb-linkbtn" @click="load()">Load the file as it is now (your edits are dropped)</button>
+      <template v-if="conflict">
+        <button type="button" class="gb-linkbtn" @click="load()">Load the file as it is now (your edits are dropped)</button>
+        or <button type="button" class="gb-linkbtn" :disabled="saving" @click="save(true)">overwrite it with yours</button>
+      </template>
     </p>
     <p v-if="saved" class="cfg-msg cfg-msg-ok" role="status">Saved. Views, fields and sprints are live.</p>
 
@@ -103,8 +100,9 @@
 <script setup lang="ts">
 import { noteUse } from '@/keys';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { ApiError, checkConfig, getConfigDocs, getConfigFile, saveConfig, type ConfigCheck, type ConfigFile, type DocSection } from '@/api/board';
-import { configText } from '@/configdraft';
+import { getConfig, getDocs, isStale, putConfig, type ConfigFile, type DocSection } from '@/api';
+import { takeFile } from '@/configmodel';
+import { checkOf, type ConfigCheck } from '@/configcheck';
 import { docSectionAt } from '@/configsnippets';
 import { message } from '@/issue';
 import { lineDiff } from '@/linediff';
@@ -113,7 +111,7 @@ import { tomlTokens } from '@/toml';
 const emit = defineEmits<{ saved: [] }>();
 
 const file = ref<ConfigFile | null>(null);
-const text = configText; // Settings › Labels writes in it too
+const text = ref(''); // the file as edited here
 const check = ref<ConfigCheck | null>(null);
 const reviewing = ref(false);
 const saving = ref(false);
@@ -208,12 +206,14 @@ watch(text, () => {
 
 async function runCheck() {
   const t = text.value;
+  // the server's dry run: what it reads, and refuses, as a save would
+  let refused = '';
   try {
-    const c = await checkConfig(t);
-    if (t === text.value) check.value = c;
+    await putConfig(t, '', true);
   } catch (e) {
-    check.value = { ok: false, message: message(e), warnings: [], summary: { fields: [], views: [], sprints: 0 } };
+    refused = message(e);
   }
+  if (t === text.value) check.value = checkOf(t, refused);
 }
 
 function syncScroll() {
@@ -245,28 +245,25 @@ function review() {
   if (dirty.value && check.value?.ok) reviewing.value = true;
 }
 
-function startFromDefault() {
-  text.value = file.value?.default ?? '';
-  void select(0, 0);
-}
-
 function discard() {
   text.value = file.value?.text ?? '';
   reviewing.value = false;
 }
 
-async function save() {
+// save writes the text from the version read; overwrite, after a 412,
+// over whatever the file is now
+async function save(overwrite = false) {
   if (!file.value) return;
   saving.value = true;
   saveError.value = '';
   conflict.value = false;
   try {
-    check.value = await saveConfig(text.value, file.value.hash);
+    takeFile(await putConfig(text.value, overwrite ? '' : file.value.version));
     await load(true);
     saved.value = true;
     emit('saved');
   } catch (e) {
-    conflict.value = e instanceof ApiError && e.code === 'changed';
+    conflict.value = isStale(e);
     saveError.value = `Not saved: ${message(e)}`;
   } finally {
     saving.value = false;
@@ -275,7 +272,7 @@ async function save() {
 
 async function load(keepSaved = false) {
   try {
-    file.value = await getConfigFile();
+    file.value = await getConfig();
     text.value = file.value.text;
     reviewing.value = false;
     saveError.value = '';
@@ -290,7 +287,7 @@ async function load(keepSaved = false) {
 
 onMounted(() => {
   void load();
-  getConfigDocs().then(
+  getDocs('configuration').then(
     (d) => (docs.value = d),
     () => (docs.value = []),
   );

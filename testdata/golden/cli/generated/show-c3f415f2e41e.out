@@ -1,0 +1,120 @@
+{
+  "id": "c3f415f2e41e1fadc763eefbf9ac656426d04b53",
+  "title": "Validation lines slowly unit token building unit query refactor (6)",
+  "status": "closed",
+  "labels": [
+    "area:backend",
+    "assignee:dev2",
+    "cat:bug",
+    "est:0.5",
+    "prio:p3",
+    "status:backlog"
+  ],
+  "shown_title": "Validation lines slowly unit token building unit query refactor (6)",
+  "updated_at": "2024-01-09T00:35:13Z",
+  "created_at": "2024-01-01T15:09:00Z",
+  "closed_at": "2024-01-09T00:35:13Z",
+  "comments": 0,
+  "author": {
+    "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+    "name": "Developer 1",
+    "login": "dev1",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+  },
+  "edited_at": "2024-01-09T00:35:13Z",
+  "participants": [
+    {
+      "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+      "name": "Developer 1",
+      "login": "dev1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+    }
+  ],
+  "events": [
+    {
+      "kind": "created",
+      "id": "c3f415f2e41e1fadc763eefbf9ac656426d04b53:0",
+      "author": {
+        "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+        "name": "Developer 1",
+        "login": "dev1",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2024-01-01T15:09:00Z",
+      "body": "Value we update chart request backend sort calculation need english. Token login scope query timeout calculation user date.\n\nRequest dialog could request timeout total could. Factor column export report wrong query to database translation retry.\n\nFile import test unit value response purchase token no error shows loads. Form missing refactor would session csv query request for after endpoint has table token french wrong factor. Energy wrong cache modal report import column filter we message user.\n\nLoads when crashes translation permission should total should table emissions loads for token page validation page table request english. Missing module total api filter would retry building check. Year fix admin export shows form csv calculation for should chart wrong invoice need. Energy user need missing calculation production update shows factor slowly timeout test english need staging returns request.",
+      "edited": true,
+      "history": [
+        {
+          "id": "c3f415f2e41e1fadc763eefbf9ac656426d04b53:0",
+          "author": {
+            "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+            "name": "Developer 1",
+            "login": "dev1",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+          },
+          "at": "2024-01-01T15:09:00Z",
+          "body": "Update import wrong form module should check. Filter dialog travel check timeout has year emissions no table retry scope value csv. Fix has would purchase api after upload save slowly modal.\n\nEnglish update endpoint page has invoice for timeout calculation api scope date after deploy. No after emissions index chart user table missing. Page index admin missing the english file we save export test csv factor should. Loads for after translation production column error invoice database purchase wrong export we column french for. Admin sort total api update endpoint csv on french export the english."
+        },
+        {
+          "id": "18d0f4f06ba00783cb868593dc593067614a7b45:0",
+          "author": {
+            "id": "050271a9b6912b576dc52678f3b072f43c5e3959",
+            "name": "Developer 4",
+            "login": "dev4",
+            "avatar_url": "https://avatars.githubusercontent.com/u/1004?s=88"
+          },
+          "at": "2024-01-04T00:37:02Z",
+          "body": "Value we update chart request backend sort calculation need english. Token login scope query timeout calculation user date.\n\nRequest dialog could request timeout total could. Factor column export report wrong query to database translation retry.\n\nFile import test unit value response purchase token no error shows loads. Form missing refactor would session csv query request for after endpoint has table token french wrong factor. Energy wrong cache modal report import column filter we message user.\n\nLoads when crashes translation permission should total should table emissions loads for token page validation page table request english. Missing module total api filter would retry building check. Year fix admin export shows form csv calculation for should chart wrong invoice need. Energy user need missing calculation production update shows factor slowly timeout test english need staging returns request."
+        }
+      ]
+    },
+    {
+      "kind": "labels",
+      "id": "c3f415f2e41e1fadc763eefbf9ac656426d04b53:1",
+      "author": {
+        "id": "4b625572e0e604a42cbee5c7249d3db3ff3e4e24",
+        "name": "Developer 1",
+        "login": "dev1",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?s=88"
+      },
+      "at": "2024-01-01T15:09:00Z",
+      "added": [
+        "status:ready",
+        "prio:p3",
+        "cat:bug",
+        "assignee:dev2",
+        "area:backend",
+        "est:0.5"
+      ]
+    },
+    {
+      "kind": "labels",
+      "id": "a098f89a8e788b4570f33bb42b96fe4114a38aff:0",
+      "author": {
+        "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
+        "name": "Developer 0",
+        "login": "dev0",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1000?s=88"
+      },
+      "at": "2024-01-06T13:38:03Z",
+      "added": [
+        "status:backlog"
+      ],
+      "removed": [
+        "status:ready"
+      ]
+    },
+    {
+      "kind": "status",
+      "id": "9b3a09fb1fddb71beaa495ef5c8046d4bb830098:0",
+      "author": {
+        "id": "b5d85ae6ceb6b8626b9a4813d3d565f0a0790d2c",
+        "name": "Developer 2",
+        "login": "dev2",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1002?s=88"
+      },
+      "at": "2024-01-09T00:35:13Z",
+      "status": "closed"
+    }
+  ]
+}

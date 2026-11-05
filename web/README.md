@@ -1,13 +1,15 @@
-# git-board web UI
+# git-board's web UI
 
-One board page talking to the git-board server's JSON API
-(`internal/server`): the saved views of `.git-board.toml` as the header
-navigation (`#/?view=<name>`), a filter/group/sort bar, each view in its
-`layout` (`board`: one column per group, in the group field's configured
-option order; `table`: the CLI's columns, one per configured field), and
-an issue side panel that edits fields (single: a select of the configured
-options; multi: chips). See the root [README.md](../README.md#web-ui) for
-the full picture and the no-auth caveat.
+The web app `git board` serves (ADR 0012, ADR 0021), over its HTTP API
+([docs/rewrite/api.md](../docs/rewrite/api.md)): the board page
+(the saved views as tabs, a filter, group and sort bar, each view in its
+`layout`: `table`, `board`, `roadmap`), the issue panel, the inbox and
+Settings. What changed from v1's web app, and why:
+[docs/rewrite/web.md](../docs/rewrite/web.md).
+
+`src/api` is the one typed client: a module per part of api.md, every
+write from the version read (`If-Match`), one error shape. No component
+calls `fetch()`.
 
 ## EPFL design system
 
@@ -18,11 +20,9 @@ vendored by copy in `epfl-design/` from commit
 its `tokens/`, `css/` and `kits/quasar/epfl-quasar-brand.css`, unmodified,
 in the same layout. `public/epfl-logo.svg` is its `assets/svg/epfl-logo.svg`.
 `src/css/app.css` loads `css/epfl.css` then the Quasar brand mapping;
-`web/epfl.go` embeds the same files for `git-board html`'s static site.
 
 A copy, not the submodule its INSTALL.md suggests: `go install` and module
-downloads never see submodule content, and the static site embeds these
-files. To update, copy those paths again from a newer commit and change the
+downloads never see submodule content. To update, copy those paths again from a newer commit and change the
 commit above.
 
 Rules worth knowing before touching a style: tokens only (`var(--…)`, no
@@ -47,28 +47,29 @@ npm install
 npm run dev       # Quasar dev server, http://localhost:9000
 ```
 
-The dev server needs the git-board server running separately on `:8080`
-(`go run ./cmd/git-board serve` from the repo root) — `src/api/board.ts`
-points there via CORS when `import.meta.env.DEV` is true. Same-origin (no
-CORS, no separate process) once built and embedded for production.
+The dev server needs `git board serve` running separately on `:8080`
+(`go run ./cmd/git-board serve` from the repo root, on a
+throwaway board): `src/api/http.ts` points there when `import.meta.env.DEV`
+is true; the server takes the dev server's origin (ADR 0013).
 
 ## Production build
 
 ```bash
-npm run build      # writes web/dist/spa (Quasar's default SPA output dir)
+npm run build      # writes web/dist/spa
 ```
 
-Then `go build ./cmd/git-board` from the repo root embeds `web/dist`
-(`web/embed.go`) and serves `dist/spa` from it, into a single binary that
-serves both the API and the UI.
+Then `go build ./cmd/git-board` embeds `web/dist`
+(`embed.go`) and serves `dist/spa` from it.
 
 ## Type-check and test
 
 ```bash
 npm run typecheck   # vue-tsc --noEmit
-npm test            # node --test src/facets.test.ts
+npm test            # node --test 'src/**/*.test.ts'
+npm run e2e         # Playwright, e2e/: make web-e2e from the root
 ```
 
-The filters and sort (`src/facets.ts`) run in the page, so they're tested
-here, with Node's own test runner (Node strips the types; no Vitest). The
-API handlers are covered on the Go side (`internal/server/server_test.go`).
+The pure modules (no `@/` imports) are tested with Node's own runner, which
+strips the types. The browser tests (`e2e/`) run on `git board serve`
+over throwaway boards that `e2e/serve.mjs` makes: a git board with a GitHub
+origin and a fake GitHub, and a Markdown board.

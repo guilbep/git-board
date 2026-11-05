@@ -1,7 +1,7 @@
 // The status's next step, as the head's arrow says it
 // (docs/design/issue-head/README.md, 19d). No status moves to the first
 // option; the step onto the last option closes the issue there, as the
-// cycle's sign-off does (internal/server/cycle.go, signedOff); an open
+// cycle's sign-off does (v1's internal/server/cycle.go, signedOff; app/cycleact.go now); an open
 // issue already at the last option only closes; a closed issue reopens.
 // No workflow, no arrow. Pure: the stepper calls the server.
 export interface NextStep {

@@ -1,0 +1,17 @@
+# name	exit	command (git-board <command>): <name>.out is its stdout, <name>.err its stderr
+01-file-0107f19-dialog-error-slowly-token-r	0	file 0107f19-dialog-error-slowly-token-response-token-index-for.md
+02-file-0cb9eab-missing-chart-csv-calculati	0	file 0cb9eab-missing-chart-csv-calculation-endpoint-energy-the.md
+03-file-148260e-fix-french-year-value-index	0	file 148260e-fix-french-year-value-index-has-4.md
+04-file-27861ea-a-long-history-150-md	0	file 27861ea-a-long-history-150.md
+05-file-36e726f-message-module-spinner-when	0	file 36e726f-message-module-spinner-when-could-error-total-slow.md
+06-file-526050c-query-returns-upload-we-mod	0	file 526050c-query-returns-upload-we-modal-cache-english-2.md
+07-file-56f15a4-crashes-could-login-validat	0	file 56f15a4-crashes-could-login-validation-deploy-backend-file.md
+08-file-5d51e7e-migration-staging-unit-vali	0	file 5d51e7e-migration-staging-unit-validation-9.md
+09-file-6944b2e-unit-scope-shows-english-th	0	file 6944b2e-unit-scope-shows-english-the-migration-slowly-retr.md
+10-file-74712f7-date-cache-deploy-when-endp	0	file 74712f7-date-cache-deploy-when-endpoint-login-user-should.md
+11-file-7b7ec1e-slowly-would-request-spinne	0	file 7b7ec1e-slowly-would-request-spinner-filter-3.md
+12-file-a46e35c-total-need-total-test-14-md	0	file a46e35c-total-need-total-test-14.md
+13-file-b356cc0-calculation-migration-form	0	file b356cc0-calculation-migration-form-translation-12.md
+14-file-b3afbab-value-for-calculation-date	0	file b3afbab-value-for-calculation-date-production-admin-file-1.md
+15-file-b3f0496-form-database-could-laborat	0	file b3f0496-form-database-could-laboratory-7.md
+16-file-c3f415f-validation-lines-slowly-uni	0	file c3f415f-validation-lines-slowly-unit-token-building-unit-q.md

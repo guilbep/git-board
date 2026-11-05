@@ -1,0 +1,54 @@
+---
+id: ID
+number: MD-1
+title: Kept in a folder, by hand
+state: open
+fields:
+  kind:
+    - bug
+  prio:
+    - p0
+  status:
+    - ready
+labels:
+  - extra
+  - plain
+people:
+  author: Ada King
+  assignees:
+    - ada
+created: 2025-03-03T09:00:00Z
+updated: NOW
+---
+
+A body with a heading:
+
+### not a comment · 2025-01-01T00:00:00Z
+
+still the body, by hand.
+
+<!-- git-board comments -->
+
+### Bob · 2025-03-03T10:00:00Z
+
+A comment, by hand.
+
+<!-- git-board comment ID:0 -->
+
+### Chloé Dubois-Ångström · 2025-03-03T14:00:00Z
+
+Written on the branch side.
+
+<!-- git-board comment ID:0 -->
+
+### Dana · 2025-04-01T08:00:00Z
+
+A new comment, by a new person.
+
+<!-- git-board comment ID:3 -->
+
+### Bob · 2025-04-01T09:00:00Z
+
+And one by Bob.
+
+<!-- git-board comment ID:4 -->

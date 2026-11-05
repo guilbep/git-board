@@ -24,7 +24,8 @@ kept, in the store you choose (git, PostgreSQL or Markdown files).
     - [Where the board is kept](guide/datastores.md): git, PostgreSQL,
       Markdown files or the forges alone.
 - **The spec** states the core's format: git-board's data model and its
-  sync with forges, as a Go library, `github.com/guilbep/git-board/core/...`.
+  sync with forges, as Go packages of `github.com/guilbep/git-board`
+  (`kernel`, `store/…`, `domain/…`, `sync`, `forge/…`).
   It keeps issues, people and their links to forges in a git repository.
   Each one is a log of operations, and the logs of every clone merge into
   the same state. The pages state the format; the code implements them.
@@ -40,25 +41,27 @@ kept, in the store you choose (git, PostgreSQL or Markdown files).
 - **The decisions**: [the spec's](spec/decisions.md), the choices it
   starts from, each linked to the PRD; and the architecture decision
   records, from [ADR 0001](adr/0001-check-results-are-signed-git-notes.md)
-  to [ADR 0020](adr/0020-the-core-in-layers.md):
+  to [ADR 0021](adr/0021-git-board-v2-same-data-new-code.md):
   why git-board has its own core ([0003](adr/0003-own-core-instead-of-git-bug.md)),
   keeps issues as operation logs ([0004](adr/0004-entities-are-operation-logs.md)),
   syncs forges as mirrors ([0008](adr/0008-sync-state-in-the-data-model.md)),
   lets you choose where the board is kept ([0002](adr/0002-datastores.md)),
   what it is for ([0018](adr/0018-own-your-issues-work-in-progress-is-opt-in.md)),
-  and how the core is layered ([0020](adr/0020-the-core-in-layers.md)).
+  how the core is layered ([0020](adr/0020-the-core-in-layers.md)), and
+  why v0.12 is new code on the same data ([0021](adr/0021-git-board-v2-same-data-new-code.md)).
 
 ## The core
 
 The core serves **git-board**, which runs on it: its server, its web app,
 its TUI and its command line; and **any Go program** that wants the same
-data. It never imports git-board's `internal/`, nor git-bug.
+data, through `app`, which opens a board. Nothing in it imports git-bug.
 
 It isn't compatible with git-bug, on purpose. Its data lives under
 `refs/board/`, which git-bug never reads, so git-bug can't see it nor send
-it to a forge a second time. Nothing converts git-bug's data: a repository
-moves to the core by pulling its issues from its forges again
-(`git board switch`).
+it to a forge a second time. git-board v0.12 doesn't convert git-bug's
+data: a repository that still holds it is refused, and migrates with
+git-board v0.11 first (`git board switch`; [Forges › Leaving
+git-bug](guide/forges.md#leaving-git-bug)).
 
 Each spec page states what M1 and M2 build. What comes later is marked with
 its milestone, as planned, and isn't defined yet. In the examples, pack
