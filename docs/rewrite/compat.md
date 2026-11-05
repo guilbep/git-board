@@ -153,6 +153,20 @@ to `allowed.txt` (it sets `GIT_BOARD_COMPAT_PENDING=1`; v1, with no
 an entry no difference needs any more fails the run, "remove it from
 pending", so the list only shrinks.
 
+## Dogfooding
+
+`make dogfood DIR=<repository>` (design.md, section 5) holds two binaries
+to each other on a real board rather than to recorded outputs: v1
+(`OLD`, or built from `OLD_REF`) and v2 (`NEW`), `next/golden`'s
+`TestDogfood`. Each reads its own copy of the board (a clone with its
+`refs/board/*` and no remote), through this page's `Run`, `Env` and
+`Normalise`; the cases are `ls --json`, `ls is:closed --json` and `show
+<id> --json` of every issue in `refs/board/issue/`. Exit codes and stdout
+are compared; stderr is kept beside, not compared (v2 words its errors
+anew). There is no allowed list: a difference fails, and its outputs go
+to `DOGFOOD_OUT`. `.github/workflows/dogfood.yml` runs it daily on this
+repository's board.
+
 ## The import guard
 
 `next/guard_test.go`: nothing in `next/` imports `core/`, `internal/` or

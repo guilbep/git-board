@@ -907,6 +907,35 @@ too, so both live in one tree.
   are read by both binaries daily, by a scheduled job that diffs `ls
   --json` and `show --json` of every issue, and reports any difference.
 
+**Dogfooding, as built (2026-11-05).** `make dogfood DIR=<repository>`
+runs `next/golden`'s `TestDogfood`: each binary reads its own copy of the
+board (a clone of the repository's commit, its working tree's
+`.git-board.toml`, its `refs/board/*`, no remote; the repository is never
+written, nothing is fetched or pushed), and `ls --json`, `ls is:closed
+--json` and `show <id> --json` of every issue, deleted ones too, are
+compared through make compat's `Run`, `Env` and `Normalise`
+([compat.md](compat.md#dogfooding)): exit code and stdout. `OLD` is v1's
+binary, else v1 built from `OLD_REF` (`git archive`, no worktree; the
+newest `v0.11.*` tag by default); `NEW` v2's, else built now. A difference
+fails it, and the differing outputs and their diff go to `DOGFOOD_OUT`
+(`dogfood-out/dogfood.diff`). It reads boards kept in git: a clone whose
+`board.datastore` names PostgreSQL or a folder is refused.
+`.github/workflows/dogfood.yml` runs it daily (and by hand, with an
+`old_ref`) on this repository's board, fetched from origin, and uploads
+the diff when it fails; Pierre's other boards (co2-calculator's) are run
+by hand, `make dogfood DIR=<its checkout>`, once their issues are in
+`refs/board/`. Pierre asked to run it after v0.12 rather
+than hold the release on it.
+
+Its baseline is a release, and **v0.11.6 can't be one**: it has no `show`
+command, and its `ls --json` has neither `closed_at` nor `comments`
+(added on main since). Against it every case differs (git-board's own
+board, 2026-11-05: 42 of 42). v1 built from this tree and v2 agree on that
+board, every case. So the job needs a last v1 release cut from main before
+the switch (v0.11.7, by a human: `git board release cut`); until then its
+daily run fails, or runs by hand with `old_ref` a commit of v1. At the
+switch (M7), the Makefile's `./next/golden/` becomes `./golden/`.
+
 ### Milestones
 
 Sizes are lines of Go, without tests; tests are about as many again.
@@ -999,9 +1028,14 @@ ported to `git-board-agents`, a Go module of its own in
 `contrib/board-agents/` (module `github.com/guilbep/board-agents`). It
 imports nothing of git-board's: it reads and writes the board through the
 `git-board` CLI's `--json` outputs and, for what only the server computes
-(the cycle, line comments located on the branch, the Work page's agents),
-through the HTTP API, all of it in one file (`internal/board/board.go`)
-to move to v2's routes at M5. Its README says how it leaves this
+(the cycle, the Work page's rows), through v2's HTTP API, all of it in
+one file (`internal/board/board.go`). Its routes are v2's since
+2026-11-05 (`/api/board`, `/api/issues/{id}`, `/api/issues/{id}/cycle`,
+`/api/cycle?who=team`, comments with `If-Match`); a test runs it against
+`git-board-next serve`. v2 lacks three things it used from v1, and it
+says so where they're missing: a comment's `cycle:step` (comment `meta`,
+M6), line comments located on the branch's head, and worktrees' paths on
+the Work page (it matches rows by branch). Its README says how it leaves this
 repository with `git subtree split`. `make agents` builds and tests it;
 `make ci` doesn't: it is no longer part of git-board. It stays when v1 is
 deleted, until it moves out.

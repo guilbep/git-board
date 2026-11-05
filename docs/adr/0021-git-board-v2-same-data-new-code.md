@@ -74,5 +74,8 @@ sync engine, after the release mapper.
   `github.com/guilbep/board-agents`, its binary `git-board-agents` (`git
   board-agents`). See the design's
   [Agents and wtx](../rewrite/design.md#agents-and-wtx-their-own-binary).
+  Its client speaks v2's API since 2026-11-05; what it still lacks from
+  v2 (a comment's `cycle:step`, line comments located on the branch) is
+  in its README, "What v2's API doesn't answer yet".
 - Whether the bridge is in v0.12 or v0.13: it is planned for v0.12, and
   ships in v0.13 if it would hold the release back.
