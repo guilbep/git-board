@@ -114,6 +114,11 @@ type stat struct {
 	Ino                uint64
 }
 
+// changed is when the file last changed: its ctime, which no one sets,
+// unless its mtime is later. A tool may set the mtime back (cp -p, rsync
+// -t, touch -d): a file just edited so is still a recent one.
+func (s stat) changed() int64 { return max(s.Mtime, s.Ctime) }
+
 // entry is what is known of a file, by name: its stat when it was last
 // written or read, at Seen, the hash of its bytes then, the issue it
 // holds ("" for a file that isn't one), and the version it was rendered
@@ -216,12 +221,12 @@ func hashOf(data []byte) string {
 }
 
 // unchanged says a file is as it was last written or read: its stat
-// the one kept, and kept a second or more after its last write, so that
+// the one kept, and kept a second or more after its last change, so that
 // a coarse clock can't hide a write since; else its bytes hash the same.
 // data is its bytes when they were read.
 func unchanged(path string, info fs.FileInfo, e entry, ok bool) (same bool, data []byte, err error) {
 	st := statOf(info)
-	if ok && e.Stat == st && e.Seen-st.Mtime > int64(time.Second) {
+	if ok && e.Stat == st && e.Seen-st.changed() > int64(time.Second) {
 		return true, nil, nil
 	}
 	data, err = os.ReadFile(path)

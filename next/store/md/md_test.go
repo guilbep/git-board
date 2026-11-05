@@ -280,8 +280,8 @@ func TestCounter(t *testing.T) {
 }
 
 // A listing keeps the versions it hashed, with their files' stat, for
-// the next process; a file written again since, its size and its mtime
-// as they were, is hashed again.
+// the next process, once its file has settled a second; a file written
+// again since, its size and its mtime as they were, is hashed again.
 func TestVersionsKept(t *testing.T) {
 	t.Parallel()
 	dir, folder := filepath.Join(t.TempDir(), "issues"), t.TempDir()
@@ -296,6 +296,11 @@ func TestVersionsKept(t *testing.T) {
 	path := s.path("issue", id)
 	old := time.Now().Add(-time.Minute)
 	os.Chtimes(path, old, old)
+	// its mtime set back, it changed just now still: its ctime says so
+	if s.Heads(ctx, "issue"); len(s.vers.by) != 0 {
+		t.Fatalf("a version kept of a file just changed: %v", s.vers.by)
+	}
+	time.Sleep(1100 * time.Millisecond)
 	first, _ := s.Heads(ctx, "issue")
 	if _, err := os.Stat(s.versionsPath()); err != nil {
 		t.Fatalf("no versions kept: %v", err)

@@ -234,7 +234,8 @@ func TestConflict(t *testing.T) {
 	if want := "markdown: " + filepath.Base(path) + ": title: changed here since the file's updated, the board's kept"; !slices.Contains(b.notices, want) {
 		t.Fatalf("notices %q, want %q", b.notices, want)
 	}
-	if _, text := b.file(t, "one"); !strings.Contains(text, "title: One\n") || strings.Contains(text, "2001") {
+	// "2001" alone may be in an id: any 4 hex digits are, 1 time in 600
+	if _, text := b.file(t, "one"); !strings.Contains(text, "title: One\n") || strings.Contains(text, "2001-01-01") {
 		t.Fatalf("the file after:\n%s", text)
 	}
 }
@@ -276,6 +277,35 @@ func TestReadsOnlyWhatChanged(t *testing.T) {
 	}
 	if th, err := b.svc.Show(ctx, ids[2]); err != nil || th.Title != "c by hand" {
 		t.Fatalf("c: %q, %v", th.Title, err)
+	}
+}
+
+// A file whose mtime a tool set back (cp -p, rsync -t) changed just now
+// still: it is read each write, until it has settled a second.
+func TestMtimeSetBack(t *testing.T) {
+	t.Parallel()
+	b := newBoard(t)
+	if _, err := b.svc.New(ctx, issues.NewReq{Title: "One"}); err != nil {
+		t.Fatal(err)
+	}
+	two, err := b.svc.New(ctx, issues.NewReq{Title: "Two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := b.file(t, "-one.md")
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(path, old, old)
+	// one's, its stat moved, then kept; and two's, written just now, each
+	// time: one's again the second time, as it changed less than a second
+	// before it was kept
+	for i := range 2 {
+		before := mdfiles.Parsed(b.files)
+		if _, _, err := b.svc.Comment(ctx, two.ID, "a write"); err != nil {
+			t.Fatal(err)
+		}
+		if n := mdfiles.Parsed(b.files) - before; n != 2 {
+			t.Fatalf("write %d read %d files, want 2", i+1, n)
+		}
 	}
 }
 

@@ -19,10 +19,10 @@ import (
 // file's hash): 34 MB at 5,000 issues, most of a list's time. So the
 // versions are kept in this machine's folder, each with its file's stat,
 // as git's index keeps a file's: a file whose stat is the one kept isn't
-// read again. A version is kept only when its file was last written a
-// second or more before it was read, and its stat was the same before
-// and after: a file written again since has another stat, however coarse
-// its clock.
+// read again. A version is kept only when its file last changed (its
+// ctime, or its mtime if later) a second or more before it was read, and
+// its stat was the same before and after: a file written again since has
+// another stat, however coarse its clock.
 
 // stat is what tells a file changed: a write changes its size, or its
 // times.
@@ -30,6 +30,11 @@ type stat struct {
 	size, mtime, ctime int64
 	ino                uint64
 }
+
+// changed is when the file last changed: its ctime, which no one sets,
+// unless its mtime is later. A tool may set the mtime back (cp -p, rsync
+// -t, touch -d): a file just edited so is still a recent one.
+func (s stat) changed() int64 { return max(s.mtime, s.ctime) }
 
 // known is a file's version at a stat.
 type known struct {
@@ -77,7 +82,7 @@ func (s *Store) cached(key, path string, info fs.FileInfo) (v string, gone bool,
 		return "", false, fmt.Errorf("md: %w", err)
 	}
 	v = version(whole(data))
-	if after, err := os.Stat(path); err == nil && statOf(after) == st && start.Sub(after.ModTime()) > time.Second {
+	if after, err := os.Stat(path); err == nil && statOf(after) == st && start.UnixNano()-statOf(after).changed() > int64(time.Second) {
 		vs.mu.Lock()
 		vs.by[key], vs.dirty = known{st, v}, true
 		vs.mu.Unlock()
