@@ -22,9 +22,8 @@ import (
 // of .git-board.toml, or those found in origin's URLs, whose sync is on, each opened fresh for its run, and
 // the settings the run reads from the board's config, as v1's
 // internal/store gives them.
-// ponytail: v1's dry run (--check), a Markdown folder's files around the
-// run and the cycle's comment keys (Quote, Carry, Restore, Published,
-// ReplyTo) are v1's still.
+// ponytail: v1's dry run (--check) and the cycle's comment keys (Quote,
+// Carry, Restore, Published, ReplyTo) are v1's still.
 
 // NamedForge is a forge project opened for a run, by its name in the
 // settings.
@@ -269,6 +268,22 @@ func (b *Board) switched(ctx context.Context) error {
 func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesync.Report, error) {
 	if err := b.switched(ctx); err != nil {
 		return issuesync.Report{}, err
+	}
+	// a Markdown folder's hand edits are read in first, and its files
+	// follow what the sync wrote, each under the folder's lock; not across
+	// the run, which waits on the forges and would hold every other write
+	// back meanwhile
+	if b.Files != nil {
+		_, end, err := b.Files.Writing(ctx)
+		if err != nil {
+			return issuesync.Report{}, err
+		}
+		end()
+		defer func() {
+			if err := b.Files.Render(ctx); err != nil && b.Issues.Notice != nil {
+				b.Issues.Notice("markdown: %v", err)
+			}
+		}()
 	}
 	see := run.See
 	if see == nil {

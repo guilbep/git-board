@@ -1,8 +1,11 @@
 package app
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/guilbep/git-board/next/domain/issues"
@@ -82,5 +85,39 @@ func TestForgesFromRemotes(t *testing.T) {
 	}
 	if want := []string{"skipped https://example.com/x/y.git: not github.com, nor a GitLab host"}; !slices.Equal(said, want) {
 		t.Errorf("said %q, want %q", said, want)
+	}
+}
+
+// On a Markdown folder, what a forge sync pulls is rendered into the
+// folder's files.
+func TestSyncForgesRendersMarkdown(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"config", "board.datastore", "markdown:issues"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if b.Files == nil {
+		t.Fatal("no Markdown folder")
+	}
+	f := fake.New("example.com/p")
+	f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: "Pulled into a file", Body: "made there"})
+	if _, err := b.SyncForges(t.Context(), WayPull, ForgeRun{Forges: []NamedForge{{"p", f}}}); err != nil {
+		t.Fatal(err)
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "issues", "*.md"))
+	var found bool
+	for _, p := range files {
+		data, _ := os.ReadFile(p)
+		found = found || strings.Contains(string(data), "Pulled into a file")
+	}
+	if !found {
+		t.Errorf("no file holds the pulled issue: %v", files)
 	}
 }
