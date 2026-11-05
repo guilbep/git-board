@@ -8,6 +8,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/sync', redirect: { path: '/settings/sync', hash: '' } },
   { path: '/inbox', component: () => import('@/pages/InboxPage.vue') },
   { path: '/insights', component: () => import('@/pages/InsightsPage.vue') },
+  { path: '/releases', component: () => import('@/pages/ReleasesPage.vue') },
+  { path: '/releases/:tag', component: () => import('@/pages/ReleasePage.vue') },
   // a tab per address, #/settings/sync…; none: the Overview (settingstabs.ts);
   // a field of Fields has one too, #/settings/fields/est
   { path: '/settings/:tab?/:name?', component: () => import('@/pages/SettingsPage.vue') },

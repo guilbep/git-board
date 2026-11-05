@@ -91,9 +91,13 @@ sync engine takes one issue), Labels' comparison with GitHub and lint
 (a tool), the clone's first-pull note (until v2 pulls on a first open).
 
 Insights is v1's page on route 51 (`GET /api/insights`, the replay in
-`next/tools/insights`, v1's, and `insights` on the CLI). Waiting for
-their routes (M6, api.md routes 43 to 53): Releases, the Work page and
-the cycle's page, the GitHub Project and its conflicts, uploads. Their v1 pages stay in `web/` until then; the cycle's
+`next/tools/insights`, v1's, and `insights` on the CLI). Releases and a
+release's page are v1's on routes 43 to 48 (`next/tools/ship`): the
+adoption's proposals come with the list, a job's steps as `release`
+events; Enable binary release (v1's `/api/releases/setup`) is Settings ›
+Release now, a table of the file. Waiting for their routes (M6, api.md
+routes 49 to 53): the Work page and the cycle's page, the GitHub Project
+and its conflicts, uploads. Their v1 pages stay in `web/` until then; the cycle's
 settings form (a table of the file) and the experimental switch stay.
 
 ## Tests

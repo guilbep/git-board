@@ -32,6 +32,10 @@ type Server struct {
 	run   *Run // the sync running, or the last one
 	runs  int
 	base  context.Context // the server's: a run outlives its request
+
+	relMu sync.Mutex // the release runner's fetches and writes (releases.go)
+	jobMu sync.Mutex
+	job   *Job // the release job running, or the last one
 }
 
 // Options say what a Server serves.

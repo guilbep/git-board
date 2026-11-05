@@ -18,6 +18,8 @@
       <router-link to="/" :class="{ active: issuesHere }" :aria-current="issuesHere ? 'page' : undefined">Issues</router-link>
       <router-link to="/inbox" active-class="active">Inbox<span v-if="inboxCount" class="nav-count" :aria-label="`, ${inboxCount} new`">{{ inboxCount }}</span></router-link>
       <router-link to="/insights" active-class="active">Insights</router-link>
+      <!-- a release's page (/releases/:tag) is under Releases too -->
+      <router-link to="/releases" active-class="active" :class="{ active: releasesHere }" :aria-current="releasesHere ? 'page' : undefined">Releases</router-link>
       <!-- Settings, as a cog: every /settings page is under it -->
       <router-link to="/settings" class="nav-cog" :class="{ active: settingsHere }" :aria-current="settingsHere ? 'page' : undefined" aria-label="Settings" title="Settings"><GbIcon name="settings" /></router-link>
     </nav>
@@ -94,6 +96,8 @@ const run = computed(() => syncStatus.value?.run ?? null);
 // the tab's dot: red when the last sync failed
 watch(() => (run.value?.state === 'failed' ? 'send' : null), setFavicon, { immediate: true });
 const syncWords = computed(() => runWords(run.value));
+// Releases, or one release's page
+const releasesHere = computed(() => route.path === '/releases' || route.path.startsWith('/releases/'));
 // the palette's key, as this keyboard writes it
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 

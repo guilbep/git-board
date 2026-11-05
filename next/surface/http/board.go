@@ -62,6 +62,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	Route(mux, "POST /api/markdown", markdown)
 
+	Route(mux, "GET /api/releases", s.releases)
+	Route(mux, "POST /api/releases", s.cut)
+	Route(mux, "GET /api/releases/{tag}", s.release)
+	Route(mux, "PATCH /api/releases/{tag}", s.patchRelease)
+	Route(mux, "POST /api/releases/{tag}/comments", s.releaseComment)
+	Route(mux, "POST /api/environments/{env}/deploy", s.deploy)
 	Route(mux, "GET /api/insights", insights)
 }
 

@@ -37,7 +37,7 @@ func TestErrorShape(t *testing.T) {
 		field  string
 	}{
 		{"no route", a.do("GET", "/api/nope", nil), 404, "not-found", ""},
-		{"an M6 route", a.do("GET", "/api/releases", nil), 404, "not-found", ""},
+		{"a route for later", a.do("GET", "/api/docs/configuration", nil), 404, "not-found", ""},
 		{"no issue", a.do("GET", "/api/issues/0000000", nil), 404, "not-found", ""},
 		{"a filter that can't be read", a.do("GET", "/api/issues?filter=updated:%3Enope", nil), 400, "invalid", "filter"},
 		{"a sort that is no field", a.do("GET", "/api/issues?sort=nope", nil), 400, "invalid", "sort"},

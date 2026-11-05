@@ -336,12 +336,12 @@ Until then they answer 404 `not-found`.
 
 | | Route | What |
 |---|---|---|
-| 43 | `GET /api/releases` | the releases, `local`; the job running and the overlays proposed |
-| 44 | `POST /api/releases` | cut one; then a job, its steps as `progress` events |
-| 45 | `GET /api/releases/{tag}` | one release; the tag `next` is the draft (v1's `/releases/draft`) |
-| 46 | `PATCH /api/releases/{tag}` | `{notes}`, `{state: "promoted" or "yanked", reason}` |
-| 47 | `POST /api/releases/{tag}/comments` | a comment on it |
-| 48 | `POST /api/environments/{env}/deploy` | `{tag}`; a rollback is a deploy of an older tag with `reason` |
+| 43 | `GET /api/releases` | `local`: `{enabled, remote, trunk, environments, binaries, releases, proposals, job}`, as `release status` reads it (built) |
+| 44 | `POST /api/releases` | `{version, final, hotfix, commit, notes, deploy}`: cut one; 202, the job, its steps as `release` events (built) |
+| 45 | `GET /api/releases/{tag}` | one release, `{row, issues, candidates, history}`; the tag `next` is the draft (`final`), v1's `/releases/draft` (built) |
+| 46 | `PATCH /api/releases/{tag}` | `{notes}`, `{state: "yanked", reason}`, `{adopt: [proposal]}`: `{}`; `{state: "promoted"}`: 202, the job (built) |
+| 47 | `POST /api/releases/{tag}/comments` | `{body}`: a comment on its record (built) |
+| 48 | `POST /api/environments/{env}/deploy` | `{tag}` (none: the trunk's head, to the followed environment); a rollback is a deploy of an older tag with `reason`; 202, the job (built) |
 | 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): steps, branches, pulls, tests, environments, as one read |
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: sign off, open or merge a pull, run the tests, review, resolve |
 | 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
@@ -377,7 +377,7 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 | `inbox` | what you read or follow | |
 | `sync` | a run started or ended; a remote moved | the run |
 | `progress` | a run's step, in `step` | the run; `issue` when it is one issue's |
-| `release` | *M6* | the tag |
+| `release` | a release job's step, its end, or a write on a record | the tag, when known |
 
 `by` is the `X-Git-Board-Client` of the request that wrote it, when one
 did. The server sees every change, whoever made it: a write through the
