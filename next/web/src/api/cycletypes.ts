@@ -34,6 +34,8 @@ export interface CycleWaits {
 }
 
 export interface CycleEvidence {
+  status?: string; // the status field's value
+  closed?: boolean;
   kind?: string; // [branches]' kind, for step 4's rule
   criteria?: string[];
   criteria_problems?: string[]; // where the description reads differently from how it looks
@@ -76,6 +78,40 @@ export interface Cycle {
   stages: CycleStages;
   pr_checked_at?: string;
   ai?: boolean; // an AI address is set: step 2 can ask it for the class
+  id?: string; // the issue's whole id (v2)
+  version?: string; // the issue's version: an action's If-Match (v2)
+  body_version?: number; // the description's version: spec-verdict's on (v2)
+  environments?: IssueEnv[]; // [release]'s, and whether each runs the issue's merged work (v2)
+}
+
+export interface IssueEnv {
+  name: string;
+  version?: string;
+  in: boolean;
+}
+
+// The body of an action (POST /api/issues/{id}/cycle/{action}, api.md 50):
+// each action reads the fields it names.
+export interface CycleActBody {
+  risk?: string;
+  verdict?: 'approve' | 'request-changes';
+  on?: string;
+  body?: string;
+  output?: string;
+  commit?: string;
+  index?: number;
+  why?: string;
+  state?: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
+  path?: string;
+  line?: number;
+  side?: 'old' | 'new';
+  reply_to?: string;
+  comment?: string;
+  resolved?: boolean;
+  branch?: string;
+  number?: number;
+  title?: string;
+  sha?: string;
 }
 
 export interface CycleStages {

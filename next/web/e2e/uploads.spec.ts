@@ -3,9 +3,9 @@
 // a comment is uploaded, and the comment gets its Markdown; a kind no
 // issue carries is refused, said under the box.
 import { expect, test } from '@playwright/test';
-import { errors } from './board';
+import { errors, markdownBoard } from './board';
 
-const md = `http://127.0.0.1:${Number(process.env.E2E_PORT ?? '18421') + 5}`;
+const md = markdownBoard;
 const png = Buffer.concat([Buffer.from('\x89PNG\r\n\x1a\n', 'latin1'), Buffer.alloc(64)]);
 
 test('a file picked, then one dropped, in a comment: uploaded, the comment gets their Markdown', async ({ page, request }) => {

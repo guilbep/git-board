@@ -5,9 +5,9 @@
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { errors } from './board';
+import { errors, markdownBoard } from './board';
 
-const md = `http://127.0.0.1:${Number(process.env.E2E_PORT ?? '18421') + 5}`;
+const md = markdownBoard;
 const files = () => readdirSync(join(process.env.E2E_DIR ?? '', 'markdown', 'issues')).filter((f) => f.endsWith('.md'));
 
 test('a Markdown board: an issue made, set, commented and closed, in its file', async ({ page, request }) => {

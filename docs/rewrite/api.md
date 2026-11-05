@@ -84,7 +84,7 @@ that gives the CLI its exit code.
 | `stale` | 412 | Stale | 5 | `If-Match` names a version the entity has moved from |
 | `busy` | 409 | Busy | 1 | a sync, a copy or a release runs; try again |
 | `missing` | 409 | Missing | 1 | the datastore can't do it (ADR 0002 §3): numbers on a folder |
-| `forbidden` | 403 | Forbidden | 1 | the host or the origin checks (ADR 0013) |
+| `forbidden` | 403 | Forbidden | 1 | the host or the origin checks (ADR 0013); a cycle's step that waits for someone else |
 | `internal` | 500 | Internal | 1 | anything else; v1 answered 400 |
 
 v1's other codes are gone. `syncing` is the one a page met most: v2
@@ -346,8 +346,8 @@ Until then they answer 404 `not-found`.
 | 46 | `PATCH /api/releases/{tag}` | `{notes}`, `{state: "yanked", reason}`, `{adopt: [proposal]}`: `{}`; `{state: "promoted"}`: 202, the job (built) |
 | 47 | `POST /api/releases/{tag}/comments` | `{body}`: a comment on its record (built) |
 | 48 | `POST /api/environments/{env}/deploy` | `{tag}` (none: the trunk's head, to the followed environment); a rollback is a deploy of an older tag with `reason`; 202, the job (built) |
-| 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): its step, gate and evidence (branches, plan, tests), as one read (built; the PRs and environments later); its list, `GET /api/cycle` (`who`: `me`, `team`), is the Work page's `{needs, waiting}` (built), paged with `limit` (each group's first rows, `needs_total`, `needs_next`…) and `group`, `cursor` |
-| 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: sign off, open or merge a pull, run the tests, review, resolve |
+| 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): its step, gate and evidence (branches, plan, tests, PRs), and the environments, as one read (built); its list, `GET /api/cycle` (`who`: `me`, `team`), is the Work page's `{needs, waiting}` (built) |
+| 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: the risk, a status move, approve the plan, the spec's verdict, review and resolve, open, edit or merge a pull, verify, check, sign off (built; below) |
 | 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
 | 52 | `GET /api/github-project` | the GitHub Project bridge: its last check, and where each field lives (*built*) |
 | 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve`; its table is `PATCH /api/config`'s (*built*) |
@@ -386,6 +386,69 @@ it answers `kept`, the value both now hold, after checking again. A
 field in no conflict is `not-found`; a value the Project has no option
 for, or a number two repositories have in conflict, `invalid`. One
 action at a time: another is `busy`.
+
+### The cycle (49, 50)
+
+Experimental (ADR 0018): off, both answer 404 `experimental`. Built in
+`next/app` (`cycle.go`, `cycleact.go`, `pulls.go`) on
+`next/domain/cycle`.
+
+**The read (49)** is `{step, at, of, name, stage, done, gate, risk,
+skipped, note, waits, mine, actions, evidence, id, version,
+body_version, pr_checked_at, environments}`, with the issue's `version` as `ETag`: an
+action's `If-Match`. `evidence` is `cycle.Input`: the status, the
+criteria, the people holding each gate, the lanes (each branch's step,
+tests and PR chip), the plan, the runs, checks and sign-offs, and `pr`,
+the evidence branch's pull request as the forge gates it (`{number, url,
+state, draft, title, body, base, head, merge_commit, author, decision,
+mergeable, merge_state, checks, reviews, requested, can_merge, checking,
+waits}`, GitHub's words; a GitLab merge request in them). `actions` are
+what the viewer can press now. `body_version` is the description's
+version, what `spec-verdict`'s `on` names. `pr_checked_at` is when the PR was last
+read from the forge. `environments` are `[release]`'s, `[{name, version,
+in}]`: `in` when the environment runs one of the issue's merged
+branches (the trunk's records, no fetch); `[]` without `[release]`.
+
+**The PRs** are read through the forge layer (`forge.Puller`: GitHub's
+GraphQL and REST, GitLab's merge requests) on origin's forge, with the
+token of the person who writes, and kept by the server for its life
+(`app.PullCache`): a read asks the forge again for a branch's PR once its
+answer is 5 minutes old, within 10 seconds, and offline the last answer
+stands. A sync's end and a fetch or pull of a remote make every answer
+stale; `refresh` asks now. The Work page reads the cache, and asks
+nothing.
+
+**An action (50)** is `POST` with `If-Match` (the issue's writes
+compare-and-swap from it; 412 `stale`), and a body with the fields its
+action reads. It answers the read (49) after it, and its `ETag`.
+
+| Action | Body | Writes |
+|---|---|---|
+| `no-criteria` | | accepts the issue without criteria (`intent:criteria=none`): its author's, the spec role's, or anyone's without one |
+| `spec-verdict` | `{verdict: approve or request-changes, on: "body@v<n>", body}` | the spec role's verdict on the description's version (`changed` on another); an approval moves the status to `ready`. The author doesn't approve their own |
+| `set-risk` | `{risk: low, normal or structural}` | the `risk` field, by the risk role when one holds it |
+| `move-ready`, `start`, `to-validation` | | the status to `ready`, the first in-progress, the first validation status, when `actions` has it |
+| `approve-plan` | | `plan:approve` at the head; at `ready`, the status to in-progress. A structural plan is approved on the forge |
+| `ready-for-review` | | the status to in-review, when the signed check results at the head prove it (ADR 0001; `invalid` with the reason when not) |
+| `review` | `{state: APPROVE, REQUEST_CHANGES or COMMENT, body}`, or a line comment `{path, line, side: old or new, body}`, or a reply `{reply_to, body}`; `commit` (the head by default; none without a branch) | a comment with `review:*` metadata, `review:pr` the PR's, which the sync mirrors |
+| `resolve` | `{comment, resolved}` | `review:resolved` on a thread's first line comment |
+| `open-pull` | `{branch}` | a pull request from one of the issue's branches on origin into its base, titled from the issue, `Refs: <number>` |
+| `edit-pull` | `{number, title, body}` | one of the issue's PRs' title and description |
+| `merge` | `{number, sha}` | merges it with a merge commit if its head is still `sha` |
+| `verify` | `{output, commit}` | a run's output, at the head by default (`verify:run`) |
+| `check` | `{index}` | one criterion checked (`verify:criterion`), its box ticked in the description |
+| `signoff` | `{why}` | the sign-off of the validation status (`signoff:status`), then the next one or the closing status, which closes the issue. Refused (`invalid`) without a run at the head, or once merged on a base declaring checks, without their proof at the merge, unless `why` overrides |
+| `refresh` | | nothing: the PRs asked of the forge now |
+
+A step that waits for someone else is `forbidden`, naming them; a step
+the issue isn't at, or a wrong value, `invalid`; an unknown action
+`not-found`. The forge's refusal (a moved head) is `invalid`, its
+failure `internal`.
+
+Not ported: v1's `suggest-risk` (an AI's class: the agents are their
+own binary), the tests' run and their log (`run-tests`, signing the
+results: `git board verify` and the proof commands), the changes' diff
+(`?changes=`, `?file=`).
 
 The release setup, the overlays' adoption, the checks' setup, the
 changes and the diff of an issue's branch, the review, the label sync
@@ -484,13 +547,13 @@ built).
 | `GET /api/issues/{id}/refs` | `GET /api/issues/{id}/cycle` (*M6*) |
 | `GET /api/issues/{id}/branches` | `GET /api/issues/{id}/cycle` (*M6*) |
 | `POST /api/issues/{id}/branches` | `POST /api/issues/{id}/cycle/branch` (*M6*) |
-| `GET /api/issues/{id}/environments` | `GET /api/issues/{id}/cycle` (*M6*) |
-| `GET /api/issues/{id}/pulls` | `GET /api/issues/{id}/cycle` (*M6*) |
-| `POST /api/issues/{id}/pulls` | `POST /api/issues/{id}/cycle/open-pull` (*M6*) |
-| `POST /api/issues/{id}/pulls/{number}/merge` | `POST /api/issues/{id}/cycle/merge` (*M6*) |
-| `PATCH /api/issues/{id}/pulls/{number}` | `POST /api/issues/{id}/cycle/edit-pull` (*M6*) |
-| `GET /api/issues/{id}/cycle` | `GET /api/issues/{id}/cycle` (*M6*) |
-| `POST /api/issues/{id}/cycle/{action}` | `POST /api/issues/{id}/cycle/{action}` (*M6*) |
+| `GET /api/issues/{id}/environments` | `GET /api/issues/{id}/cycle` (built) |
+| `GET /api/issues/{id}/pulls` | `GET /api/issues/{id}/cycle` (built) |
+| `POST /api/issues/{id}/pulls` | `POST /api/issues/{id}/cycle/open-pull` (built) |
+| `POST /api/issues/{id}/pulls/{number}/merge` | `POST /api/issues/{id}/cycle/merge` (built) |
+| `PATCH /api/issues/{id}/pulls/{number}` | `POST /api/issues/{id}/cycle/edit-pull` (built) |
+| `GET /api/issues/{id}/cycle` | `GET /api/issues/{id}/cycle` (built) |
+| `POST /api/issues/{id}/cycle/{action}` | `POST /api/issues/{id}/cycle/{action}` (built) |
 | `GET /api/issues/{id}/tests` | `GET /api/issues/{id}/cycle` (*M6*) |
 | `POST /api/issues/{id}/tests/run` | `POST /api/issues/{id}/cycle/run-tests` (*M6*) |
 | `GET /api/issues/{id}/tests/log/{hash}` | `GET /api/issues/{id}/cycle?log=<hash>` (*M6*) |
@@ -498,8 +561,8 @@ built).
 | `POST /api/checks/setup` | `PATCH /api/config` (*M6*) |
 | `GET /api/issues/{id}/changes` | `GET /api/issues/{id}/cycle?changes=<range>` (*M6*) |
 | `GET /api/issues/{id}/changes/file` | `GET /api/issues/{id}/cycle?file=<path>` (*M6*) |
-| `POST /api/issues/{id}/review` | `POST /api/issues/{id}/cycle/review` (*M6*) |
-| `POST /api/issues/{id}/review/{comment}/resolve` | `POST /api/issues/{id}/cycle/resolve` (*M6*) |
+| `POST /api/issues/{id}/review` | `POST /api/issues/{id}/cycle/review` (built) |
+| `POST /api/issues/{id}/review/{comment}/resolve` | `POST /api/issues/{id}/cycle/resolve` (built) |
 | `GET /api/issues/{id}/agent` | dropped: agents move to their own binary (ADR 0021), which calls this API |
 | `POST /api/issues/{id}/agent/{action}` | dropped: the same |
 | `POST /api/issues/{id}/comments` | `POST /api/issues/{id}/comments`; its `status` is `PATCH` with `comment` |

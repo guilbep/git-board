@@ -54,7 +54,7 @@ func (b *Board) workRows(ctx context.Context, list []issues.Issue, m issues.Inbo
 	c := b.Code()
 	c.Kept = code.NewKept()
 	anc := branches.NewAncestry(c)
-	key := rowKey(ctx, c, m)
+	key := rowKey(ctx, c, m, b.PRs.Gen())
 
 	b.work.mu.Lock()
 	had := b.work.by
@@ -94,7 +94,7 @@ func (b *Board) workRows(ctx context.Context, list []issues.Issue, m issues.Inbo
 		wg.Go(func() {
 			for i := range next {
 				k := &kept[i]
-				in, err := b.EvidenceIn(ctx, anc, k.th, m.Login, nil, nil)
+				in, err := b.EvidenceIn(ctx, anc, k.th, m.Login, b.cachedPRs(), nil)
 				if errs[i] = err; err == nil {
 					k.row, k.key = work.RowOf(k.th, cycle.Compute(in), m), key
 				}
@@ -128,13 +128,13 @@ func (b *Board) workRows(ctx context.Context, list []issues.Issue, m issues.Inbo
 // viewer, and the code's refs (the branches, local and remote, and the
 // remote's HEAD), which name every commit and file the evidence reads.
 // "" when git can't list them: nothing is kept then.
-func rowKey(ctx context.Context, c code.Repo, m issues.InboxMe) string {
+func rowKey(ctx context.Context, c code.Repo, m issues.InboxMe, prs uint64) string {
 	all, err := c.Branches(ctx)
 	if err != nil {
 		return ""
 	}
 	h := sha256.New()
-	fmt.Fprintf(h, "%s\x00%s\x00%s\n", m.ID, m.Login, c.RemoteHead(ctx, "origin"))
+	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%d\n", m.ID, m.Login, c.RemoteHead(ctx, "origin"), prs)
 	for _, br := range all {
 		fmt.Fprintf(h, "%s %s %s\n", br.Remote, br.Name, br.Hash)
 	}

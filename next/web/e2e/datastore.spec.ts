@@ -4,8 +4,9 @@
 // 0002, 3). On a git board, the same controls work as before. (Start over
 // is the CLI's in v2: git board reset.)
 import { expect, test } from '@playwright/test';
+import { markdownBoard } from './board';
 
-const md = `http://127.0.0.1:${Number(process.env.E2E_PORT ?? '18321') + 5}`;
+const md = markdownBoard;
 const why = (what: string) => `${what} needs a board kept in git; this board is kept in Markdown files`;
 
 test('a Markdown board: pull, push, fetch and ahead/behind are disabled, each saying why', async ({ page, request }) => {

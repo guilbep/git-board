@@ -9,6 +9,7 @@ const port = process.env.E2E_PORT ?? '18421';
 // the board's directory: the tests read its .git-board.toml (e2e/board.ts)
 export const dir = process.env.E2E_DIR ?? join(tmpdir(), `git-board-next-e2e-${port}`);
 process.env.E2E_DIR = dir;
+process.env.E2E_PORT = port; // the tests reach the Markdown board beside it (e2e/board.ts)
 
 export default defineConfig({
   testDir: 'e2e',
