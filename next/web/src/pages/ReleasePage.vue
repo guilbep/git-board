@@ -444,7 +444,8 @@ watch(tag, () => {
 // release's history is the slow read); config: [release] changed; issues,
 // while a job runs: live.ts says it after a reconnect
 const reloadSoon = debounced(() => (running.value ? void loadReleases() : load()));
-const offLive = onLive((e) => (e.kind === 'release' || e.kind === 'config' || e.kind === 'resync') && reloadSoon());
+// own: a job this page started tells its steps by this page
+const offLive = onLive((e) => (e.kind === 'release' || e.kind === 'config' || e.kind === 'resync') && reloadSoon(), { own: true });
 onBeforeUnmount(offLive);
 
 onMounted(() => {
