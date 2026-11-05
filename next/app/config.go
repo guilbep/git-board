@@ -373,22 +373,27 @@ func SaveConfig(dir string, text []byte, base string, dry bool) error {
 	return os.WriteFile(configPath(dir), text, mode)
 }
 
-// SetConfigKeys sets each key of dir's .git-board.toml to its TOML
-// literal ("" removes it), their lines alone, as SetConfig does one, and
-// answers the file's new text; nothing is written unless all are good,
-// the file is still at base ("": whatever it is), and not dry.
-func SetConfigKeys(dir string, set map[string]string, base string, dry bool) ([]byte, error) {
+// SetConfigKeys sets each key of dir's .git-board.toml to its value, a
+// whole subtree (conf.SetValue: a table's keys in place, nil removes the
+// key and its tables), and answers the file's new text; nothing is
+// written unless all are good, the file is still at base ("": whatever
+// it is), and not dry.
+func SetConfigKeys(dir string, set map[string]any, base string, dry bool) ([]byte, error) {
 	cur, _, err := ConfigText(dir)
 	if err != nil {
 		return nil, err
 	}
 	text := string(cur)
 	for _, key := range slices.Sorted(maps.Keys(set)) {
-		table, name, err := conf.SplitKey(text, key)
-		if err != nil {
+		// a top table (cycle) is a key here, as a whole: set or removed
+		_, isTable := set[key].(map[string]any)
+		top := !strings.Contains(key, ".") && (isTable || set[key] == nil) && conf.SimpleName(key)
+		if _, _, err := conf.SplitKey(text, key); err != nil && !top {
 			return nil, &Error{Class: Usage, Err: err}
 		}
-		text = conf.SetKeys(text, table, []string{name}, map[string]string{name: set[key]})
+		if text, err = conf.SetValue(text, key, set[key]); err != nil {
+			return nil, &Error{Class: Usage, Err: fmt.Errorf("%s: %w", key, err)}
+		}
 	}
 	return []byte(text), SaveConfig(dir, []byte(text), base, dry)
 }

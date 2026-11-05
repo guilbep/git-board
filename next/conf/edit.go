@@ -93,6 +93,12 @@ func Literal(v any) string {
 			parts = append(parts, Literal(e))
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
+	case []any:
+		var parts []string
+		for _, e := range t {
+			parts = append(parts, Literal(e))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
 	}
 	return strings.ReplaceAll(s, "\n", " ")
 }
@@ -125,6 +131,11 @@ func unquote(v string) string {
 
 var keyLine = regexp.MustCompile(`^(\s*([A-Za-z0-9_-]+)\s*=\s*)(\[(?:[^\[\]]|\[[^\[\]]*\])*\]|\{[^}]*\}|"(?:[^"\\]|\\.)*"|'[^']*'|[^#\s]+)(.*)$`)
 
+// SimpleName says name is one key's name: letters, digits, _ and -.
+func SimpleName(name string) bool {
+	return name != "" && strings.Trim(name, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == ""
+}
+
 // SplitKey checks a dotted key and splits it into its table and its own
 // name: a key at the top, or inside an array of tables, isn't one.
 func SplitKey(text, key string) (table, name string, err error) {
@@ -133,7 +144,7 @@ func SplitKey(text, key string) (table, name string, err error) {
 		return "", "", fmt.Errorf("%s: %w", key, ErrUnknownKey)
 	}
 	for _, part := range strings.Split(key, ".") {
-		if part == "" || strings.Trim(part, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != "" {
+		if !SimpleName(part) {
 			return "", "", fmt.Errorf("%q: a key is names of letters, digits, _ and -, joined by dots", key)
 		}
 	}

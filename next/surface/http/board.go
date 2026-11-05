@@ -256,17 +256,13 @@ type patchConfigReq struct {
 
 func (s *Server) patchConfig(ctx context.Context, r patchConfigReq) (Reply, error) {
 	dir := board(ctx).Dir
-	set := map[string]string{}
+	set := map[string]any{}
 	for k, raw := range r.Set {
 		var v any
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return Reply{}, invalid(k, err)
 		}
-		if v != nil {
-			set[k] = conf.Literal(tomlish(v))
-		} else {
-			set[k] = ""
-		}
+		set[k] = tomlish(v)
 	}
 	text, err := app.SetConfigKeys(dir, set, version(r.IfMatch), r.DryRun)
 	if err != nil {

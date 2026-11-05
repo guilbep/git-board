@@ -237,8 +237,12 @@ domain's problem, and the rest answers.
 **Whole text (24)** is the file as a person writes it. **Keys (25)** are
 dotted keys, as `config set` takes them (`fields.prio.options`,
 `views.mine.filter`); a value is JSON (a string, a number, a list, an
-object), `null` removes the key. Only those keys' lines change: comments
-and order stay. Both refuse (`invalid`, nothing written) a key git-board
+object), `null` removes the key. An object is the key's whole table: its
+keys set in place, those it leaves out removed, its sub-tables likewise
+(`fields.prio`, or a top table, `cycle`), and `null` removes a table with
+its sub-tables; a list of objects is an array of tables (`sprints.list`).
+A string where the file holds a date stays a date. Only those keys' lines
+change: comments and order stay. Both refuse (`invalid`, nothing written) a key git-board
 doesn't read or a file left broken. With `dry_run=1` they check and
 answer the file they would write, and write nothing: v1's
 `/api/config/check`. Views are `[views]`: saving one is a `PATCH`.
