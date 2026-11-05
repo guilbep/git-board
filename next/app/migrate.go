@@ -9,6 +9,7 @@ import (
 	"github.com/guilbep/git-board/next/domain/issues"
 	"github.com/guilbep/git-board/next/domain/people"
 	"github.com/guilbep/git-board/next/forge"
+	"github.com/guilbep/git-board/next/sync"
 )
 
 // The forge-mapping migration, v1's internal/migrate
@@ -93,7 +94,7 @@ func (b *Board) MigrateField(ctx context.Context, r MigrateReq) ([]MigratePlan, 
 	var first error
 	for _, f := range b.Config.Forges.List {
 		target := forge.Target(s, inProject, f, field)
-		st := stakes(s, f, field, all)
+		st := stakes(s, tableKey(f), field, all)
 		p := MigratePlan{Forge: f.Name, Repo: f.Project, Target: target, Issues: len(st)}
 		if dry {
 			switch target {
@@ -124,6 +125,10 @@ func (b *Board) MigrateField(ctx context.Context, r MigrateReq) ([]MigratePlan, 
 			}
 			continue
 		}
+		// the forge's own key names its sync records: the table's is
+		// what it should be, the adapter's is what the sync wrote
+		st = stakes(s, fw.Key(), field, all)
+		p.Issues = len(st)
 		labels, moved := 0, 0
 		var ferr error
 		for _, one := range st {
@@ -170,10 +175,13 @@ func (b *Board) MigrateField(ctx context.Context, r MigrateReq) ([]MigratePlan, 
 	return plans, first
 }
 
-// stakes are the issues carrying the field and linked on forge f, with
-// their values as the storage has them (aliases folded).
-func stakes(s *issues.Schema, f forge.Table, field string, all []issues.Issue) []stake {
+// stakes are the issues carrying the field and linked on the forge
+// project key names, with their values as the storage has them (aliases
+// folded). The link is the one in key's sync records: a URL's host
+// names no GitLab project, two tables can share it.
+func stakes(s *issues.Schema, key, field string, all []issues.Issue) []stake {
 	var out []stake
+	sid := sync.StateID(key)
 	for _, is := range all {
 		var values []string
 		for _, l := range is.Labels {
@@ -184,43 +192,22 @@ func stakes(s *issues.Schema, f forge.Table, field string, all []issues.Issue) [
 		if len(values) == 0 {
 			continue
 		}
-		// its link on this forge: v1 read the GitHub one alone
-		i := slices.IndexFunc(is.Forges, func(l issues.Forge) bool { return urlOn(f, l.URL) })
+		i := slices.IndexFunc(is.Forges, func(l issues.Forge) bool { return l.Sync == sid })
 		if i < 0 {
 			continue
 		}
-		if ref := refOf(is.Forges[i].URL); ref.Number != "" {
-			out = append(out, stake{ref: ref, values: values})
+		if n := is.Forges[i].Number; n != "" {
+			out = append(out, stake{ref: forge.Ref{Number: n}, values: values})
 		}
 	}
 	return out
 }
 
-// refOf is the forge ref of a linked issue: its URL's last number
-// (github.com/o/r/issues/2605 → 2605). No link, no ref.
-func refOf(url string) forge.Ref {
-	i := strings.LastIndexByte(url, '/')
-	n := url[i+1:]
-	if n == "" || strings.Trim(n, "0123456789") != "" {
-		return forge.Ref{}
-	}
-	return forge.Ref{Number: n}
-}
-
-// urlOn says whether an issue's link points at forge f's project: the
-// host, and on GitHub the owner/repo too, two forges of one host being
-// the norm. A GitLab table names its project by numeric id, its issue
-// URLs by path, so the host decides there (one project per table).
-func urlOn(f forge.Table, url string) bool {
-	u := strings.ToLower(url)
-	host := "https://" + strings.ToLower(f.Host) + "/"
-	if !strings.HasPrefix(u, host) {
-		return false
-	}
-	if f.Kind == "github" {
-		return strings.HasPrefix(u[len(host):], strings.ToLower(f.Project)+"/")
-	}
-	return true
+// tableKey is the key the adapter of table f names its project by
+// (forge.Forge.Key), without opening it: the host and the project as
+// the table writes them (GitLab's numeric id, as links are keyed on it).
+func tableKey(f forge.Table) string {
+	return f.Host + "/" + strings.Trim(f.Project, "/")
 }
 
 // account is value's account on the forge's server: a login's, else a

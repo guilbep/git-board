@@ -116,7 +116,8 @@ func Open(ctx context.Context, dir string, o Options) (*Board, error) {
 	}
 	c := &clone{dir: dir}
 	b := &Board{Kernel: kb, Config: cfg, Views: views, Dir: dir, clone: c,
-		Issues: &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge, Notice: o.Notice, Folder: ds.Folder(), Views: views, Held: cfg.Held},
+		Issues: &issues.Service{Board: kb, Schema: schema, Avatars: people.Forge, Notice: o.Notice, Folder: ds.Folder(), Views: views, Held: cfg.Held,
+			GitHub: cfg.gitHubRepo()},
 		People: &people.Service{Board: kb, Avatars: people.Forge, SetMe: c.setMe}}
 	if o.Who {
 		b.Issues.Me, b.Issues.Avatars = kernel.ID(set.me), people.ParseAvatars(set.avatars)

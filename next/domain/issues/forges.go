@@ -23,8 +23,14 @@ type reading struct {
 
 // reading is the board's counter and records. Records that don't read
 // are told to notice: the issues show without their forges.
-func (s *Service) reading(ctx context.Context, notice Notice, now bool) reading {
-	rd := reading{cnt: s.counter(ctx, notice), now: now}
+func (s *Service) reading(ctx context.Context, notice Notice, now bool) (rd reading) {
+	rd = reading{cnt: s.counter(ctx, notice), now: now}
+	defer func() { // the counter's GitHub repository, from the records too
+		if rd.cnt != nil {
+			c := s.withRepo(*rd.cnt, rd.recs)
+			rd.cnt = &c
+		}
+	}()
 	heads, err := s.Board.Store().Heads(ctx, bsync.Kind.Name())
 	if err == nil && len(heads) == 0 {
 		return rd
@@ -44,6 +50,16 @@ func (s *Service) reading(ctx context.Context, notice Notice, now bool) reading 
 	if err != nil && notice != nil {
 		notice("the sync records: %v; the issues show without their forges", err)
 	}
+	for _, recs := range rd.recs {
+		for i, r := range recs {
+			if r.Number != "" && !isNumber(r.Number) {
+				if notice != nil {
+					notice("sync %s: issue %s's forge number %q isn't one, left aside", r.Forge, r.Issue, r.Number)
+				}
+				recs[i].Number = ""
+			}
+		}
+	}
 	return rd
 }
 
@@ -52,10 +68,10 @@ func (s *Service) reading(ctx context.Context, notice Notice, now bool) reading 
 func (is *Issue) forged(recs []bsync.Record) {
 	for _, r := range recs {
 		n := r.Number
-		if n == "" {
+		if !isNumber(n) { // board data: anyone who can push refs/board/sync/* writes it
 			n = lastNumber(r.URL)
 		}
-		f := Forge{Name: ForgeName(r.URL), URL: webURL(r.URL), Number: n}
+		f := Forge{Name: ForgeName(r.URL), URL: webURL(r.URL), Number: n, Sync: r.Forge}
 		is.Forges = append(is.Forges, f)
 		if f.Name == "GitHub" && is.GithubURL == "" {
 			is.GithubURL = f.URL
@@ -93,11 +109,17 @@ func ForgeName(u string) string {
 
 // lastNumber is the issue number ending a forge URL, if it ends with one.
 func lastNumber(u string) string {
-	last := path.Base(u)
-	if last == "" || strings.Trim(last, "0123456789") != "" {
-		return ""
+	if last := path.Base(u); isNumber(last) {
+		return last
 	}
-	return last
+	return ""
+}
+
+// isNumber says s is a forge number: digits only, at least one. A number
+// read from board data goes in file names (NNN-slug.md), branch names
+// and searches; anything else in it is refused where it is read.
+func isNumber(s string) bool {
+	return s != "" && strings.Trim(s, "0123456789") == ""
 }
 
 // pending marks what hasn't reached the forge of r yet, from its record:

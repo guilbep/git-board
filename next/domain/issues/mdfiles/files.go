@@ -339,7 +339,10 @@ func (f *Folder) render(ctx context.Context, k *known) error {
 		return err
 	}
 	all := sum != k.Sum
-	nameOf := names(heads)
+	nameOf, err := names(heads)
+	if err != nil {
+		return err
+	}
 	listed := make(map[kernel.ID]int, len(heads))
 	for i, h := range heads {
 		listed[kernel.ID(h.ID)] = i
@@ -348,7 +351,7 @@ func (f *Folder) render(ctx context.Context, k *known) error {
 	// a file of an issue under another name goes, and a deleted one's
 	for _, name := range slices.Sorted(mapsKeys(k.Files)) {
 		e := k.Files[name]
-		if e.ID == "" {
+		if e.ID == "" || !oneName(name) { // a name an older version kept: never removed outside the folder
 			continue
 		}
 		i, ok := listed[e.ID]

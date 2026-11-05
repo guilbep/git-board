@@ -30,7 +30,10 @@ func Export(ctx context.Context, svc *issues.Service, dir string, flat func(labe
 	}
 	ids := make([]kernel.ID, len(heads))
 	nameOf := map[string]string{}
-	all := names(heads)
+	all, err := names(heads)
+	if err != nil {
+		return nil, err
+	}
 	for i, h := range heads {
 		ids[i], nameOf[h.ID] = kernel.ID(h.ID), all[i]
 	}

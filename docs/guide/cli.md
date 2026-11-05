@@ -208,13 +208,16 @@ git board undo a1b2c3d --force      # though someone wrote after you
 It writes the inverse of your last change: a label added is removed and
 one removed added back; a status, a title or a text goes back to what it
 was; a new comment is deleted. A change is what one command wrote, so
-`edit -e`'s title and description go back together. Undoing twice redoes.
-Nothing is erased: the change and its undo are both in `git board log`.
+`edit -e`'s title and description go back together. Undoing twice redoes,
+but for a new comment: its undo is a delete, and a delete is final ([ADR
+0019](../adr/0019-deleting-is-a-tombstone.md)), so a second undo refuses
+and says so; post the text again with `git board comment`. Nothing is
+erased: the change and its undo are both in `git board log`.
 
 Refused, exit code 2, with the reason:
 
 - creating an issue: `git board delete` deletes it;
-- a delete: never undone;
+- a delete: never undone, the one undoing a comment wrote too;
 - a change of metadata (a review thread resolved, a Project field);
 - someone else wrote to the issue after you, or a sync pulled into it:
   `--force` undoes yours anyway, over theirs.

@@ -658,10 +658,14 @@ your last change to any issue, by its time.
 
 A change is what one command wrote: git board edit -e changes the title
 and the description at once, and undo puts both back. Undoing twice
-redoes. Changes a sync pulled from a forge aren't yours to undo here.
+redoes, but for a new comment: its undo deletes it, and a delete is
+final (docs/adr/0019), so the second undo refuses; post the text again
+with git board comment. Changes a sync pulled from a forge aren't yours
+to undo here.
 
 It refuses, exit code 2, what it can't undo, and says why: creating an
-issue (git board delete deletes it), a delete, a change of metadata. It
+issue (git board delete deletes it), a delete (a comment's undo's too),
+a change of metadata. It
 refuses too when someone else wrote to the issue after you, or a sync
 pulled into it: --force undoes yours anyway, over theirs.`,
 		Example: `  git board undo a1b2c3d

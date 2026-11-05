@@ -18,6 +18,7 @@ package mdfiles
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -49,34 +50,59 @@ var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 // Name is an issue's file name, NNN-slug.md: the bare number, else the
 // id's first 7 digits; the title's slug, 50 bytes at most. Two of one
 // name: the later id's takes -<its first 7 digits> (names).
-func Name(is issues.Issue) string {
+//
+// Every part comes from board data, which anyone who can push the
+// board's refs writes, and the name is joined to a folder: a number
+// that isn't digits is passed over, and a name that still isn't one
+// clean file name (an id that isn't hex) is refused.
+func Name(is issues.Issue) (string, error) {
 	n := is.BareNumber()
+	if strings.Trim(n, "0123456789") != "" {
+		n = ""
+	}
 	if n == "" {
+		if !isID(is.ID) {
+			return "", fmt.Errorf("issue %q: an id that isn't one names no file", is.ID)
+		}
 		n = is.ID[:7]
 	}
 	slug := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(is.Title), "-"), "-")
 	if len(slug) > 50 {
 		slug = strings.TrimRight(slug[:50], "-")
 	}
-	if slug == "" {
-		return n + ".md"
+	name := n + ".md"
+	if slug != "" {
+		name = n + "-" + slug + ".md"
 	}
-	return n + "-" + slug + ".md"
+	if !oneName(name) {
+		return "", fmt.Errorf("issue %s: %q isn't a file name", is.ID, name)
+	}
+	return name, nil
+}
+
+// oneName says name is one clean path element: no separator, not . or
+// .., nothing filepath.Join would move out of its folder.
+func oneName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, `/\`+"\x00") &&
+		filepath.IsLocal(name) && filepath.Base(name) == name
 }
 
 // names are the files' names of issues sorted by id: a clash suffixes
 // the later id.
-func names(heads []issues.Head) []string {
+func names(heads []issues.Head) ([]string, error) {
 	out := make([]string, len(heads))
 	taken := make(map[string]bool, len(heads))
 	for i, h := range heads {
-		name := Name(h.Issue)
+		name, err := Name(h.Issue)
+		if err != nil {
+			return nil, err
+		}
 		if taken[name] {
 			name = strings.TrimSuffix(name, ".md") + "-" + h.ID[:7] + ".md"
 		}
 		taken[name], out[i] = true, name
 	}
-	return out
+	return out, nil
 }
 
 // commentsMark is the line between the description and the comments.

@@ -344,6 +344,10 @@ surrounding white space and cut at its first space into a key and a value:
 - `prefix`: the prefix, a letter then letters or digits
   (`^[A-Za-z][A-Za-z0-9]*$`);
 - `start`: the first number handed out, a decimal integer, 1 at least;
+- `github`: the project's github.com repository, `owner/repo`, whose
+  numbers below `start` are its issues' own (v2 writes it when it starts
+  the counter on a board with one github.com forge; v1 skips it); a value
+  that isn't `owner/repo` is skipped;
 - a key that is a decimal integer (Go's `strconv.Atoi`: an optional sign,
   then digits): that number is the value's issue. A number with no value
   is an error; a number given twice is an error;
@@ -355,9 +359,14 @@ takes the later line's number.
 
 - **The next number** is the highest of `start` and every number + 1.
 - **An issue's number** is its line's, `<prefix>-<n>`; else, below
-  `start`, its number on GitHub (a link of a sync entity whose URL's host
-  is `github.com`): `#2518` is `CO2-2518`, the number it had before the
-  project numbered its own; else none yet.
+  `start`, its number on the project's GitHub repository (a link of a
+  sync entity whose URL is `https://github.com/<owner>/<repo>/…`):
+  `#2518` is `CO2-2518`, the number it had before the project numbered
+  its own; else none yet. The repository is the `github` line's; else the
+  one `[forges.*]` table of kind `github` on `github.com`; else the one
+  github.com repository the sync records link to. Two, and none named:
+  no GitHub number is an issue's own, since two repositories each have
+  a `#5`, and an issue linked on both would change number.
 - **Numbering** gives the next numbers to the issues without one that
   every clone has, oldest first (by creation time, then id), in one write
   of the counter: on git the issues origin has, on a shared datastore all.

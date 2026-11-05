@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"cmp"
 	"fmt"
 	"regexp"
 	"slices"
@@ -55,8 +56,13 @@ func MoveKey(from, to, key string) Edit {
 		if i < 0 {
 			return text, check(text, from, key, false)
 		}
-		line := lines[i]
-		lines = slices.Delete(lines, i, i+1)
+		j, err := extent(lines, i, from, key)
+		if err != nil {
+			return "", err
+		}
+		value := slices.Clone(lines[i:j])
+		lines = slices.Delete(lines, i, j)
+		line := strings.Join(value, "\n")
 		start, end := block(lines, to)
 		if start < 0 {
 			base := strings.TrimRight(strings.Join(lines, "\n"), "\n")
@@ -68,10 +74,12 @@ func MoveKey(from, to, key string) Edit {
 			at := start + 1
 			for j := start + 1; j < end; j++ {
 				if keyLine.MatchString(lines[j]) {
-					at = j + 1
+					if e, err := extent(lines, j, to, ""); err == nil {
+						at, j = e, e-1
+					}
 				}
 			}
-			text = strings.Join(slices.Insert(lines, at, line), "\n")
+			text = strings.Join(slices.Insert(lines, at, value...), "\n")
 		}
 		if err := check(text, from, key, false); err != nil {
 			return "", err
@@ -116,6 +124,11 @@ func MapValue(table, key string, f func(literal string) (string, error)) Edit {
 		if i < 0 {
 			return text, check(text, table, key, false)
 		}
+		if j, err := extent(lines, i, table, key); err != nil {
+			return "", err
+		} else if j != i+1 {
+			return "", fmt.Errorf("[%s] %s: a value over several lines, which this migration can't map; write it on one line, or edit it by hand", table, key)
+		}
 		m := keyLine.FindStringSubmatch(lines[i])
 		v, err := f(m[3])
 		if err != nil {
@@ -133,28 +146,41 @@ func DropKey(table, key string) Edit {
 	return func(text string) (string, error) {
 		lines, i := find(text, table, key)
 		if i >= 0 {
-			text = strings.Join(slices.Delete(lines, i, i+1), "\n")
+			j, err := extent(lines, i, table, key)
+			if err != nil {
+				return "", err
+			}
+			text = strings.Join(slices.Delete(lines, i, j), "\n")
 		}
 		return text, check(text, table, key, false)
 	}
 }
 
-// CommentKey sets [table] key aside: its line becomes a comment, why
-// beside it. The file keeps its lines, and the value is there for
+// CommentKey sets [table] key aside: its lines become comments, why
+// beside the first. The file keeps its lines, a value over several (an
+// array, a multi-line string) all of them, and the value is there for
 // UncommentKey(table, key, why), which undoes it.
 func CommentKey(table, key, why string) Edit {
 	return func(text string) (string, error) {
 		lines, i := find(text, table, key)
 		if i >= 0 {
+			j, err := extent(lines, i, table, key)
+			if err != nil {
+				return "", err
+			}
 			lines[i] = "# " + lines[i] + "  # " + why
+			for k := i + 1; k < j; k++ {
+				lines[k] = "# " + lines[k]
+			}
 			text = strings.Join(lines, "\n")
 		}
 		return text, check(text, table, key, false)
 	}
 }
 
-// UncommentKey gives back the line CommentKey set aside with why; a file
-// without it is left as it is.
+// UncommentKey gives back the lines CommentKey set aside with why: the
+// first, beside why, and the commented lines after it up to the value's
+// end. A file without them is left as it is.
 func UncommentKey(table, key, why string) Edit {
 	return func(text string) (string, error) {
 		lines := strings.Split(text, "\n")
@@ -165,14 +191,46 @@ func UncommentKey(table, key, why string) Edit {
 			if !pre || !post {
 				continue
 			}
-			if m := keyLine.FindStringSubmatch(l); m != nil && m[2] == key {
-				lines[i] = l
-				text = strings.Join(lines, "\n")
-				return text, check(text, table, key, true)
+			if m := keyLine.FindStringSubmatch(l); m == nil || m[2] != key {
+				continue
 			}
+			value := []string{l}
+			for j := i + 1; !decodes(value); j++ {
+				next, ok := "", false
+				if j < len(lines) {
+					next, ok = strings.CutPrefix(lines[j], "# ")
+				}
+				if !ok {
+					return "", fmt.Errorf("[%s] %s: its value, set aside over several lines, doesn't end before line %d; edit it by hand", table, key, j+1)
+				}
+				value = append(value, next)
+			}
+			copy(lines[i:], value)
+			text = strings.Join(lines, "\n")
+			return text, check(text, table, key, true)
 		}
 		return text, nil
 	}
+}
+
+// extent is the index after the last line of the value whose key is on
+// lines[i]: i+1 for a value on its line, more for an array or a
+// multi-line string. A value that never ends is an error, never a line
+// left behind.
+func extent(lines []string, i int, table, key string) (int, error) {
+	for j := i + 1; j <= len(lines); j++ {
+		if decodes(lines[i:j]) {
+			return j, nil
+		}
+	}
+	return 0, fmt.Errorf("[%s] %s: its value doesn't end; edit it by hand", table, cmp.Or(key, strings.TrimSpace(lines[i])))
+}
+
+// decodes says lines, a key and its value, are TOML on their own.
+func decodes(lines []string) bool {
+	var v map[string]any
+	_, err := toml.Decode(strings.Join(lines, "\n"), &v)
+	return err == nil
 }
 
 // block is [table]'s lines, its header's index and the one after its
@@ -186,6 +244,12 @@ func block(lines []string, table string) (start, end int) {
 		if strings.HasPrefix(strings.TrimSpace(lines[end]), "[") {
 			break
 		}
+		// an array's lines, [1, 2] on its own, aren't a header
+		if keyLine.MatchString(lines[end]) {
+			if e, err := extent(lines, end, table, ""); err == nil {
+				end = e - 1
+			}
+		}
 	}
 	return start, end
 }
@@ -196,8 +260,16 @@ func find(text, table, key string) ([]string, int) {
 	lines := strings.Split(text, "\n")
 	start, end := block(lines, table)
 	for i := start + 1; start >= 0 && i < end; i++ {
-		if m := keyLine.FindStringSubmatch(lines[i]); m != nil && m[2] == key {
+		m := keyLine.FindStringSubmatch(lines[i])
+		if m == nil {
+			continue
+		}
+		if m[2] == key {
 			return lines, i
+		}
+		// a multi-line value's lines aren't keys, though one reads x = 1
+		if e, err := extent(lines, i, table, m[2]); err == nil {
+			i = e - 1
 		}
 	}
 	return lines, -1

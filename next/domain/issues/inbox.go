@@ -39,8 +39,19 @@ func inboxPath(folder string, id kernel.ID) string {
 	return filepath.Join(folder, "git-board", "inbox", string(id)+".json")
 }
 
+// inboxID refuses an id that isn't 40 hex digits: it names a file.
+func inboxID(id kernel.ID) error {
+	if len(id) != 40 || strings.Trim(string(id), "0123456789abcdef") != "" {
+		return fmt.Errorf("inbox: %q isn't a person's id", id)
+	}
+	return nil
+}
+
 // LoadInbox reads id's file in folder; none yet is an empty Inbox.
 func LoadInbox(folder string, id kernel.ID) (Inbox, error) {
+	if err := inboxID(id); err != nil {
+		return Inbox{}, err
+	}
 	data, err := os.ReadFile(inboxPath(folder, id))
 	if errors.Is(err, fs.ErrNotExist) {
 		return Inbox{}, nil
@@ -59,6 +70,9 @@ func LoadInbox(folder string, id kernel.ID) (Inbox, error) {
 // SaveInbox writes id's file through a temporary file and a rename: a
 // crash leaves the old file or the new one.
 func SaveInbox(folder string, id kernel.ID, in Inbox) error {
+	if err := inboxID(id); err != nil {
+		return err
+	}
 	p := inboxPath(folder, id)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err

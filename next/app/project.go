@@ -43,6 +43,24 @@ func (c *Config) githubForge() forge.Table {
 	return forge.Table{Name: "gh", Kind: "github", Host: "github.com"}
 }
 
+// gitHubRepo is the board's github.com repository, owner/repo, when one
+// table names it: whose numbers below the counter's start are the
+// issues' own (ADR 0016). Two such tables, or none: "", and the counter's
+// own line or the sync records decide (issues.Counter.GitHub).
+func (c *Config) gitHubRepo() string {
+	repo := ""
+	for _, f := range c.Forges.List {
+		if f.Kind != "github" || !strings.EqualFold(f.Host, "github.com") {
+			continue
+		}
+		if repo != "" && !strings.EqualFold(repo, f.Project) {
+			return ""
+		}
+		repo = cmp.Or(repo, f.Project)
+	}
+	return repo
+}
+
 // Project is the bridge's configuration: [github-project], the fields and
 // the GitHub forge's mappings. A broken [github-project] is its problem.
 func (c *Config) Project() (*ghproject.Config, error) {

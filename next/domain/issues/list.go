@@ -32,6 +32,10 @@ type Service struct {
 	Views map[string]View
 	// Writing, when set, brackets each write (a Markdown folder's).
 	Writing Writing
+	// GitHub is the board's github.com repository, owner/repo, from its
+	// forges: whose numbers below the counter's start are the issues'
+	// own when the counter doesn't name one (Counter.GitHub).
+	GitHub string
 	// Held, when set, says which labels the sync keeps off the forge of
 	// a key (forge.Forges.Held): none of them waits for that forge.
 	Held func(key, label string) bool
