@@ -1,7 +1,10 @@
 package app
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"slices"
 	"strings"
 
@@ -45,6 +48,14 @@ type experimental struct {
 // config does: a file v1 refuses is refused, with v1's message (the first
 // problem). local is the clone's board.experimental, nil when unset.
 func ReadConfig(f *conf.File, local []string) (*Config, error) {
+	c, err := readConfig(f, local)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", f.Path(), err)
+	}
+	return c, nil
+}
+
+func readConfig(f *conf.File, local []string) (*Config, error) {
 	tables := issues.Declare(f)
 	ft := forge.Declare(f)
 	rel := releases.Declare(f)
@@ -89,7 +100,7 @@ func ReadConfig(f *conf.File, local []string) (*Config, error) {
 		add(h.Problems())
 	}
 	if len(probs) > 0 {
-		return nil, fmt.Errorf("parsing %s: %w", f.Path(), probs[0])
+		return nil, probs[0]
 	}
 	return c, nil
 }
@@ -104,4 +115,68 @@ func SplitFeatures(s string) []string {
 		list = append(list, strings.ToLower(f))
 	}
 	return list
+}
+
+// errNotFound is a key not set: exit code 3, as v1.
+var errNotFound = errors.New("not found")
+
+// ConfigPath is the .git-board.toml of the repository holding dir.
+func ConfigPath(dir string) string { return configPath(dir) }
+
+// GetConfig is a key's value in the .git-board.toml of dir's
+// repository, as TOML writes it.
+func GetConfig(dir, key string) (string, error) {
+	data, err := os.ReadFile(configPath(dir))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", &Error{Class: NotFound, Err: fmt.Errorf("%w: no %s here", errNotFound, conf.FileName)}
+	}
+	if err != nil {
+		return "", err
+	}
+	v, err := conf.GetKey(string(data), key)
+	if errors.Is(err, conf.ErrNoKey) {
+		return "", &Error{Class: NotFound, Err: fmt.Errorf("%w: %s is not set in %s", errNotFound, key, conf.FileName)}
+	}
+	return v, err
+}
+
+// SetConfig sets a key of the .git-board.toml of dir's repository to a
+// TOML literal (conf.Value), or removes it for "": its line alone. A key
+// git-board doesn't read, or a value that leaves the file broken, is
+// refused (Usage) and nothing is written.
+func SetConfig(dir, key, literal string) error {
+	path := configPath(dir)
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("no %s here: git board init writes one", conf.FileName)
+	}
+	if err != nil {
+		return err
+	}
+	usage := func(err error) error { return &Error{Class: Usage, Err: err} }
+	table, name, err := conf.SplitKey(string(data), key)
+	if err != nil {
+		return usage(err)
+	}
+	out := conf.SetKeys(string(data), table, []string{name}, map[string]string{name: literal})
+	f, err := conf.Parse(path, []byte(out))
+	if err == nil {
+		_, err = readConfig(f, nil)
+	}
+	if err != nil {
+		return usage(fmt.Errorf("%s = %s: %w", key, literal, err))
+	}
+	for _, k := range f.Unknown() {
+		if k == key || strings.HasPrefix(k, key+".") {
+			return usage(fmt.Errorf("%s: %w", key, conf.ErrUnknownKey))
+		}
+	}
+	if out == string(data) {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(out), info.Mode().Perm())
 }

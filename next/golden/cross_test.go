@@ -70,6 +70,20 @@ var writes = []string{
 	`follow 398523d --json`,
 	`labels`,
 	`me`,
+	`config set views.ready.filter "status:ready is:open prio:p0"`,
+	`config set views.mine.filter "assignee:@me"`,
+	`config set views.mine.sort "updated desc"`,
+	`config set sprints.length_days 21`,
+	`config set sprints.length_days two`,
+	`config set fields.prio.options '["p0", "p1", "p2", "p3", "p4"]'`,
+	`config set fields.nope.colors 1`,
+	`config set roles.reviewer @bob`,
+	`config set github-project.owner guilbep`,
+	`config unset sprints.start_weekday`,
+	`config get views.mine.filter`,
+	`config get github-project.number`,
+	`config get sprints.length_days`,
+	`view mine`,
 }
 
 // mdWrites are the writes the cross-write test runs on the Markdown
@@ -193,7 +207,8 @@ func crossWrites(t *testing.T, one, two string, board Board, writes []string) {
 				}
 			}
 			cases := []Case{{"ls", `ls "is:open,closed" --json`}, {"labels", "labels --json"},
-				{"follows", `ls "follows:@me is:open,closed" --json`}, {"status", "status"}, {"status json", "status --json"}}
+				{"follows", `ls "follows:@me is:open,closed" --json`}, {"status", "status"}, {"status json", "status --json"},
+				{"config", "config list --json"}, {"view", "view ready --json"}}
 			for _, id := range ids {
 				cases = append(cases, Case{"show " + id[:7], "show " + id + " --json"}, Case{"log " + id[:7], "log " + id + " --json"})
 			}

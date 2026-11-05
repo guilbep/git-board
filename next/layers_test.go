@@ -39,7 +39,7 @@ var mayImport = map[string][]string{
 	"next/forge":              {"next/conf"},
 	"next/tools":              {"next/conf"},
 	"next/app":                {"next/kernel", "next/conf", "next/domain/issues", "next/domain/people", "next/domain/releases", "next/domain/cycle", "next/forge", "next/tools", "next/store", "next/store/git", "next/store/md", "next/store/pg", "next/store/forgecopy", "next/view"},
-	"next/surface/cli":        {"next/app", "next/kernel", "next/domain/issues", "next/domain/people"},
+	"next/surface/cli":        {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people"},
 	"next/cmd/git-board-next": {"next/surface/cli"},
 	"next/golden":             {},
 	"next/golden/v1gen":       {},
