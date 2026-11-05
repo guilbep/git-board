@@ -80,6 +80,9 @@ func Open(ctx context.Context, dir string, o Options) (*Board, error) {
 		return nil, err
 	}
 	if o.Notice != nil {
+		if v := f.Version(); v > conf.Current {
+			o.Notice("warning: %s is schema %d, newer than this git-board's %d: it reads what it knows, writes nothing to it, and ignores the rest; upgrade git-board", f.Path(), v, conf.Current)
+		}
 		for _, k := range f.Unknown() {
 			o.Notice("warning: %s: %s: git-board doesn't know this key, ignored (git board lint)", f.Path(), k)
 		}

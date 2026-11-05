@@ -19,15 +19,19 @@ import (
 // Config is .git-board.toml, each table declared by its domain (design.md,
 // Config) and read.
 type Config struct {
-	File     *conf.File
-	Schema   *issues.Schema
-	Views    map[string]issues.View
-	Branches issues.Branches
-	Forges   forge.Forges
-	Repos    forge.Repos
-	Release  releases.Config
-	Cycle    cycle.Config
-	Tools    tools.Tables
+	File *conf.File
+	// SchemaVersion is the file's schema version (conf.File.Version): 1
+	// without a schema key, 0 without a file. CurrentSchema is this
+	// git-board's.
+	SchemaVersion int
+	Schema        *issues.Schema
+	Views         map[string]issues.View
+	Branches      issues.Branches
+	Forges        forge.Forges
+	Repos         forge.Repos
+	Release       releases.Config
+	Cycle         cycle.Config
+	Tools         tools.Tables
 	// Features are [experimental] features: the file's, or this clone's
 	// board.experimental when it sets one.
 	Features []string
@@ -61,7 +65,7 @@ func readConfig(f *conf.File, local []string) (*Config, error) {
 	rel := releases.Declare(f)
 	cyc := cycle.Declare(f)
 	exp := conf.Declare(f, conf.Table[experimental]{Name: "experimental"})
-	c := &Config{File: f, Tools: tools.Declare(f)}
+	c := &Config{File: f, SchemaVersion: f.Version(), Tools: tools.Declare(f)}
 	var probs []conf.Problem
 	add := func(p []conf.Problem) { probs = append(probs, p...) }
 	var p []conf.Problem
@@ -143,42 +147,153 @@ func GetConfig(dir, key string) (string, error) {
 // SetConfig sets a key of the .git-board.toml of dir's repository to a
 // TOML literal (conf.Value), or removes it for "": its line alone. A key
 // git-board doesn't read, or a value that leaves the file broken, is
-// refused (Usage) and nothing is written.
-func SetConfig(dir, key, literal string) error {
+// refused (Usage) and nothing is written. An older schema is written
+// upgraded to this git-board's (the result says so); a newer one isn't
+// written.
+func SetConfig(dir, key, literal string) (ConfigWrite, error) {
 	path := configPath(dir)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("no %s here: git board init writes one", conf.FileName)
+		return ConfigWrite{}, fmt.Errorf("no %s here: git board init writes one", conf.FileName)
 	}
 	if err != nil {
-		return err
+		return ConfigWrite{}, err
 	}
 	usage := func(err error) error { return &Error{Class: Usage, Err: err} }
-	table, name, err := conf.SplitKey(string(data), key)
+	text, from, err := conf.ForWrite(string(data))
 	if err != nil {
-		return usage(err)
+		return ConfigWrite{From: from}, usage(err)
 	}
-	out := conf.SetKeys(string(data), table, []string{name}, map[string]string{name: literal})
+	w := ConfigWrite{From: from, To: conf.Current}
+	table, name, err := conf.SplitKey(text, key)
+	if err != nil {
+		return w, usage(err)
+	}
+	out := conf.SetKeys(text, table, []string{name}, map[string]string{name: literal})
 	f, err := conf.Parse(path, []byte(out))
 	if err == nil {
 		_, err = readConfig(f, nil)
 	}
 	if err != nil {
-		return usage(fmt.Errorf("%s = %s: %w", key, literal, err))
+		return w, usage(fmt.Errorf("%s = %s: %w", key, literal, err))
 	}
 	for _, k := range f.Unknown() {
 		if k == key || strings.HasPrefix(k, key+".") {
-			return usage(fmt.Errorf("%s: %w", key, conf.ErrUnknownKey))
+			return w, usage(fmt.Errorf("%s: %w", key, conf.ErrUnknownKey))
 		}
 	}
-	if out == string(data) {
-		return nil
+	if out == text { // a write that changes nothing upgrades nothing
+		return ConfigWrite{From: from, To: from}, nil
 	}
+	return w, writeConfig(path, out)
+}
+
+// ConfigWrite is what a write did to the file's schema: From, the version
+// it was, To the one it is. From < To: the write upgraded it.
+type ConfigWrite struct{ From, To int }
+
+// Upgraded says the write upgraded the file's schema.
+func (w ConfigWrite) Upgraded() bool { return w.From < w.To }
+
+// Notice is the line a surface prints once, on the write that upgraded
+// the file; "" when it didn't.
+func (w ConfigWrite) Notice() string {
+	if !w.Upgraded() {
+		return ""
+	}
+	return fmt.Sprintf("%s upgraded from schema %d to %d (git board config schema says what changed)", conf.FileName, w.From, w.To)
+}
+
+// CurrentSchema is the schema version this git-board writes: what a
+// Config's SchemaVersion is compared with.
+const CurrentSchema = conf.Current
+
+// SchemaState is the file's schema against this git-board's: config
+// schema, Settings.
+type SchemaState struct {
+	File    int              `json:"file"`   // the file's version; 0 without a file
+	Binary  int              `json:"binary"` // this git-board's, CurrentSchema
+	Pending []conf.Migration `json:"pending"`
+}
+
+// ConfigSchema is the schema state of the .git-board.toml of dir's
+// repository.
+func ConfigSchema(dir string) (SchemaState, error) {
+	s := SchemaState{Binary: conf.Current, Pending: []conf.Migration{}}
+	data, err := os.ReadFile(configPath(dir))
+	if errors.Is(err, fs.ErrNotExist) {
+		return s, nil
+	}
+	if err != nil {
+		return s, err
+	}
+	if s.File, err = conf.Version(string(data)); err != nil {
+		return s, fmt.Errorf("parsing %s: %w", conf.FileName, err)
+	}
+	if s.File < conf.Current {
+		s.Pending, _ = conf.Steps(s.File, conf.Current)
+	}
+	return s, nil
+}
+
+// Migrated is what MigrateConfig did, or would do.
+type Migrated struct {
+	From  int              `json:"from"`
+	To    int              `json:"to"`
+	Steps []conf.Migration `json:"steps"`
+	Diff  string           `json:"diff"` // diff -u of the file
+}
+
+// MigrateConfig moves the .git-board.toml of dir's repository to schema
+// to, up or down: up when up says so (an upgrade's to is at least the
+// file's), down else. dry writes nothing.
+func MigrateConfig(dir string, to int, up, dry bool) (Migrated, error) {
+	path := configPath(dir)
+	usage := func(err error) error { return &Error{Class: Usage, Err: err} }
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Migrated{}, &Error{Class: NotFound, Err: fmt.Errorf("%w: no %s here", errNotFound, conf.FileName)}
+	}
+	if err != nil {
+		return Migrated{}, err
+	}
+	from, err := conf.Version(string(data))
+	if err != nil {
+		return Migrated{}, usage(fmt.Errorf("parsing %s: %w", conf.FileName, err))
+	}
+	m := Migrated{From: from, To: to, Steps: []conf.Migration{}}
+	if _, err := conf.Steps(1, to); err != nil {
+		return m, usage(err)
+	}
+	switch {
+	case from > conf.Current:
+		return m, usage(&conf.NewerError{File: from})
+	case up && to < from:
+		return m, usage(fmt.Errorf("%s is schema %d: git board config downgrade --to %d goes down", conf.FileName, from, to))
+	case !up && to > from:
+		return m, usage(fmt.Errorf("%s is schema %d: git board config upgrade --to %d goes up", conf.FileName, from, to))
+	}
+	out, steps, err := conf.Migrate(string(data), to)
+	if err != nil {
+		return m, usage(err)
+	}
+	if steps != nil {
+		m.Steps = steps
+	}
+	m.Diff = conf.Diff(fmt.Sprintf("%s (schema %d)", conf.FileName, from), fmt.Sprintf("%s (schema %d)", conf.FileName, to), string(data), out)
+	if dry || out == string(data) {
+		return m, nil
+	}
+	return m, writeConfig(path, out)
+}
+
+// writeConfig writes the file, its mode kept.
+func writeConfig(path, text string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(out), info.Mode().Perm())
+	return os.WriteFile(path, []byte(text), info.Mode().Perm())
 }
 
 // projectFields are the fields the GitHub Project bridge keeps in step

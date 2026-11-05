@@ -22,7 +22,7 @@ var co2 = &Schema{
 		"assignee": {Single: false},
 		"cat":      {Single: true, Options: []string{"bug", "feature", "chore"}},
 	},
-	Sprints: Sprints{LengthDays: 14, StartWeekday: "monday", List: []Sprint{
+	Sprints: Sprints{LengthDays: 14, List: []Sprint{
 		{Slug: "delivery", Title: "Delivery", Start: time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)},
 		{Slug: "post-delivery", Title: "Post-delivery", Start: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)},
 	}},

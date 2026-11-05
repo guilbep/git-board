@@ -114,6 +114,15 @@ var mdWrites = []string{
 
 var shortIDHex = regexp.MustCompile(`\b[0-9a-f]{7,64}\b`)
 
+// upgraded is the line v2 says on the write that upgrades the file's
+// schema (docs/guide/config-schema.md), which v1 doesn't: the one
+// difference of a write's output.
+var upgraded = regexp.MustCompile(`(?m)^\.git-board\.toml upgraded from schema \d+ to \d+ .*\n`)
+
+// tomlLine is the line a TOML error names: in the file v2 upgraded, the
+// schema key's lines over the tables put it lower than in v1's.
+var tomlLine = regexp.MustCompile(`toml: line \d+`)
+
 // binaries builds v1's git-board and git-board-next.
 func binaries(t *testing.T) (v1, v2 string) {
 	t.Helper()
@@ -240,6 +249,8 @@ func crossWrites(t *testing.T, one, two string, board Board, writes []string) {
 	for i, line := range writes {
 		a, b := said["v1"][i], said["v2"][i]
 		a.Stdout, b.Stdout = shortIDHex.ReplaceAll(a.Stdout, []byte("ID")), shortIDHex.ReplaceAll(b.Stdout, []byte("ID"))
+		b.Stderr = upgraded.ReplaceAll(b.Stderr, nil)
+		a.Stderr, b.Stderr = tomlLine.ReplaceAll(a.Stderr, []byte("toml: line N")), tomlLine.ReplaceAll(b.Stderr, []byte("toml: line N"))
 		if a.Exit != b.Exit || !bytes.Equal(a.Stdout, b.Stdout) || !bytes.Equal(a.Stderr, b.Stderr) {
 			t.Errorf("%s: v1 and v2 differ\nexit %d / %d\nstderr:\n%s\nstdout:\n%s",
 				line, a.Exit, b.Exit, Diff(a.Stderr, b.Stderr), Diff(a.Stdout, b.Stdout))

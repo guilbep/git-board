@@ -91,13 +91,20 @@ else as a string: quote "14" for a string of digits.
 A key board.<name> is this clone's own, in git config: board.me,
 board.view, board.avatars, board.datastore, board.experimental. set
 writes it in this repository's config (--local), get reads it at every
-level git does. A datastore URL is printed without its password.`,
+level git does. A datastore URL is printed without its password.
+
+.git-board.toml has a schema version (docs/guide/config-schema.md):
+schema shows it, upgrade and downgrade move the file between versions.
+An older file is read as if upgraded, and written upgraded by set and
+unset, which say so.`,
 		Example: `  git board config list
   git board config get views.backlog.filter
   git board config set views.backlog.filter "is:open prio:p1"
   git board config set sprints.length_days 14
   git board config unset github-project.write
-  git board config set board.view classic`,
+  git board config set board.view classic
+  git board config schema
+  git board config upgrade --dry-run`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
@@ -129,7 +136,7 @@ level git does. A datastore URL is printed without its password.`,
 			Short: "Set a key",
 			Args:  cobra.ExactArgs(2),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				return configSet(args[0], args[1], false)
+				return configSet(cmd.ErrOrStderr(), args[0], args[1], false)
 			},
 		},
 		&cobra.Command{
@@ -137,9 +144,10 @@ level git does. A datastore URL is printed without its password.`,
 			Short: "Remove a key",
 			Args:  cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				return configSet(args[0], "", true)
+				return configSet(cmd.ErrOrStderr(), args[0], "", true)
 			},
-		})
+		},
+		newConfigSchema(), newConfigMigrate(true), newConfigMigrate(false))
 	return cmd
 }
 
@@ -191,7 +199,7 @@ func configGet(key string) (string, error) {
 	return v, nil
 }
 
-func configSet(key, value string, unset bool) error {
+func configSet(stderr io.Writer, key, value string, unset bool) error {
 	if strings.HasPrefix(key, "board.") {
 		k, err := knownGitKey(key)
 		if err != nil {
@@ -226,7 +234,11 @@ func configSet(key, value string, unset bool) error {
 	if !unset {
 		lit = conf.Value(value)
 	}
-	return app.SetConfig(dir, key, lit)
+	w, err := app.SetConfig(dir, key, lit)
+	if n := w.Notice(); n != "" && err == nil {
+		fmt.Fprintln(stderr, n)
+	}
+	return err
 }
 
 // configEntry is a key config list prints.
