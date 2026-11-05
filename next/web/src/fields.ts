@@ -1,0 +1,67 @@
+// The display convention from the root README ("Display convention"): a
+// "ns:value" label shows under the field "ns", configured or not; labels
+// without a namespace show under "Other labels". No component re-derives
+// this.
+import type { Bucket, FieldConfig } from './api/board';
+
+export type Fields = Record<string, FieldConfig>;
+
+// Configured field names, sorted: the column order the CLI table uses.
+export function fieldNames(fields: Fields): string[] {
+  return Object.keys(fields).sort();
+}
+
+export function displayName(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+// Values of field `name` on an issue's labels ("prio:p1" -> ["p1"]).
+export function fieldValues(labels: string[], name: string): string[] {
+  const prefix = `${name}:`;
+  return labels.filter((l) => l.startsWith(prefix)).map((l) => l.slice(prefix.length));
+}
+
+// Labels that aren't the value of one of the shown fields (`names`: the
+// configured fields plus the namespaces found on the issues, see
+// facets.namespaces).
+export function otherLabels(labels: string[], names: string[]): string[] {
+  return labels.filter((l) => {
+    const i = l.indexOf(':');
+    return i < 0 || !names.includes(l.slice(0, i));
+  });
+}
+
+// One value as shown to people: a number with its unit (est: 3h), a date
+// in words (30 Oct).
+export function formatValue(name: string, value: string, fields: Fields): string {
+  const f = fields[name];
+  if (f?.unit) return `${value}${f.unit}`;
+  if (f?.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return dateLabel(value);
+  return value;
+}
+
+const thisYear = new Date().getFullYear();
+function dateLabel(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString(undefined, d.getFullYear() === thisYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// A field's type, as the server resolved it; select for the ones it
+// leaves to the page (undeclared, plain values).
+export function typeOf(name: string, fields: Fields): string {
+  return fields[name]?.type ?? 'select';
+}
+
+// Buckets in the group field's configured option order; values outside the
+// options keep the server's order after them, "(none)" (board.BucketBy's
+// key for issues without the field) comes last.
+export function orderBuckets(buckets: Bucket[], group: string, fields: Fields): Bucket[] {
+  const options = fields[group]?.options ?? [];
+  const rank = (b: Bucket) => {
+    if (b.group === '(none)') return options.length + 1;
+    const i = options.indexOf(b.group);
+    return i < 0 ? options.length : i;
+  };
+  // Array.prototype.sort is stable, so equal ranks keep the server's order.
+  return [...buckets].sort((a, b) => rank(a) - rank(b));
+}

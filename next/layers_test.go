@@ -54,7 +54,8 @@ var mayImport = map[string][]string{
 	"next/tools/ship":                  {"next/domain/releases", "next/domain/issues", "next/forge", "next/tools/branches", "next/tools/code", "next/domain/releases/proof"},
 	"next/tools/ship/shiptest":         {"next/app", "next/domain/releases", "next/domain/issues/issuesync", "next/kernel", "next/sync", "next/tools/ship"},
 	"next/app":                         {"next/kernel", "next/kernel/pack", "next/conf", "next/domain/issues", "next/domain/issues/mdfiles", "next/domain/people", "next/domain/releases", "next/domain/cycle", "next/forge", "next/forge/github", "next/forge/gitlab", "next/domain/issues/issuesync", "next/tools", "next/store", "next/store/git", "next/store/md", "next/store/pg", "next/store/forgecopy", "next/view", "next/sync", "next/domain/releases/releasesync", "next/tools/ship", "next/tools/branches", "next/tools/code", "next/domain/releases/proof"},
-	"next/surface/http":                {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge"},
+	"next/web":                         {},
+	"next/surface/http":                {"next/web", "next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge"},
 	"next/surface/cli":                 {"next/app", "next/conf", "next/kernel", "next/domain/issues", "next/domain/people", "next/forge", "next/domain/releases", "next/tools/ship", "next/tools/branches", "next/surface/tui", "next/surface/http"},
 	"next/surface/tui":                 {"next/app", "next/domain/issues"},
 	"next/cmd/git-board-next":          {"next/surface/cli"},
@@ -65,11 +66,6 @@ var mayImport = map[string][]string{
 // v1gen writes the golden boards with v1's code (guard_test.go): the one
 // package of next/ that imports v1, deleted with it.
 const v1gen = "next/golden/v1gen"
-
-// webApp is the web app's build, embedded (ADR 0012): not v1's code but
-// the page both binaries serve, which outlives v1. The HTTP surface alone
-// imports it.
-const webApp, webServer = "web", "next/surface/http"
 
 // testsMayImport is what a package's tests may import besides: the
 // datastores and the view, to run on real ones, and the conformance suite.
@@ -109,7 +105,6 @@ func TestLayers(t *testing.T) {
 			switch {
 			case !inNext && toNext:
 				t.Errorf("%s imports %s: v1 never imports next/", rel, p)
-			case inNext && dep == webApp && pkg == webServer: // the web app it serves
 			case inNext && !toNext && pkg != v1gen:
 				t.Errorf("%s imports %s: next/ copies what it needs from v1 and owns it", rel, p)
 			case inNext && !toNext: // v1gen, the exception above

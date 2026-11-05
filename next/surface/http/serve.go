@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	boardweb "github.com/guilbep/git-board/web"
+	boardweb "github.com/guilbep/git-board/next/web"
 )
 
 // Serving a board (ADR 0012, ADR 0013): this machine's loopback, port
@@ -25,7 +25,7 @@ import (
 // FirstPort is where a board looks for a free port.
 var FirstPort = 8080
 
-// WebApp is the web app's files, embedded (web/dist/spa: Quasar's build;
+// WebApp is the web app's files, embedded (next/web/dist/spa: Quasar's build;
 // empty until `npm run build`).
 func WebApp() fs.FS {
 	dist, err := fs.Sub(boardweb.DistFS, "dist/spa")

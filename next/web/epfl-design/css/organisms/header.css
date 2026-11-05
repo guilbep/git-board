@@ -1,0 +1,53 @@
+/* ORGANISM — Header
+   Public epfl.ch chrome: logo, main nav with the signature 7×6px red dot under
+   the active/hovered item, search, and the EN/FR/DE language switch. */
+
+.epfl-header {
+  display: flex;
+  align-items: center;
+  height: var(--header-h);
+  padding: 0 var(--gutter);
+  border-bottom: var(--border-w) solid var(--border-subtle);
+  background: var(--bg);
+}
+.epfl-logo img { height: 2rem; display: block; }
+
+.epfl-nav { display: flex; gap: 0; margin-left: 3.5rem; flex: 1; }
+.epfl-nav a {
+  position: relative;
+  padding: 1.4rem 0.8rem;
+  font-weight: var(--w-bold);
+  font-size: 0.9375rem;
+  color: var(--fg);
+  text-decoration: none;
+  transition: color var(--t-fast);
+  cursor: pointer;
+}
+.epfl-nav a:hover,
+.epfl-nav a.active { color: var(--primary); }
+.epfl-nav a:focus-visible { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; }
+/* The signature red marker under the active / hovered nav item */
+.epfl-nav a.active::after,
+.epfl-nav a:hover::after {
+  content: '';
+  position: absolute;
+  bottom: 1.2rem;
+  left: 0.8rem;
+  width: 0.4375rem;
+  height: 0.375rem;
+  background: var(--primary);
+}
+
+.epfl-search input {
+  border: var(--border-w) solid var(--epfl-gray-300);
+  background: var(--bg);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8125rem;
+  width: 12.5rem;
+  border-radius: var(--radius);
+}
+.epfl-search input:focus { outline: var(--focus-w) solid var(--primary-hover); outline-offset: 0.125rem; border-color: var(--fg); }
+
+.epfl-lang { display: flex; gap: var(--space-2); margin-left: 1rem; font-size: 0.8125rem; }
+.epfl-lang a { color: var(--fg-muted); cursor: pointer; text-decoration: none; font-weight: var(--w-bold); }
+.epfl-lang a.on { color: var(--primary); }

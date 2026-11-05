@@ -1,0 +1,40 @@
+<!-- An issue as a full page, at a link to share: #/issues/<git-bug id> (not
+     a forge number: an issue can be local, or on two forges). -->
+<template>
+  <AppHeader :views="viewNames" />
+  <main class="gb-issuepage">
+    <IssuePanel :id="String(route.params.id)" :key="String(route.params.id)" :names="names" :fields="fields" :step="route.query.step ? idOf(String(route.query.step)) : undefined" page @open="(other: string) => router.push(`/issues/${other}`)" />
+  </main>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { getFields, getViews, type FieldConfig } from '@/api/board';
+import { loadColors } from '@/colors';
+import { namespaces } from '@/facets';
+import { idOf } from '@/flow';
+import AppHeader from '@/components/AppHeader.vue';
+import IssuePanel from '@/components/IssuePanel.vue';
+
+const route = useRoute();
+const router = useRouter();
+const viewNames = ref<string[]>([]);
+const fields = ref<Record<string, FieldConfig>>({});
+const names = ref<string[]>([]);
+
+onMounted(async () => {
+  try {
+    const [views, f] = await Promise.all([getViews(), getFields(), loadColors()]);
+    viewNames.value = Object.keys(views);
+    fields.value = f;
+    names.value = namespaces([], f);
+  } catch {
+    // the panel shows its own errors
+  }
+});
+</script>
+
+<style scoped>
+.gb-issuepage { padding: 0 0 3rem; }
+</style>
