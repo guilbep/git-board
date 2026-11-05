@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// marker names a git-board issue, comment or version in a text sync
+// MarkerOf names a git-board issue, comment or version in a text sync
 // posts. quoted says the text starts with a quote line, after its header;
 // keys are the "k=v" pairs a comment's marker carries after its id.
-func marker(kind, id string, quoted bool, keys string) string {
+func MarkerOf(kind, id string, quoted bool, keys string) string {
 	if quoted {
 		id += " quoted"
 	}
@@ -26,36 +26,36 @@ var (
 	quoteRE  = regexp.MustCompile(`^> [^\n]*(?:\n\n|$)`)
 )
 
-// header is the line naming who wrote a text, when, and where.
-func header(name string, written int64, where string) string {
+// HeaderLine is the line naming who wrote a text, when, and where.
+func HeaderLine(name string, written int64, where string) string {
 	return "*From " + name + ", " + time.Unix(written, 0).UTC().Format("2006-01-02") + ", " + where + ".*"
 }
 
-// wrapped is a text as sync posts it: a header, a quote, the text, a
+// Wrapped is a text as sync posts it: a header, a quote, the text, a
 // marker. Kind, id and keys are the marker's. fork is the fork's own start of a text it
 // posted, kept as it is: its marker, forkID its id, and its header, whose
 // link is the original's URL.
-type wrapped struct{ header, quote, body, marker, kind, id, keys, fork, forkID, link string }
+type Wrapped struct{ Header, Quote, Body, Marker, Kind, ID, Keys, Fork, ForkID, Link string }
 
-// unwrap splits a text sync posted, or the fork did. A text with neither
+// Unwrap splits a text sync posted, or the fork did. A text with neither
 // form is all body.
-func unwrap(text string) wrapped {
-	w := wrapped{body: text}
+func Unwrap(text string) Wrapped {
+	w := Wrapped{Body: text}
 	m := markerRE.FindStringSubmatchIndex(text)
 	if m == nil {
-		w.fork, w.forkID, w.link = forkStart(text)
-		w.body = text[len(w.fork):]
+		w.Fork, w.ForkID, w.Link = ForkStart(text)
+		w.Body = text[len(w.Fork):]
 		return w
 	}
-	w.kind, w.id, w.keys = text[m[2]:m[3]], text[m[4]:m[5]], strings.TrimPrefix(text[m[8]:m[9]], " ")
-	w.body = text[:m[0]]
-	if h := headerRE.FindString(w.body); h != "" {
-		w.header, w.body = strings.TrimSuffix(h, "\n\n"), w.body[len(h):]
+	w.Kind, w.ID, w.Keys = text[m[2]:m[3]], text[m[4]:m[5]], strings.TrimPrefix(text[m[8]:m[9]], " ")
+	w.Body = text[:m[0]]
+	if h := headerRE.FindString(w.Body); h != "" {
+		w.Header, w.Body = strings.TrimSuffix(h, "\n\n"), w.Body[len(h):]
 	}
-	if q := quoteRE.FindString(w.body); m[6] >= 0 && q != "" {
-		w.quote, w.body = strings.TrimSuffix(q, "\n\n"), w.body[len(q):]
+	if q := quoteRE.FindString(w.Body); m[6] >= 0 && q != "" {
+		w.Quote, w.Body = strings.TrimSuffix(q, "\n\n"), w.Body[len(q):]
 	}
-	w.mark(w.keys)
+	w.Mark(w.Keys)
 	return w
 }
 
@@ -68,9 +68,9 @@ var (
 	forkHeaderRE = regexp.MustCompile(`^\*Originally posted by [^\n]*\[view on [^\]\n]*\]\(([^)\s]+)\)\*(?:\n\n|\n|$)`)
 )
 
-// forkStart is the fork's marker and header at the start of a text, the
+// ForkStart is the fork's marker and header at the start of a text, the
 // marker's id, and the URL of the original the header links.
-func forkStart(text string) (start, id, link string) {
+func ForkStart(text string) (start, id, link string) {
 	m := forkMarkerRE.FindStringSubmatch(text)
 	if m == nil {
 		return "", "", ""
@@ -82,10 +82,10 @@ func forkStart(text string) (start, id, link string) {
 	return start, id, link
 }
 
-// commentLinked is the original comment a fork header's link names: the
+// CommentLinked is the original comment a fork header's link names: the
 // forge's host and the comment's id, from GitHub's #issuecomment-<id> or
 // GitLab's #note_<id>; "" for an issue's link.
-func commentLinked(link string) (host, id string) {
+func CommentLinked(link string) (host, id string) {
 	u, err := url.Parse(link)
 	if err != nil {
 		return "", ""
@@ -98,22 +98,22 @@ func commentLinked(link string) (host, id string) {
 	return "", ""
 }
 
-// forked says the text is in the fork's form.
-func (w wrapped) forked() bool { return w.fork != "" }
+// Forked says the text is in the fork's form.
+func (w Wrapped) Forked() bool { return w.Fork != "" }
 
-// mark sets the marker for w's kind, id and quote, carrying keys.
-func (w *wrapped) mark(keys string) { w.marker = marker(w.kind, w.id, w.quote != "", keys) }
+// Mark sets the marker for w's kind, id and quote, carrying keys.
+func (w *Wrapped) Mark(keys string) { w.Marker = MarkerOf(w.Kind, w.ID, w.Quote != "", keys) }
 
 // String joins the parts that aren't empty with a blank line, after the
 // fork's start.
-func (w wrapped) String() string {
+func (w Wrapped) String() string {
 	var parts []string
-	for _, p := range []string{w.header, w.quote, w.body, w.marker} {
+	for _, p := range []string{w.Header, w.Quote, w.Body, w.Marker} {
 		if p != "" {
 			parts = append(parts, p)
 		}
 	}
-	return w.fork + strings.Join(parts, "\n\n")
+	return w.Fork + strings.Join(parts, "\n\n")
 }
 
 var (
@@ -128,7 +128,7 @@ func SameText(a, b string) bool { return same(a, b) }
 
 func same(a, b string) bool {
 	norm := func(s string) string {
-		s = codeTicks.ReplaceAllString(unwrap(s).body, "")
+		s = codeTicks.ReplaceAllString(Unwrap(s).Body, "")
 		return strings.TrimSpace(spaces.ReplaceAllString(refLink.ReplaceAllString(s, "#"), " "))
 	}
 	return norm(a) == norm(b)
@@ -136,12 +136,12 @@ func same(a, b string) bool {
 
 var token = regexp.MustCompile("`+|@[A-Za-z0-9_][A-Za-z0-9_.-]*|#[0-9]+")
 
-// translate defuses a text's mentions, unless it is a title, and gives
+// Translate defuses a text's mentions, unless it is a title, and gives
 // each reference #n what ref answers. Code spans are left as they are: a
 // run of backticks opens one only when a run as long closes it.
 // ponytail: code spans by backtick runs only; indented code blocks and
 // HTML aren't recognized.
-func translate(text string, title bool, ref func(n string) string) string {
+func Translate(text string, title bool, ref func(n string) string) string {
 	var b strings.Builder
 	toks := token.FindAllStringIndex(text, -1)
 	last := 0

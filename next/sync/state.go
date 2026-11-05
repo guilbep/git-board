@@ -231,7 +231,7 @@ func recordsOf(st State, out map[string][]Record) map[string][]Record {
 		seen := make(map[string]string, len(st.Seen[issue]))
 		for f, v := range st.Seen[issue] {
 			if f == "body" || strings.HasPrefix(f, "comment:") {
-				v = unwrap(v).body
+				v = Unwrap(v).Body
 			}
 			seen[f] = v
 		}
