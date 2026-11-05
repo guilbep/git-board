@@ -1,0 +1,6 @@
+GET /api/issues?filter=is:closed&group=status
+
+HTTP 200
+Content-Type: application/json
+
+[{"group":"done","issues":[{"id":"398523d66eaebdebff64257a35e73c84d5c31f47","title":"Export CSV (#13)","status":"closed","labels":["est:0.5","kind:feature","prio:p2","status:done"],"inherited":["reviewer:chloe"],"github_url":"https://github.com/acme/widgets/issues/13","forges":[{"name":"GitHub","url":"https://github.com/acme/widgets/issues/13","number":"13"}],"shown_title":"Export CSV","number":"GB-101","counted":true,"updated_at":"2025-03-03T17:01:00Z","created_at":"2025-03-03T16:00:00Z","closed_at":"2025-03-03T17:01:00Z","comments":1}]}]

@@ -1,0 +1,6 @@
+PUT /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/comments/<new1>:0 {"body":"Edited from a stale text.","base":"not what it says"}
+
+HTTP 409
+Content-Type: application/json
+
+{"code":"changed","error":"someone changed this comment meanwhile"}

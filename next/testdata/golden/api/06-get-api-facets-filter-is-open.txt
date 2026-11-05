@@ -1,0 +1,6 @@
+GET /api/facets?filter=is:open
+
+HTTP 200
+Content-Type: application/json
+
+[{"key":"is","options":[{"value":"open","count":7},{"value":"closed","count":1}],"selected":["open"],"rest":""},{"key":"assignee","options":[{"value":"(none)","count":4},{"value":"chloe","count":2},{"value":"ada","count":1},{"value":"bobby","count":1}],"selected":[],"rest":"is:open"},{"key":"est","options":[{"value":"(none)","count":5},{"value":"3","count":1},{"value":"8","count":1}],"selected":[],"rest":"is:open"},{"key":"kind","options":[{"value":"(none)","count":5},{"value":"bug","count":2}],"selected":[],"rest":"is:open"},{"key":"prio","options":[{"value":"(none)","count":5},{"value":"p0","count":1},{"value":"p3","count":1}],"selected":[],"rest":"is:open"},{"key":"sprint","options":[{"value":"(none)","count":5},{"value":"s1","count":1},{"value":"s2","count":1}],"selected":[],"rest":"is:open"},{"key":"status","options":[{"value":"(none)","count":3},{"value":"backlog","count":2},{"value":"in-progress","count":1},{"value":"in-review","count":1}],"selected":[],"rest":"is:open"},{"key":"area","options":[{"value":"(none)","count":6},{"value":"données","count":1}],"selected":[],"rest":"is:open"},{"key":"label","options":[{"value":"(none)","count":5},{"value":"a","count":1},{"value":"d","count":1},{"value":"étiquette","count":1}],"selected":[],"rest":"is:open"}]

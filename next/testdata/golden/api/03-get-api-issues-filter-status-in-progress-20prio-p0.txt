@@ -1,0 +1,6 @@
+GET /api/issues?filter=status:in-progress%20prio:p0
+
+HTTP 200
+Content-Type: application/json
+
+[{"group":"","issues":[{"id":"26a4ba85e9ef4a8ff1b61f228dd598c8b3667905","title":"Search hides closed issues by default","status":"open","labels":["assignee:ada","assignee:bobby","kind:bug","est:3","prio:p0","sprint:s1","status:in-progress"],"inherited":["reviewer:chloe"],"github_url":"https://github.com/acme/widgets/issues/12","forges":[{"name":"GitHub","url":"https://github.com/acme/widgets/issues/12","number":"12"},{"name":"GitLab","url":"https://gitlab.epfl.ch/acme/widgets/-/issues/3","number":"3"}],"shown_title":"Search hides closed issues by default","number":"GB-100","counted":true,"updated_at":"2025-03-03T15:00:00Z","created_at":"2025-03-03T09:00:00Z","comments":3}]}]

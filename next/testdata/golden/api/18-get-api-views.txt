@@ -1,0 +1,6 @@
+GET /api/views
+
+HTTP 200
+Content-Type: application/json
+
+{"ready":{"layout":"","filter":"status:ready is:open","group":"","sort":"prio asc"}}

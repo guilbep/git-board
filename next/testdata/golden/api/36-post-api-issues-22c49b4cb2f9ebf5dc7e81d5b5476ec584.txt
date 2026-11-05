@@ -1,0 +1,6 @@
+POST /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/comments not JSON
+
+HTTP 400
+Content-Type: application/json
+
+{"error":"invalid character 'o' in literal null (expecting 'u')"}

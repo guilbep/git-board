@@ -1,0 +1,6 @@
+GET /api/colors
+
+HTTP 200
+Content-Type: application/json
+
+{"area":{"données":"blue"},"kind":{"bug":"red","feature":"teal"},"prio":{"p0":"red","p1":"orange","p2":"amber","p3":"grey"},"sprint":{"s1":"blue","s2":"purple"},"status":{"backlog":"grey","done":"green","in-progress":"blue","in-review":"purple","ready":"teal"}}

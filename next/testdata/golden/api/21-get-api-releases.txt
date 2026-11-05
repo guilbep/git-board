@@ -1,0 +1,6 @@
+GET /api/releases
+
+HTTP 200
+Content-Type: application/json
+
+{"enabled":false,"remote":"","trunk":"","environments":[],"binaries":[],"releases":[]}

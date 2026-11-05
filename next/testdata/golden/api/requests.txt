@@ -1,0 +1,44 @@
+# The HTTP API's transcripts on the golden board basic: one request a
+# line, "METHOD path [JSON body]", run in this order on one checkout, so
+# a write's effect shows in the reads after it. internal/server's
+# TestAPITranscripts records each answer in NN-<slug>.txt (make golden)
+# and checks v1 gives it again. <newN> is the Nth hash the board didn't
+# hold, as the answers before it name it (a written pack, its commit):
+# the request takes the same hash. The normalisations are listed in
+# docs/rewrite/compat.md, Normalisations.
+GET /api/issues
+GET /api/issues?filter=is:open,closed
+GET /api/issues?filter=status:in-progress%20prio:p0
+GET /api/issues?filter=%22unless%20the%20query%22
+GET /api/issues?filter=is:closed&group=status
+GET /api/facets?filter=is:open
+GET /api/facets?filter=assignee:chloe
+GET /api/issues/26a4ba85e9ef4a8ff1b61f228dd598c8b3667905
+GET /api/issues/26a4ba8/thread
+GET /api/issues/9062b9a381ed0075abb7c2b22261a9be88f7a685/thread
+GET /api/issues/999eab2e4a22d1af3d62abffe7e62e79db7d12ac/thread
+GET /api/issues/22d74e73979498ba69c554da1bf1cc1014cb013d/thread
+GET /api/issues/427cb1bd1c4a7deee3c0bf6ff0b3b4ea24f7dc42/thread
+GET /api/issues/4f38a4b0d2759be1e6acd8594134ab29f542de51/thread
+GET /api/issues/0000000/thread
+GET /api/config/fields
+GET /api/config/labels
+GET /api/views
+GET /api/colors
+GET /api/me
+GET /api/releases
+POST /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/comments {"body":"A comment from the API."}
+PUT /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/comments/<new1>:0 {"body":"A comment from the API, edited.","base":"A comment from the API."}
+PUT /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/comments/<new1>:0 {"body":"Edited from a stale text.","base":"not what it says"}
+POST /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/labels {"add":["prio:p0","bug"],"remove":["a"]}
+POST /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/labels {"add":["prio:nope"]}
+PATCH /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71 {"status":"done"}
+PUT /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/title {"title":"Label churn, retitled"}
+PUT /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/status {"status":"open"}
+PUT /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/status {"status":"maybe"}
+POST /api/issues {"title":"Made through the API","body":"Its body.","labels":["prio:p2"]}
+POST /api/issues {"title":"  ","body":"no title"}
+GET /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/thread
+GET /api/issues?filter=is:open,closed
+POST /api/issues/0000000/comments {"body":"nowhere"}
+POST /api/issues/22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71/comments not JSON
