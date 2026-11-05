@@ -35,8 +35,8 @@ func newShow() *cobra.Command {
 					return usageError{err}
 				}
 			}
-			ctx := cmd.Context()
 			b, err := open(cmd, true)
+			ctx := cmd.Context()
 			if err != nil {
 				return err
 			}
@@ -209,8 +209,8 @@ func newLog() *cobra.Command {
 					return usageError{err}
 				}
 			}
-			ctx := cmd.Context()
 			b, err := open(cmd, true)
+			ctx := cmd.Context()
 			if err != nil {
 				return err
 			}

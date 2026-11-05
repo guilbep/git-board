@@ -146,8 +146,8 @@ func newComment() *cobra.Command {
 			if yes && del == "" {
 				return usageError{fmt.Errorf("--yes goes with --delete")}
 			}
-			ctx := cmd.Context()
 			b, err := open(cmd, true)
+			ctx := cmd.Context()
 			if err != nil {
 				return err
 			}
@@ -156,7 +156,15 @@ func newComment() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			th, err := b.issues.Show(ctx, args[0])
+			// the thread when a comment of it is named; else the issue's id
+			var th issues.Thread
+			if del != "" || edit != "" || editLast {
+				th, err = b.issues.Show(ctx, args[0])
+			} else {
+				var id kernel.ID
+				id, err = b.issues.Resolve(ctx, args[0])
+				th.ID = string(id)
+			}
 			if err != nil {
 				return err
 			}
@@ -254,8 +262,8 @@ func newEdit() *cobra.Command {
 			if setTitle && text.editor {
 				return usageError{fmt.Errorf("--editor edits the title too: --title or --editor, not both")}
 			}
-			ctx := cmd.Context()
 			b, err := open(cmd, true)
+			ctx := cmd.Context()
 			if err != nil {
 				return err
 			}

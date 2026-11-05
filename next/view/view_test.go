@@ -177,3 +177,69 @@ func TestRowsFileFollowsTheMark(t *testing.T) {
 		t.Fatalf("with a file cut short, List = %v", ls)
 	}
 }
+
+// A write appends its rows to the patch file: another process lists
+// through it; a patch cut short, it reads the table; past the records a
+// list keeps, it writes one rows file again.
+func TestRowsPatches(t *testing.T) {
+	t.Parallel()
+	ds := mem.New(t.TempDir())
+	dir := t.TempDir()
+	b := openBoard(t, ds, filepath.Join(dir, "view.db"))
+	var ids []kernel.ID
+	for i := range 3 {
+		e, err := counter.Create(ctx, b, "", op(i+1))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, e.ID)
+	}
+	if ls, _ := counter.List(ctx, b, kernel.Query{}); len(ls) != 3 {
+		t.Fatalf("List = %v", ls)
+	}
+	bump := func(id kernel.ID, n int) {
+		t.Helper()
+		if _, err := counter.Do(ctx, b, id, func(kernel.Entity[count]) ([]kernel.Op, error) { return []kernel.Op{op(n)}, nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bump(ids[0], 10)
+	bump(ids[2], 20)
+	if _, err := counter.Create(ctx, b, "", op(7)); err != nil {
+		t.Fatal(err)
+	}
+	total := func(v *kernel.Board) (n, sum int) {
+		t.Helper()
+		ls, err := counter.List(ctx, v, kernel.Query{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range ls {
+			sum += l.Row.N
+		}
+		return len(ls), sum
+	}
+	if n, sum := total(openBoard(t, ds, filepath.Join(dir, "view.db"))); n != 4 || sum != 6 {
+		t.Fatalf("through the patches: %d rows, sum %d", n, sum)
+	}
+	patches := filepath.Join(dir, "rows-counter.patch")
+	data, err := os.ReadFile(patches)
+	if err != nil || len(data) == 0 {
+		t.Fatalf("no patch file: %v", err)
+	}
+	if err := os.WriteFile(patches, data[:len(data)-3], 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n, sum := total(openBoard(t, ds, filepath.Join(dir, "view.db"))); n != 4 || sum != 6 {
+		t.Fatalf("a patch cut short: %d rows, sum %d", n, sum)
+	}
+	for i := range 250 {
+		bump(ids[1], 100+i)
+	}
+	if n, sum := total(openBoard(t, ds, filepath.Join(dir, "view.db"))); n != 4 || sum != 6+250 {
+		t.Fatalf("after 250 patches: %d rows, sum %d", n, sum)
+	}
+	if _, err := os.Stat(patches); !os.IsNotExist(err) {
+		t.Errorf("past the records a list keeps, the patch file stays: %v", err)
+	}
+}

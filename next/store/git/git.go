@@ -32,7 +32,8 @@ type Store struct {
 	gitDir    string // this worktree's
 	commonDir string // every worktree's: refs, objects, the board's folder
 	warm      sync.Once
-	warmed    chan warmed // a cat-file Warm started, for the next load
+	warmed    chan warmed  // a cat-file Warm started, for the next load
+	idle      chan *walker // cat-files a load is done with, for the next: one process a command, not one a read
 }
 
 var _ store.Datastore = (*Store)(nil)
@@ -55,7 +56,7 @@ func Open(ctx context.Context, dir string) (*Store, error) {
 	if len(lines) != 2 {
 		return nil, fmt.Errorf("%s: git rev-parse said %q", dir, out)
 	}
-	return &Store{gitDir: lines[0], commonDir: lines[1], warmed: make(chan warmed, 1)}, nil
+	return &Store{gitDir: lines[0], commonDir: lines[1], warmed: make(chan warmed, 1), idle: make(chan *walker, idleWalkers)}, nil
 }
 
 // find is the repository holding dir, found as git finds it in the
@@ -115,7 +116,7 @@ func gitDirAt(gitDir string) (*Store, bool) {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return nil, false
 	}
-	return &Store{gitDir: gitDir, commonDir: common, warmed: make(chan warmed, 1)}, true
+	return &Store{gitDir: gitDir, commonDir: common, warmed: make(chan warmed, 1), idle: make(chan *walker, idleWalkers)}, true
 }
 
 // Caps: a version is a commit, which names its packs for good; the
@@ -127,14 +128,22 @@ func (s *Store) Folder() string { return filepath.Join(s.commonDir, "board") }
 
 // Close ends a walker Warm started and no load took.
 func (s *Store) Close() error {
+	var errs []error
 	select {
 	case w := <-s.warmed:
 		if w.err == nil {
-			return w.w.close()
+			errs = append(errs, w.w.close())
 		}
 	default:
 	}
-	return nil
+	for {
+		select {
+		case w := <-s.idle:
+			errs = append(errs, w.close())
+		default:
+			return errors.Join(errs...)
+		}
+	}
 }
 
 // GitDir is this worktree's git directory: its config.
@@ -188,14 +197,33 @@ func (s *Store) Heads(ctx context.Context, kinds ...string) ([]store.Head, error
 			}
 			out = append(out, store.Head{Kind: kind, ID: id, Version: v})
 		}
-		for id, v := range loose[i] {
-			out = append(out, store.Head{Kind: kind, ID: id, Version: v})
+		byID := func(a, b store.Head) int { return strings.Compare(a.ID, b.ID) }
+		if !sortedRefs {
+			slices.SortFunc(out[start:], byID)
 		}
-		if len(loose[i]) > 0 || !sortedRefs {
-			slices.SortFunc(out[start:], func(a, b store.Head) int { return strings.Compare(a.ID, b.ID) })
+		if len(loose[i]) > 0 { // a few, after a write: merged in, not sorted with the rest
+			var more []store.Head
+			for id, v := range loose[i] {
+				more = append(more, store.Head{Kind: kind, ID: id, Version: v})
+			}
+			slices.SortFunc(more, byID)
+			out = append(out[:start], merge(out[start:], more, byID)...)
 		}
 	}
 	return out, nil
+}
+
+// merge is two sorted lists as one.
+func merge[T any](a, b []T, cmp func(T, T) int) []T {
+	out := make([]T, 0, len(a)+len(b))
+	for len(a) > 0 && len(b) > 0 {
+		if cmp(a[0], b[0]) <= 0 {
+			out, a = append(out, a[0]), a[1:]
+		} else {
+			out, b = append(out, b[0]), b[1:]
+		}
+	}
+	return append(append(out, a...), b...)
 }
 
 // loose are a kind's loose refs, by id.

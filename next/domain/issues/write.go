@@ -71,6 +71,7 @@ type NewReq struct {
 // New creates an issue as who writes, with its fields in the same pack,
 // and keeps its state in step with its status.
 func (s *Service) New(ctx context.Context, r NewReq) (Issue, error) {
+	ctx = s.Board.Snapshot(ctx)
 	me, err := s.writer()
 	if err != nil {
 		return Issue{}, err
@@ -99,13 +100,34 @@ func (s *Service) New(ctx context.Context, r NewReq) (Issue, error) {
 
 // Get is an issue as a list shows it, by name.
 func (s *Service) Get(ctx context.Context, name string) (Issue, error) {
+	ctx = s.Board.Snapshot(ctx)
 	th, err := s.Show(ctx, name)
 	return th.Issue, err
+}
+
+// current is an issue's state as a write decides on it, by name: its
+// labels, status and forges, from its log, without the thread and the
+// people a Get reads.
+func (s *Service) current(ctx context.Context, name string) (Issue, error) {
+	id, err := s.Resolve(ctx, name)
+	if err != nil {
+		return Issue{}, err
+	}
+	e, err := Kind.Get(ctx, s.Board, id)
+	if err != nil {
+		return Issue{}, err
+	}
+	if e.State.Deleted {
+		return Issue{}, fmt.Errorf("issue %s: %w", id, ErrDeleted)
+	}
+	d := index(&e.State)
+	return s.issue(id, &d.Row, people.Directory{}, nil), nil
 }
 
 // Comment adds a comment as who writes, and answers its id and the
 // issue's.
 func (s *Service) Comment(ctx context.Context, name, body string) (kernel.OpID, kernel.ID, error) {
+	ctx = s.Board.Snapshot(ctx)
 	st, err := s.do(ctx, name, func(me kernel.ID, _ *State) ([]kernel.Op, error) {
 		return []kernel.Op{op("comment", me, map[string]any{"body": body})}, nil
 	})
@@ -132,6 +154,7 @@ func text(st *State, id kernel.OpID) (target kernel.OpID, body string, err error
 // the text the edit started from: another one there now refuses it
 // (ErrChanged); "" skips the check.
 func (s *Service) EditText(ctx context.Context, name string, id kernel.OpID, body, base string) error {
+	ctx = s.Board.Snapshot(ctx)
 	_, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		target, now, err := text(st, id)
 		switch {
@@ -149,6 +172,7 @@ func (s *Service) EditText(ctx context.Context, name string, id kernel.OpID, bod
 
 // DeleteComment hides a comment (ADR 0019); the description isn't one.
 func (s *Service) DeleteComment(ctx context.Context, name string, id kernel.OpID) error {
+	ctx = s.Board.Snapshot(ctx)
 	_, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		target, _, err := text(st, id)
 		if err != nil {
@@ -164,6 +188,7 @@ func (s *Service) DeleteComment(ctx context.Context, name string, id kernel.OpID
 
 // Delete hides an issue (ADR 0019): no view shows it again.
 func (s *Service) Delete(ctx context.Context, name string) (kernel.ID, error) {
+	ctx = s.Board.Snapshot(ctx)
 	st, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		return []kernel.Op{op("delete", me, map[string]any{"target": string(st.BodyOp)})}, nil
 	})
@@ -174,6 +199,7 @@ func (s *Service) Delete(ctx context.Context, name string) (kernel.ID, error) {
 // than now; base is what they were when the edit started (ErrChanged
 // when another writer changed one since).
 func (s *Service) Edit(ctx context.Context, name string, title, body *string, base Thread) ([]string, error) {
+	ctx = s.Board.Snapshot(ctx)
 	var changed []string
 	_, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		changed = nil
@@ -199,6 +225,7 @@ func (s *Service) Edit(ctx context.Context, name string, title, body *string, ba
 
 // SetStatus opens or closes an issue.
 func (s *Service) SetStatus(ctx context.Context, name string, status Status) error {
+	ctx = s.Board.Snapshot(ctx)
 	if status != Open && status != Closed {
 		return fmt.Errorf("status %q: want open or closed", status)
 	}
@@ -215,6 +242,7 @@ func (s *Service) SetStatus(ctx context.Context, name string, status Status) err
 // kind is written as its plain label, an assignee in any case once. It
 // answers the labels after.
 func (s *Service) ChangeLabels(ctx context.Context, name string, added, removed []string) ([]string, error) {
+	ctx = s.Board.Snapshot(ctx)
 	st, err := s.do(ctx, name, func(me kernel.ID, st *State) ([]kernel.Op, error) {
 		add, rm := s.stored(added, removed, st.Labels)
 		add = slices.DeleteFunc(slices.Clone(add), func(l string) bool { return slices.Contains(st.Labels, l) })
@@ -287,16 +315,8 @@ func (s *Service) stored(added, removed, raw []string) (a, r []string) {
 // assignments reads field=value arguments: parsed, resolved (@me,
 // sprints, aliases) and, unless force, held to the config.
 func (s *Service) assignments(ctx context.Context, args []string, meName string, force bool) ([]Assignment, error) {
-	var inUse []string
-	if !force {
-		counts, err := s.Labels(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, c := range counts {
-			inUse = append(inUse, c.Label)
-		}
-	}
+	var inUse []string // the labels in use, read when a field isn't configured: a list
+	read := false
 	if meName == "" && slices.ContainsFunc(args, func(a string) bool { return strings.HasSuffix(a, "@me") }) {
 		meName = s.myName(ctx)
 	}
@@ -307,6 +327,16 @@ func (s *Service) assignments(ctx context.Context, args []string, meName string,
 		a, err := ParseAssignment(arg)
 		if err == nil {
 			a, err = a.resolve(s.Schema, meName, today)
+		}
+		if err == nil && !force && !read && a.Field != PlainLabel && !s.Schema.known(a.Field, nil) {
+			counts, err := s.Labels(ctx)
+			if err != nil {
+				return nil, err
+			}
+			for _, c := range counts {
+				inUse = append(inUse, c.Label)
+			}
+			read = true
 		}
 		if err == nil && !force {
 			err = s.Schema.Check(a, inUse)
@@ -370,11 +400,12 @@ type SetReq struct {
 // step with its status. It answers a line per assignment, as set prints
 // them: what it did, the last one with what the state did.
 func (s *Service) Set(ctx context.Context, r SetReq) ([]string, error) {
+	ctx = s.Board.Snapshot(ctx)
 	as, err := s.assignments(ctx, r.Assign, r.MeName, r.Force)
 	if err != nil {
 		return nil, err
 	}
-	is, err := s.Get(ctx, r.Name)
+	is, err := s.current(ctx, r.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +470,7 @@ func (s *Service) inStep(ctx context.Context, id string, as []Assignment, labels
 	if status == options[len(options)-1] {
 		want = Closed
 	}
-	is, err := s.Get(ctx, id)
+	is, err := s.current(ctx, id)
 	if err != nil || Status(is.Status) == want {
 		return "", err
 	}
@@ -540,12 +571,13 @@ type CloseReq struct {
 // why (closed-as, duplicate-of, and a "Duplicate of" comment), then its
 // state. It answers what close prints.
 func (s *Service) Close(ctx context.Context, r CloseReq) (string, error) {
+	ctx = s.Board.Snapshot(ctx)
 	field := s.Schema.Fields["status"]
 	if len(field.Options) == 0 {
 		return "", fmt.Errorf("no [fields.status] options configured in .git-board.toml")
 	}
 	terminal := field.Options[len(field.Options)-1]
-	is, err := s.Get(ctx, r.Name)
+	is, err := s.current(ctx, r.Name)
 	if err != nil {
 		return "", err
 	}
@@ -560,7 +592,7 @@ func (s *Service) Close(ctx context.Context, r CloseReq) (string, error) {
 	}
 	note := ""
 	if r.DuplicateOf != "" {
-		other, err := s.Get(ctx, r.DuplicateOf)
+		other, err := s.current(ctx, r.DuplicateOf)
 		if err != nil {
 			return "", fmt.Errorf("--duplicate-of %s: %w", r.DuplicateOf, err)
 		}
@@ -627,7 +659,8 @@ func refFrom(is, other Issue) string {
 // when it was the terminal one or none; its closed-as goes (a
 // duplicate-of stays). It answers what reopen prints.
 func (s *Service) Reopen(ctx context.Context, name, comment string) (string, error) {
-	is, err := s.Get(ctx, name)
+	ctx = s.Board.Snapshot(ctx)
+	is, err := s.current(ctx, name)
 	if err != nil {
 		return "", err
 	}

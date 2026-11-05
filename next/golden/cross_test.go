@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/fs"
 	"maps"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -46,6 +49,9 @@ var writes = []string{
 	`comment 9062b9a -b ""`,
 	`comment 999eab2 --delete nosuch --yes`,
 	`delete 427cb1b --yes`,
+	`comment 427cb1b -b "on a deleted issue"`,
+	`set 427cb1b prio=p1`,
+	`comment 427cb1b --edit-last -b "on a deleted issue"`,
 	`delete 0000000 --yes`,
 	`labels`,
 	`me`,
@@ -58,6 +64,25 @@ func binaries(t *testing.T) (v1, v2 string) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("builds both binaries: not with -short")
+	}
+	// go test caches a result by the files the test reads: stat every
+	// source both binaries build from, so an edit runs the test again.
+	for _, root := range []string{"../..", ".."} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() && (d.Name() == "testdata" || d.Name() == "node_modules" || strings.HasPrefix(d.Name(), ".")) && path != root {
+				return filepath.SkipDir
+			}
+			if !d.IsDir() && (strings.HasSuffix(path, ".go") || d.Name() == "go.mod" || d.Name() == "go.sum") {
+				_, err = os.Stat(path)
+			}
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	dir := t.TempDir()
 	v1, v2 = filepath.Join(dir, "git-board"), filepath.Join(dir, "git-board-next")

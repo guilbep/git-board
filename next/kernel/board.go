@@ -49,8 +49,13 @@ type snapshot struct {
 
 // Snapshot is ctx for one request or command: every read made with it
 // brings each kind it reads to the datastore's heads once, at its first
-// read, and answers from there. Without one, every read does.
+// read, and answers from there. Without one, every read does. A context
+// that is one already stays as it is: a command's reads and writes share
+// it.
 func (b *Board) Snapshot(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(snapshotKey{b}).(*snapshot); ok {
+		return ctx
+	}
 	return context.WithValue(ctx, snapshotKey{b}, &snapshot{fresh: map[string]bool{}})
 }
 

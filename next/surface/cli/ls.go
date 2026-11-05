@@ -57,8 +57,8 @@ func newLs() *cobra.Command {
 // list is ls and view: the issues req matches, now or at a time, then
 // rendered. What a list leaves out goes to stderr, as v1 logs it.
 func list(cmd *cobra.Command, req issues.ListReq, at time.Time, group, sort string, limit int, md bool, js *jsonOut) error {
-	ctx := cmd.Context()
 	b, err := open(cmd, needsMe(req.Filter))
+	ctx := cmd.Context()
 	if err != nil {
 		return err
 	}

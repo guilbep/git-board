@@ -14,7 +14,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	_ "modernc.org/sqlite" // database/sql's "sqlite", FTS5 included
@@ -24,10 +23,10 @@ import (
 )
 
 // version is the schema's: a file of another is built again.
-const version = 1
+const version = 2
 
 const schema = `
-CREATE TABLE marks (kind TEXT PRIMARY KEY, rev INTEGER NOT NULL, sum BLOB NOT NULL, heads BLOB NOT NULL, search INTEGER NOT NULL);
+CREATE TABLE marks (kind TEXT PRIMARY KEY, rev INTEGER NOT NULL, sum BLOB NOT NULL, search INTEGER NOT NULL);
 CREATE TABLE rows (n INTEGER PRIMARY KEY, kind TEXT NOT NULL, id TEXT NOT NULL, version TEXT NOT NULL,
 	created INTEGER NOT NULL, updated INTEGER NOT NULL, hidden INTEGER NOT NULL, search INTEGER NOT NULL,
 	row BLOB NOT NULL, UNIQUE (kind, id));
@@ -127,6 +126,7 @@ func (v *View) Mark(ctx context.Context, kind string) (kernel.Mark, error) {
 
 type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
 func mark(ctx context.Context, q querier, kind string) (kernel.Mark, error) {
@@ -147,13 +147,23 @@ func (v *View) Heads(ctx context.Context, kind string) ([]kernel.Head, error) {
 	return heads(ctx, v.db, kind)
 }
 
+// heads are a kind's rows' and errors' versions, by id: every entity the
+// view has is one or the other.
 func heads(ctx context.Context, q querier, kind string) ([]kernel.Head, error) {
-	var b []byte
-	err := q.QueryRowContext(ctx, "SELECT heads FROM marks WHERE kind = ?", kind).Scan(&b)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+	rows, err := q.QueryContext(ctx, "SELECT id, version FROM rows WHERE kind = ?1 UNION ALL SELECT id, version FROM broken WHERE kind = ?1 ORDER BY 1", kind)
+	if err != nil {
+		return nil, err
 	}
-	return kernel.ParseListing(b), err
+	defer rows.Close()
+	var out []kernel.Head
+	for rows.Next() {
+		var h kernel.Head
+		if err := rows.Scan(&h.ID, &h.Version); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }
 
 // Write changes a kind's rows in one transaction, each where its stored
@@ -176,7 +186,7 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 	if err != nil {
 		return err
 	}
-	var base []kernel.Head
+	emptied := false // the kind has no rows: a lookup finds nothing
 	if w.Reset && m.Rev != w.Rev { // another process may have started over meanwhile: then its rows stand
 		for _, q := range []string{
 			"DELETE FROM terms WHERE n IN (SELECT n FROM rows WHERE kind = ?1)",
@@ -189,24 +199,37 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 				return err
 			}
 		}
-		m = kernel.Mark{Rev: w.Rev}
+		m, emptied = kernel.Mark{Rev: w.Rev}, true
 	} else if m.Rev != w.Rev {
 		return tx.Rollback()
-	} else if base, err = heads(ctx, tx, kind); err != nil {
-		return err
 	}
 	st, err := prepare(ctx, tx, kind)
 	if err != nil {
 		return err
 	}
 	defer st.close()
-	at := make(map[kernel.ID]kernel.Version, len(base))
-	for _, h := range base {
-		at[h.ID] = h.Version
+	// the sum moves by each head changed (kernel.Sum): a write reads the
+	// heads it changes, not the kind's 20,000
+	sum := m.Sum
+	over := map[kernel.ID]*kernel.Version{} // this write's heads, nil: dropped
+	get := func(id kernel.ID) (kernel.Version, bool, error) {
+		if v, ok := over[id]; ok {
+			if v == nil {
+				return "", false, nil
+			}
+			return *v, true, nil
+		}
+		if emptied {
+			return "", false, nil
+		}
+		return st.version(ctx, id)
 	}
 	changed := map[kernel.ID]*row{} // what the rows file takes: nil a row gone
 	for _, p := range w.Put {
-		cur, there := at[p.ID]
+		cur, there, err := get(p.ID)
+		if err != nil {
+			return err
+		}
 		if cur != p.Base || there == (p.Base == "") {
 			continue // another process moved it meanwhile
 		}
@@ -215,30 +238,34 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 			return err
 		}
 		changed[p.ID] = r
-		at[p.ID] = p.Version
+		if there {
+			sum = kernel.SubSum(sum, kernel.HeadSum(kernel.Head{ID: p.ID, Version: cur}))
+		}
+		sum = kernel.AddSum(sum, kernel.HeadSum(kernel.Head{ID: p.ID, Version: p.Version}))
+		over[p.ID] = &p.Version
 	}
 	for _, d := range w.Drop {
-		if cur, there := at[d.ID]; !there || cur != d.Version {
+		cur, there, err := get(d.ID)
+		if err != nil {
+			return err
+		}
+		if !there || cur != d.Version {
 			continue
 		}
 		if err := st.remove(ctx, d.ID); err != nil {
 			return err
 		}
 		changed[d.ID] = nil
-		delete(at, d.ID)
+		sum = kernel.SubSum(sum, kernel.HeadSum(kernel.Head{ID: d.ID, Version: cur}))
+		over[d.ID] = nil
 	}
-	list := make([]kernel.Head, 0, len(at))
-	for id, ver := range at {
-		list = append(list, kernel.Head{ID: id, Version: ver})
-	}
-	slices.SortFunc(list, func(a, b kernel.Head) int { return strings.Compare(string(a.ID), string(b.ID)) })
 	search := 0
 	if m.Search || w.Search {
 		search = 1
 	}
-	next := kernel.Mark{Rev: m.Rev, Sum: kernel.Sum(list), Search: search == 1}
-	if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO marks (kind, rev, sum, heads, search) VALUES (?, ?, ?, ?, ?)",
-		kind, next.Rev, next.Sum[:], kernel.Listing(list), search); err != nil {
+	next := kernel.Mark{Rev: m.Rev, Sum: sum, Search: search == 1}
+	if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO marks (kind, rev, sum, search) VALUES (?, ?, ?, ?)",
+		kind, next.Rev, next.Sum[:], search); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -255,7 +282,7 @@ func (v *View) Write(ctx context.Context, kind string, w kernel.Write) (err erro
 type stmts struct {
 	kind                                             string
 	tx                                               *sql.Tx
-	insertRow, updateRow, deleteRow, find            *sql.Stmt
+	insertRow, updateRow, deleteRow, find, head      *sql.Stmt
 	term, dropTerms, text, dropText, broken, unbreak *sql.Stmt
 	fields                                           map[string]int
 }
@@ -275,6 +302,7 @@ func prepare(ctx context.Context, tx *sql.Tx, kind string) (*stmts, error) {
 	st.updateRow = prep(`UPDATE rows SET version = ?, created = ?, updated = ?, hidden = ?, search = ?, row = ? WHERE n = ?`)
 	st.deleteRow = prep(`DELETE FROM rows WHERE n = ?`)
 	st.find = prep(`SELECT n, search FROM rows WHERE kind = ? AND id = ?`)
+	st.head = prep(`SELECT version FROM rows WHERE kind = ?1 AND id = ?2 UNION ALL SELECT version FROM broken WHERE kind = ?1 AND id = ?2`)
 	st.term = prep(`INSERT OR IGNORE INTO terms (term, n) VALUES (?, ?)`)
 	st.dropTerms = prep(`DELETE FROM terms WHERE n = ?`)
 	st.text = prep(`INSERT INTO texts (rowid, t0, t1, t2, t3) VALUES (?, ?, ?, ?, ?)`)
@@ -304,7 +332,7 @@ func prepare(ctx context.Context, tx *sql.Tx, kind string) (*stmts, error) {
 }
 
 func (st *stmts) close() {
-	for _, s := range []*sql.Stmt{st.insertRow, st.updateRow, st.deleteRow, st.find, st.term, st.dropTerms, st.text, st.dropText, st.broken, st.unbreak} {
+	for _, s := range []*sql.Stmt{st.insertRow, st.updateRow, st.deleteRow, st.find, st.head, st.term, st.dropTerms, st.text, st.dropText, st.broken, st.unbreak} {
 		if s != nil {
 			s.Close()
 		}
@@ -321,6 +349,17 @@ func (st *stmts) existing(ctx context.Context, id kernel.ID) (int64, bool, error
 		return 0, false, nil
 	}
 	return n, search, err
+}
+
+// version is an entity's head in the view: its row's version, or its
+// error's.
+func (st *stmts) version(ctx context.Context, id kernel.ID) (kernel.Version, bool, error) {
+	var v kernel.Version
+	err := st.head.QueryRowContext(ctx, st.kind, id).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return v, err == nil, err
 }
 
 // unsearch takes a row's terms and texts out.

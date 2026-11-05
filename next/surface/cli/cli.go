@@ -122,5 +122,7 @@ func open(cmd *cobra.Command, who bool) (*board, error) {
 	if err != nil {
 		return nil, err
 	}
+	// the command is one snapshot: its reads and writes check the heads once
+	cmd.SetContext(b.Kernel.Snapshot(cmd.Context()))
 	return &board{Board: b, issues: b.Issues}, nil
 }

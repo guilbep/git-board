@@ -49,8 +49,7 @@ func (s *Store) loadShare(ctx context.Context, refs []store.Ref, each func(store
 	if err != nil {
 		return err
 	}
-	defer w.close()
-	return w.walk(refs, func(r store.Ref, nodes []node, err error) error {
+	err = w.walk(refs, func(r store.Ref, nodes []node, err error) error {
 		var packs [][]byte
 		if err == nil {
 			packs = make([][]byte, len(nodes))
@@ -60,6 +59,25 @@ func (s *Store) loadShare(ctx context.Context, refs []store.Ref, each func(store
 		}
 		return each(r, packs, err)
 	})
+	if err != nil {
+		w.close() // its answers may be half read
+		return err
+	}
+	s.done(w)
+	return nil
+}
+
+// idleWalkers is how many cat-files a Store keeps between loads.
+const idleWalkers = 4
+
+// done keeps a walker whose answers are all read for the next load, or
+// lets it go.
+func (s *Store) done(w *walker) {
+	select {
+	case s.idle <- w:
+	default:
+		w.close()
+	}
 }
 
 // node is one entity commit: its parents, its pack and the pack's clock.
@@ -110,11 +128,10 @@ func (s *Store) startWalker(ctx context.Context) (*walker, error) {
 func (w *walker) close() error { return w.wait() }
 
 // Warm starts a cat-file for the next load, which then waits for no
-// process to start: show's, while it checks the view meanwhile. A
-// walker is used once: the next load after takes its own.
+// process to start: show's, while it checks the view meanwhile.
 func (s *Store) Warm(ctx context.Context) {
 	s.warm.Do(func() {
-		w, err := s.startWalker(ctx)
+		w, err := s.startWalker(context.WithoutCancel(ctx))
 		s.warmed <- warmed{w, err}
 	})
 }
@@ -124,13 +141,19 @@ type warmed struct {
 	err error
 }
 
-// walker is the warm one when there is one, else a new one.
+// walker is the warm one when there is one, else an idle one, else a
+// new one. It outlives the load's context: Close ends it.
 func (s *Store) walker(ctx context.Context) (*walker, error) {
 	select {
 	case w := <-s.warmed:
 		return w.w, w.err
 	default:
-		return s.startWalker(ctx)
+	}
+	select {
+	case w := <-s.idle:
+		return w, nil
+	default:
+		return s.startWalker(context.WithoutCancel(ctx))
 	}
 }
 

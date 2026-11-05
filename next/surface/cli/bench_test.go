@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -45,15 +46,36 @@ func BenchmarkLsFields(b *testing.B) { bench(b, "ls", "status:ready assignee:dev
 // ls with free text, its index built.
 func BenchmarkLsText(b *testing.B) { bench(b, "ls", "export crash") }
 
-// show: budget 30 ms.
-func BenchmarkShow(b *testing.B) {
-	dir := benchRepo(b)
+// anIssue is an issue of the bench board, its first 8 characters.
+func anIssue(b *testing.B, dir string) string {
 	out, err := exec.Command("git", "-C", dir, "for-each-ref", "--count=1", "--format=%(refname:lstrip=3)", "refs/board/issue/").Output()
 	if err != nil || len(out) < 8 {
 		b.Fatalf("no issue: %v", err)
 	}
-	bench(b, "show", strings.TrimSpace(string(out))[:8])
+	return strings.TrimSpace(string(out))[:8]
 }
+
+// show: budget 30 ms.
+func BenchmarkShow(b *testing.B) { bench(b, "show", anIssue(b, benchRepo(b))) }
+
+// The writes: budget 50 ms. Each adds to the bench board.
+func BenchmarkComment(b *testing.B) {
+	bench(b, "comment", anIssue(b, benchRepo(b)), "-b", "a comment from the benchmark")
+}
+
+func BenchmarkSet(b *testing.B) {
+	dir := benchRepo(b)
+	id := anIssue(b, dir)
+	i := 0
+	for b.Loop() { // a value that changes, each time
+		i++
+		if code := Main(ctx, []string{"-C", dir, "set", id, fmt.Sprintf("est=%d", i)}, io.Discard, os.Stderr); code != 0 {
+			b.Fatalf("exit %d", code)
+		}
+	}
+}
+
+func BenchmarkNew(b *testing.B) { bench(b, "new", "From the benchmark", "-b", "body") }
 
 // ls, first on a clone (no view): budget 3 s.
 func BenchmarkLsFirst(b *testing.B) {

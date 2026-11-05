@@ -77,43 +77,49 @@ type Row struct {
 	Row     []byte
 }
 
-// Listing encodes heads, sorted by id: a line "<id> <version>" each.
-// Two listings are the same when their bytes are.
-func Listing(heads []Head) []byte {
-	b := make([]byte, 0, len(heads)*82)
+// Sum is a listing's sum, as a Mark keeps it: each head's HeadSum added,
+// mod 2^256. The order of the heads doesn't count, and a write of one
+// head changes the sum by its own (AddSum, SubSum), without reading the
+// 20,000 others.
+func Sum(heads []Head) [32]byte {
+	var s [32]byte
 	for _, h := range heads {
-		b = append(b, h.ID...)
-		b = append(b, ' ')
-		b = append(b, h.Version...)
-		b = append(b, '\n')
+		s = AddSum(s, HeadSum(h))
 	}
-	return b
+	return s
 }
 
-// Sum is a listing's sum, as a Mark keeps it.
-func Sum(heads []Head) [32]byte { return sha256.Sum256(Listing(heads)) }
+// HeadSum is one head's part of a Sum: the sha256 of "<id> <version>".
+func HeadSum(h Head) [32]byte {
+	var buf [160]byte
+	b := append(buf[:0], h.ID...)
+	b = append(b, ' ')
+	return sha256.Sum256(append(b, h.Version...))
+}
 
-// ParseListing is Listing read back.
-func ParseListing(b []byte) []Head {
-	out := make([]Head, 0, len(b)/82)
-	for len(b) > 0 {
-		i := 0
-		for i < len(b) && b[i] != '\n' {
-			i++
-		}
-		line := b[:i]
-		if i < len(b) {
-			i++
-		}
-		b = b[i:]
-		for j := 0; j < len(line); j++ {
-			if line[j] == ' ' {
-				out = append(out, Head{ID: ID(line[:j]), Version: Version(line[j+1:])})
-				break
-			}
-		}
+// AddSum is a + b, mod 2^256, as big-endian numbers.
+func AddSum(a, b [32]byte) [32]byte {
+	var carry uint16
+	for i := 31; i >= 0; i-- {
+		t := uint16(a[i]) + uint16(b[i]) + carry
+		a[i], carry = byte(t), t>>8
 	}
-	return out
+	return a
+}
+
+// SubSum is a - b, mod 2^256: AddSum undone.
+func SubSum(a, b [32]byte) [32]byte {
+	var borrow int16
+	for i := 31; i >= 0; i-- {
+		t := int16(a[i]) - int16(b[i]) - borrow
+		borrow = 0
+		if t < 0 {
+			t += 256
+			borrow = 1
+		}
+		a[i] = byte(t)
+	}
+	return a
 }
 
 // jsonCodec is a row as JSON, for a kind that brings no codec.

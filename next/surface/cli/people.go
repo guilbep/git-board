@@ -82,8 +82,8 @@ func newMe() *cobra.Command {
 			case ls && len(args) > 0:
 				return usageError{fmt.Errorf("--ls takes no person id")}
 			}
-			ctx := cmd.Context()
 			b, err := open(cmd, true)
+			ctx := cmd.Context()
 			if err != nil {
 				return err
 			}
