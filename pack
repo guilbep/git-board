@@ -1,1 +1,1 @@
-{"clock":2,"ops":[{"kind":"change-labels","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1794086831,"data":{"add":["status:ready"],"remove":["status:draft"]}}]}
+{"clock":3,"ops":[{"kind":"change-labels","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1794086836,"data":{"add":["kind:bug"],"remove":null}}]}
