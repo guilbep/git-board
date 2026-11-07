@@ -3,6 +3,8 @@
 Sync keeps an issue the same in git-board and on each forge project it is
 linked to. It pulls what changed on the forge, and pushes what changed in
 git-board. [Forges](forges.md) says what GitHub and GitLab need.
+[Where a value lives](places.md) states the model these rules serve: one
+truth, many mirrors, and the agreement that makes a mirror reversible.
 
 Sync runs with git-board's settings: the forge projects, the posting account
 and `publish-private`. They live in git-board's `.git-board.toml`, and

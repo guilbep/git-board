@@ -65,6 +65,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "PATCH /api/forges/{name}", s.patchForge)
 	Route(mux, "DELETE /api/forges/{name}", s.removeForge)
 	Route(mux, "GET /api/forges/credentials", credentials)
+	Route(mux, "GET /api/forges/auth", forgeAuths)
+	Route(mux, "POST /api/forges/auth", s.storeToken)
 
 	Route(mux, "GET /api/github-project", s.projectStatus)
 	Route(mux, "POST /api/github-project/{action}", s.projectAction)

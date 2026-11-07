@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/forge/fake"
 	"github.com/guilbep/git-board/forge/github"
+	"github.com/guilbep/git-board/kernel"
 	"github.com/guilbep/git-board/tools/ghproject"
 	"github.com/guilbep/git-board/tools/ghproject/projectfake"
 )
@@ -113,6 +115,38 @@ func statusOf(t *testing.T, b *Board, n string) []string {
 	}
 	t.Fatalf("no issue #%s", n)
 	return nil
+}
+
+// TestProjectLogin: with no [forges] table naming a login, the Project
+// bridge reads the token of your own account on the host (what forge
+// login stores by default), not any account's.
+func TestProjectLogin(t *testing.T) {
+	b, _ := projectBoard(t)
+	ctx := t.Context()
+	me := string(b.People.Me)
+	if _, err := issuesync.DoPerson(ctx, b.Kernel, me, issuesync.AddAccount(me, issuesync.Account{Server: "github.com", ID: "42", Login: "ada"})); err != nil {
+		t.Fatal(err)
+	}
+	sessions := func() (string, error) {
+		var login string
+		was := OpenProjectV2
+		OpenProjectV2 = func(ctx context.Context, host, l, owner string, number int) (ghproject.Project, error) {
+			login = l
+			return was(ctx, host, l, owner, number)
+		}
+		t.Cleanup(func() { OpenProjectV2 = was })
+		_, _, err := b.projectSession(ctx)
+		return login, err
+	}
+	if login, err := sessions(); err != nil || login != "ada" {
+		t.Errorf("login %q, %v", login, err)
+	}
+	if _, err := issuesync.DoPerson(ctx, b.Kernel, me, kernel.Op{Kind: "remove-account", Author: me, Time: 1700000500, Data: json.RawMessage(`{"server":"github.com","id":"42"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if login, err := sessions(); err != nil || login != "" {
+		t.Errorf("login without the account %q, %v", login, err)
+	}
 }
 
 // The bridge through the app: a pull, a push, a conflict resolved, and

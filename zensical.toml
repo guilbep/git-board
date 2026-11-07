@@ -40,6 +40,7 @@ nav = [
     { "Queries and search" = "spec/queries.md" },
     { "Sync" = "spec/sync.md" },
     { "Forges" = "spec/forges.md" },
+    { "Where a value lives" = "spec/places.md" },
   ] },
   { "Decisions" = [
     { "The spec's decisions" = "spec/decisions.md" },
@@ -64,6 +65,7 @@ nav = [
     { "ADR 0019: deleting is a tombstone: hidden everywhere, kept in history" = "adr/0019-deleting-is-a-tombstone.md" },
     { "ADR 0020: the core in layers: a kernel, then issues, releases and the cycle" = "adr/0020-the-core-in-layers.md" },
     { "ADR 0021: git-board v2: new code, the same data" = "adr/0021-git-board-v2-same-data-new-code.md" },
+    { "ADR 0022: one truth, many mirrors" = "adr/0022-one-truth-many-mirrors.md" },
   ] },
   { "Rewrite" = [
     { "v2: the design of a rewrite" = "rewrite/design.md" },

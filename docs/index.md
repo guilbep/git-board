@@ -38,17 +38,23 @@ kept, in the store you choose (git, PostgreSQL or Markdown files).
       search read, and the change events that tell a program what moved.
     - [Sync](spec/sync.md) and [Forges](spec/forges.md): how the core syncs
       with GitHub and GitLab, and what each forge needs.
+    - [Where a value lives](spec/places.md): the model the sync serves —
+      one truth, many mirrors; the three decisions that place a value,
+      the agreement that makes a mirror reversible, and the rule for
+      each behaviour the config leaves unwritten.
 - **The decisions**: [the spec's](spec/decisions.md), the choices it
   starts from, each linked to the PRD; and the architecture decision
   records, from [ADR 0001](adr/0001-check-results-are-signed-git-notes.md)
-  to [ADR 0021](adr/0021-git-board-v2-same-data-new-code.md):
+  to [ADR 0022](adr/0022-one-truth-many-mirrors.md):
   why git-board has its own core ([0003](adr/0003-own-core-instead-of-git-bug.md)),
   keeps issues as operation logs ([0004](adr/0004-entities-are-operation-logs.md)),
   syncs forges as mirrors ([0008](adr/0008-sync-state-in-the-data-model.md)),
   lets you choose where the board is kept ([0002](adr/0002-datastores.md)),
   what it is for ([0018](adr/0018-own-your-issues-work-in-progress-is-opt-in.md)),
-  how the core is layered ([0020](adr/0020-the-core-in-layers.md)), and
-  why v0.12 is new code on the same data ([0021](adr/0021-git-board-v2-same-data-new-code.md)).
+  how the core is layered ([0020](adr/0020-the-core-in-layers.md)), why
+  v0.12 is new code on the same data ([0021](adr/0021-git-board-v2-same-data-new-code.md)),
+  and the one-truth-many-mirrors invariant with the explicit states it
+  commits to ([0022](adr/0022-one-truth-many-mirrors.md)).
 
 ## The core
 

@@ -13,7 +13,7 @@
 
 v1's API grew one route per button: 117 routes, 18,000 lines with their
 tests. v2's is designed from what the web app reads and writes, in
-nouns the CLI already prints. It has 54 routes.
+nouns the CLI already prints. It has 56 routes.
 
 The server is `surface/http`. Each route decodes a request, calls
 one method of `app`, and encodes the answer. No rule lives in the
@@ -316,6 +316,8 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 | 36 | `GET /api/forges/credentials` | | `{"items": [{host, login, source}]}` |
 | 37 | `GET /api/numbers` (*later*) | | `{prefix, next, unnumbered}` |
 | 38 | `POST /api/numbers` | `{prefix, start}` or `{}` | `{where, numbered}` |
+| 54 | `GET /api/forges/auth?check=` | | `{"items": [forge status]}` |
+| 55 | `POST /api/forges/auth` | `{forge, login, token}` | 201, `{forge, host, login}` |
 
 **Status (30).** `forges` are the forges the board syncs with: its
 `[forges]` tables, or those found in origin's URLs (`discovered`), each
@@ -358,6 +360,20 @@ through the forge as a sync reads them; one that already names the
 project refuses it, 400 `invalid`. 34 and 35 change a table the file has:
 a forge found in the remotes has none, 404. 36 lists the tokens
 `forge status` finds, with nothing asked of a forge; never one's value.
+
+**The tokens (54, 55)** are `forge status`'s, for the web app's Tokens
+section: 54 answers each forge, and for each of its accounts (the
+posting login, yours on the host) whether a token is found and where,
+as `{name, kind, host, project, sync, discovered, tokens}` with a
+token `{login, role, found, source, owner, error}` — `role` is
+`posting` or `you`; with `check=1` the forge is asked whose each token
+is, `owner` the login it says (or `error` what it answered instead).
+55 stores a token (`forge login`): `forge` is a forge's name, `login`
+the account it is for ("" : yours on the host, else the posting
+account), the token on the body alone; it goes to git's credential
+helper (`git credential approve`, ADR 0010), and is never answered,
+kept nor logged. 201 with the forge, its host and the login it was
+stored for.
 
 **Numbers (38)** are the project's numbers (ADR 0016). `{prefix, start}`
 starts numbering, and answers where the counter is (`on origin`, `in

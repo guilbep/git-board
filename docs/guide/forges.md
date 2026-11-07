@@ -15,16 +15,18 @@ A failed pull stops the steps after it. A forge or the Project that fails is tol
 
 A forge doesn't replace a remote: the people who use git-board pull and push the issues with git; a forge is for the people who stay on GitHub or GitLab.
 
+The model behind all of it is **one truth, many mirrors**: the board holds every field's value as a label; each forge and the GitHub Project show it as whatever they offer, per field; and every write either side accepts is recorded as the value both sides last agreed on, so switching a mirror on, off or round moves only what changed since. [The spec's Where a value lives](../spec/places.md) states it; [ADR 0022](../adr/0022-one-truth-many-mirrors.md) records it.
+
 ## Tokens
 
-A forge is read and written with a token, never kept in git-board's files: `.git-board.toml` is committed, and names only the forge's posting account, `login`. The token comes from the environment when it is set for that forge's host (`GITHUB_TOKEN` for github.com, `GITHUB_ENTERPRISE_TOKEN` for the host `GITHUB_ENTERPRISE_HOST` names, `GITLAB_TOKEN` for the host `GITLAB_HOST` names, gitlab.com by default), as in CI; else from git's credential helper for the host, with the login as user name (`git credential fill`). A token pasted in Settings goes to that helper (`git credential approve`), and is never shown again. On the command line, `git board forge login <forge>` stores one the same way, read at a hidden prompt or from stdin, and `git board forge status` says, for each forge, whether a token is found and where; `--check` asks the forge whose it is.
+A forge is read and written with a token, never kept in git-board's files: `.git-board.toml` is committed, and names only the forge's posting account, `login`. The token comes from the environment when it is set for that forge's host (`GITHUB_TOKEN` for github.com, `GITHUB_ENTERPRISE_TOKEN` for the host `GITHUB_ENTERPRISE_HOST` names, `GITLAB_TOKEN` for the host `GITLAB_HOST` names, gitlab.com by default), as in CI; else from git's credential helper for the host, with the login as user name (`git credential fill`). A token pasted in Settings › Sync › **Tokens** goes to that helper (`git credential approve`), and is never shown again; the same section says, for each forge and account, whether a token is found and where, and **Check** asks each forge whose it is. On the command line, `git board forge login <forge>` stores one the same way, read at a hidden prompt or from stdin, and `git board forge status` says the same.
 
 - **GitHub**: a classic personal access token (github.com/settings/tokens) with the `repo` scope, or `public_repo` for a public repository.
 - **GitLab**: a personal access token of the instance (`/-/user_settings/personal_access_tokens`) with the `api` scope; `read_api` is enough to only get. Reporter on the project to read, Developer to send.
 
 Someone else with a token of their own on the forge, in their own credential helper, has their comments posted as themselves when they sync; the others' are posted by the posting account, under a line naming them.
 
-The GitHub Project is read and written through GitHub's GraphQL API with the GitHub forge's token, found as above: it needs the `read:project` scope to read the Project, `project` to write it.
+The GitHub Project is read and written through GitHub's GraphQL API with the GitHub forge's token, found as above: it needs the `read:project` scope to read the Project, `project` to write it. When no `[forges]` table names a login, the Project reads the token of your own account on the host — the one `forge login` stores by default — and a token of yours without `read:project` elsewhere in the credential helper is left alone.
 
 ## Adding a forge
 

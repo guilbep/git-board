@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -75,6 +76,62 @@ func TestForges(t *testing.T) {
 	if text := file(); strings.Contains(text, "forges.gl") || !strings.Contains(text, "[forges.gh]") || strings.Contains(text, "s3cret") {
 		t.Errorf("the file after:\n%s", text)
 	}
+	if strings.Contains(a.logs(), "s3cret") {
+		t.Errorf("the token is logged:\n%s", a.logs())
+	}
+}
+
+// Routes 54 and 55: the forges' tokens as forge status reads them, and a
+// token stored in the credential helper (faked) from the body alone,
+// never answered nor logged.
+func TestForgeAuth(t *testing.T) {
+	dir, _ := newBoard(t)
+	var stored []string
+	approve, find := app.ApproveToken, app.FindToken
+	t.Cleanup(func() { app.ApproveToken, app.FindToken = approve, find })
+	app.ApproveToken = func(_ context.Context, baseURL, login, token string) error {
+		stored = append(stored, baseURL+" "+login+" "+token)
+		return nil
+	}
+	app.FindToken = func(_ context.Context, f forge.Table, login string) (string, error) {
+		if f.Host == "github.com" && login == "ada" {
+			return "t", nil
+		}
+		return "", nil
+	}
+	owner := app.ForgeOwner
+	t.Cleanup(func() { app.ForgeOwner = owner })
+	app.ForgeOwner = func(_ context.Context, f forge.Table, login string) (string, error) {
+		if f.Host == "github.com" && login == "ada" {
+			return "ada", nil
+		}
+		return "", errors.New("the forge refused it")
+	}
+	if _, err := app.SetConfigKeys(dir, map[string]any{"forges.gh": map[string]any{"kind": "github", "project": "o/r", "login": "ada"}}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	a := newAPI(t, dir)
+
+	st := want[items[app.ForgeStatus]](t, a.do("GET", "/api/forges/auth", nil), http.StatusOK)
+	if len(st.Items) != 1 || st.Items[0].Name != "gh" || len(st.Items[0].Tokens) != 1 {
+		t.Fatalf("auth: %+v", st.Items)
+	}
+	tk := st.Items[0].Tokens[0]
+	if !tk.Found || tk.Source != "git's credential helper" || tk.Owner != "" {
+		t.Errorf("token: %+v", tk)
+	}
+	st = want[items[app.ForgeStatus]](t, a.do("GET", "/api/forges/auth?check=1", nil), http.StatusOK)
+	if tk = st.Items[0].Tokens[0]; tk.Owner != "ada" {
+		t.Errorf("checked: %+v", tk)
+	}
+
+	got := want[tokenStored](t, a.do("POST", "/api/forges/auth", map[string]any{"forge": "gh", "token": " s3cret-token "}), http.StatusCreated)
+	if got != (tokenStored{Forge: "gh", Host: "github.com", Login: "ada"}) || len(stored) != 1 || stored[0] != "https://github.com ada s3cret-token" {
+		t.Fatalf("stored %+v, %q", got, stored)
+	}
+	want[map[string]any](t, a.do("POST", "/api/forges/auth", map[string]any{"forge": "gh", "token": " "}), http.StatusBadRequest)
+	want[map[string]any](t, a.do("POST", "/api/forges/auth", map[string]any{"forge": "nope", "token": "t"}), http.StatusNotFound)
+	want[map[string]any](t, a.do("POST", "/api/forges/auth", map[string]any{"forge": "gh"}), http.StatusBadRequest)
 	if strings.Contains(a.logs(), "s3cret") {
 		t.Errorf("the token is logged:\n%s", a.logs())
 	}

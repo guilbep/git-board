@@ -17,7 +17,8 @@ import (
 // The GitHub Project bridge (tools/ghproject): [github-project]'s
 // Project, its fields kept in step with the labels. The token is the
 // GitHub forge's (ADR 0010): the posting account of the first GitHub
-// [forges] table, else any account on github.com.
+// [forges] table, else yours on the host (what forge login stores by
+// default), else any account on github.com.
 
 // ErrNoProject is a bridge command on a board whose .git-board.toml
 // names no Project.
@@ -83,7 +84,13 @@ func (b *Board) projectSession(ctx context.Context) (*ghproject.Config, ghprojec
 	if err := b.switched(ctx); err != nil {
 		return nil, nil, err
 	}
-	p, err := OpenProjectV2(ctx, cmp.Or(c.Forge.Host, "github.com"), c.Forge.Login, c.Owner, c.Number)
+	host := cmp.Or(c.Forge.Host, "github.com")
+	login := c.Forge.Login
+	if login == "" { // a table with no login, or no table: yours, what
+		// forge login stores by default, else any account on the host
+		login = b.myLogin(ctx, host)
+	}
+	p, err := OpenProjectV2(ctx, host, login, c.Owner, c.Number)
 	if err != nil {
 		return nil, nil, err
 	}

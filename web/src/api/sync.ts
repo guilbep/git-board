@@ -53,3 +53,42 @@ export interface NewForge {
 export function addForge(f: NewForge): Promise<{ name: string }> {
   return send('POST', '/api/forges', { body: f });
 }
+
+// The forges' tokens as forge status reads them (routes 54, 55): each
+// forge, and for each of its accounts whether a token is found, and
+// where. check asks each forge whose each token is (the network). Never
+// a token's value.
+export interface ForgeToken {
+  login: string;
+  role: string; // posting (the forge's table's login) or you
+  found: boolean;
+  source?: string; // an environment variable, or git's credential helper
+  owner?: string; // checked: the login the forge says the token is
+  error?: string; // checked: what the forge answered instead
+}
+
+export interface ForgeAuth {
+  name: string;
+  kind: string;
+  host: string;
+  project: string;
+  sync: boolean;
+  discovered?: boolean; // found in origin's URLs, no [forges] table
+  tokens: ForgeToken[];
+}
+
+export function getForgeAuth(check = false): Promise<{ items: ForgeAuth[] }> {
+  return get(`/api/forges/auth${check ? '?check=1' : ''}`);
+}
+
+// a token stored in git's credential helper (forge login, ADR 0010): on
+// the request's body alone, never shown again
+export interface NewToken {
+  forge: string;
+  login?: string; // '' : yours on the host, else the forge's posting account
+  token: string;
+}
+
+export function storeForgeToken(t: NewToken): Promise<{ forge: string; host: string; login: string }> {
+  return send('POST', '/api/forges/auth', { body: t });
+}

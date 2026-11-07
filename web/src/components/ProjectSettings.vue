@@ -7,8 +7,8 @@
   <div class="set-panel pj">
     <h2 class="h4">GitHub Project</h2>
     <p class="pj-lead">
-      The Project's fields kept in step with the labels: a field changed on one side since both agreed takes that side;
-      changed on both, it is a conflict, left alone until you keep one.
+      The board is the truth; the Project mirrors the fields you give it, kept in step with the labels: a field changed on one
+      side since both agreed takes that side; changed on both, it is a conflict, left alone until you keep one.
     </p>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert"><b>Not done.</b> {{ error }}</p>
     <p v-if="status?.problem" class="epfl-alert epfl-alert-danger" role="alert">[github-project]: {{ status.problem }}</p>

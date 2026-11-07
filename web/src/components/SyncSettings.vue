@@ -14,6 +14,7 @@
         <h2 class="h4">Sync</h2>
         <p class="sy-lead">
           Where your issues go besides this clone: one Sync pulls {{ remote }}, syncs the forges, then pushes. Each row does it for its side alone.
+          The board is the one truth — each forge and the GitHub Project mirror the fields you give them, and every write either side accepts is recorded, so switching one on, off or round moves only what changed since.
           The forges are kept in <code>.git-board.toml</code>; the tokens, in git's credential helper. <button type="button" class="gb-linkbtn" @click="guideOpen = true">How forges work</button>
         </p>
       </div>
@@ -51,7 +52,7 @@
                 <span>{{ f.project }}</span>
                 <div class="sy-note">
                   {{ f.discovered ? 'found in the remotes' : 'in .git-board.toml' }}
-                  <template v-if="placesLine(f.name)"> · fields: {{ placesLine(f.name) }} · <router-link to="/settings/fields">change it in Fields</router-link></template>
+                  <template v-if="placesLine(f.name)"> · fields live here: {{ placesLine(f.name) }} · <router-link to="/settings/fields">change it in Fields</router-link></template>
                 </div>
               </td>
               <td>
@@ -125,6 +126,8 @@
       </section>
     </q-dialog>
 
+    <ForgeTokens :key="forges.map((f) => f.name).join(',')" @changed="reload" />
+
     <AddForgeDialog v-model="adding" :found="forges.filter((f) => f.discovered)" @added="reload" @guide="guideOpen = true" />
     <ForgesGuide v-model="guideOpen" />
   </div>
@@ -142,6 +145,7 @@ import { onLive } from '@/live';
 import { loadSync, syncStatus } from '@/sync';
 import { reportWords, remoteWords, stepWords } from '@/ways';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
+import ForgeTokens from '@/components/ForgeTokens.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import SyncProgress from '@/components/SyncProgress.vue';

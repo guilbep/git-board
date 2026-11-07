@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/guilbep/git-board/app"
 )
@@ -59,6 +60,52 @@ func (s *Server) removeForge(ctx context.Context, r forgeReq) (Reply, error) {
 func credentials(ctx context.Context, _ none) (items[app.Credential], error) {
 	cs, err := board(ctx).Credentials(ctx)
 	return items[app.Credential]{Items: cs}, err
+}
+
+// forgeAuthReq is the read of the forges' tokens: check asks each forge
+// whose each token is (the network), as forge status --check does.
+type forgeAuthReq struct {
+	Check bool `query:"check"`
+}
+
+// forgeAuths answers forge status: each forge, and for each of its
+// accounts (the posting login, yours) whether a token is found and
+// where. Never a token's value.
+func forgeAuths(ctx context.Context, r forgeAuthReq) (items[app.ForgeStatus], error) {
+	list, err := board(ctx).ForgeStatuses(ctx, r.Check)
+	return items[app.ForgeStatus]{Items: list}, err
+}
+
+// newToken is a token to store: for a forge (by its name, as forge
+// status lists it), for login ("" : yours on its host, else the forge's
+// posting account), read from the body alone, never logged.
+type newToken struct {
+	Forge string `json:"forge"`
+	Login string `json:"login"`
+	Token string `json:"token"`
+}
+
+// tokenStored answers what was stored, where: the token itself never.
+type tokenStored struct {
+	Forge string `json:"forge"`
+	Host  string `json:"host"`
+	Login string `json:"login"`
+}
+
+// storeToken keeps a token in git's credential helper (forge login, ADR
+// 0010): git credential approve with it on the input alone.
+func (s *Server) storeToken(ctx context.Context, r newToken) (Reply, error) {
+	if r.Token = strings.TrimSpace(r.Token); r.Token == "" {
+		return Reply{}, invalid("token", errors.New("a token, on the body alone"))
+	}
+	f, who, err := board(ctx).LoginFor(ctx, r.Forge, r.Login)
+	if err != nil {
+		return Reply{}, on("forge", err)
+	}
+	if err := app.StoreToken(ctx, f, who, r.Token); err != nil {
+		return Reply{}, on("token", err)
+	}
+	return Reply{Status: http.StatusCreated, Body: tokenStored{Forge: r.Forge, Host: f.Host, Login: who}}, nil
 }
 
 var errNoSync = errors.New("sync: true or false")

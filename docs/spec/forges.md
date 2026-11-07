@@ -2,7 +2,10 @@
 
 An adapter speaks to one forge's API for sync (M4). This page says what
 GitHub and GitLab need, as checked live for the git-bug fork that came
-before the core. [Sync](sync.md) gives the rules they serve.
+before the core. [Sync](sync.md) gives the rules they serve, and
+[Where a value lives](places.md) the model they serve it in: one truth,
+many mirrors, the three decisions that place a value, and the
+agreement that makes a mirror reversible.
 
 An adapter implements the core's `forge.Forge` and passes its conformance
 suite, `forge/forgetest`, over a fake forge served as that forge's
