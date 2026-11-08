@@ -389,6 +389,9 @@ func (s *Server) initConfig(ctx context.Context, r initConfigReq) (Reply, error)
 		res.Path, res.Lines, err = app.InitConfig(ctx, board(ctx).Dir, r.Template)
 		return err
 	})
+	if errors.Is(err, app.ErrConfigExists) {
+		err = &app.Error{Class: app.Changed, Err: err} // 409: init never overwrites
+	}
 	if err != nil {
 		return Reply{}, on("template", err)
 	}
