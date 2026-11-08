@@ -163,17 +163,44 @@ answers them per issue, and does not answer these questions yet.
   keeps it on the forge). On a shared forge, three teams see this
   behavior. Confirm that it is still the want.
 
+## The goals, freshened on 2026-11-08
+
+Three inputs arrived after the session of 2026-11-07. Each fits the
+invariant, and each raises the order of one piece.
+
+- People sync between GitHub and GitLab from the command line, and the
+  way must be easy. GitLab is the backup. This is use case 1 and use
+  case 6 together: GitHub runs both ways, and the GitLab mirror
+  receives with `way = "push"`. The easy path is one command that adds
+  the backup forge and sets its way, plus the Tokens section for the
+  token. `git board forge status` says what is missing, in words.
+- People choose where the board is kept when they open the app for the
+  first time. Today the choice is `board.datastore` in git config, and
+  the Datastore page states it. The want is a question at the first
+  open, with git as the default. This is decision one of the three,
+  made visible.
+- The long-term goal is the hosted service of
+  [issue 1](https://github.com/guilbep/git-board/issues/1): one server
+  serves every repository of the organization, behind EPFL login, with
+  git as the only store for issues, and no issue database. The hosted
+  server runs one board per repository on the same app, so the model of
+  this page holds unchanged, and the datastore choice above stays
+  open per board. The pilot of issue 1 lists its first steps.
+
 ## Q6. What is built, in what order
 
 | Piece | Serves | Size |
 |---|---|---|
 | The definition section in ADR 0022 | the wording of the invariant | an edit |
-| The key `way` for each forge | use case 1, and the read-only mirror of use case 6 | the configuration, the engine, the words of the Sync page |
+| The key `way` for each forge | the GitLab backup, use case 1 and 6 | the configuration, the engine, the words of the Sync page |
+| One command that adds a backup forge | the easy command line of 2026-11-08 | a command on the forge commands |
+| The datastore question at the first open | decision one, made visible | a first-run step in the app, git as the default |
 | The Project homes written into the forge tables | the last implicit state | the configure command, the migration, and the removal of the Project clause |
 | A filter for the issues of a forge | the shared forge | the configuration and the engine, only if Q5 finds the want |
-| An S3 datastore | use case 7 | an implementation of the `Datastore` interface, a project of its own |
+| An S3 datastore | use case 7, and the hosted service | an implementation of the `Datastore` interface, a project of its own |
 
-Proposal for the session: decide the words of Q1 first. Then order the
-direction key of Q3 and the written homes of Q4. Leave the filter of
-Q5 and the S3 datastore as recorded wants, until a board asks for
-them.
+Proposal for the session: decide the words of Q1 first. Then build the
+`way` key and the one command, because the GitLab backup waits for
+them. Then the datastore question at the first open. The hosted
+service of issue 1 runs on its own plan, and the pilot uses what this
+page decides.
