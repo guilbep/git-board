@@ -51,8 +51,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "GET /api/config", getConfig)
 	Route(mux, "PUT /api/config", s.putConfig)
 	Route(mux, "PATCH /api/config", s.patchConfig)
+	Route(mux, "POST /api/config/init", s.initConfig)
 
 	Route(mux, "GET /api/datastore", datastore)
+	putMux := http.NewServeMux()
+	Route(putMux, "PUT /api/datastore", s.putDatastore)
+	mux.Handle("PUT /api/datastore", loopbackOnly(putMux))
 	copyMux := http.NewServeMux()
 	Route(copyMux, "POST /api/datastore/copy", copyDatastore)
 	mux.Handle("POST /api/datastore/copy", loopbackOnly(copyMux))
@@ -188,6 +192,9 @@ type setMeReq struct {
 	Name    string  `json:"name"`
 	Email   string  `json:"email"`
 	Avatars *string `json:"avatars"`
+	// Global: write board.avatars at git's global level, so every
+	// repository of the user reads it.
+	Global bool `json:"global,omitempty"`
 }
 
 // setMe changes who writes, or where pictures come from, then opens the
@@ -209,7 +216,7 @@ func (s *Server) setMe(ctx context.Context, r setMeReq) (meRes, error) {
 		return meRes{}, invalid("id", errors.New("an id, a name and an email, or avatars"))
 	}
 	if err == nil && r.Avatars != nil {
-		err = b.SetAvatars(ctx, *r.Avatars)
+		err = b.SetAvatars(ctx, *r.Avatars, r.Global)
 	}
 	if err != nil {
 		return meRes{}, on("id", err)
@@ -355,6 +362,34 @@ func (s *Server) patchConfig(ctx context.Context, r patchConfigReq) (Reply, erro
 		}
 	}
 	return configReply(dir, text), nil
+}
+
+// initConfigReq names the template the file starts from: "" the default,
+// else the CLI's --template (a built-in name, a file, or a URL).
+type initConfigReq struct {
+	Template string `json:"template,omitempty"`
+}
+
+// initRes answers the file written, and what reading the forge said.
+type initRes struct {
+	Path  string   `json:"path"`
+	Lines []string `json:"lines"`
+}
+
+// initConfig writes the default .git-board.toml, as `git board init`
+// does: the template, seeded with origin's labels and its Project's
+// fields when it can read them. It never overwrites one: a file there
+// already is an error, 409.
+func (s *Server) initConfig(ctx context.Context, r initConfigReq) (Reply, error) {
+	var res initRes
+	err := s.writeConfig(ctx, func() (err error) {
+		res.Path, res.Lines, err = app.InitConfig(ctx, board(ctx).Dir, r.Template)
+		return err
+	})
+	if err != nil {
+		return Reply{}, on("template", err)
+	}
+	return Reply{Status: http.StatusCreated, Body: res}, nil
 }
 
 // tomlish is a JSON value as TOML writes it: a whole number an integer.

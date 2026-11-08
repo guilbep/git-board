@@ -17,12 +17,14 @@
       <div class="set-forms">
         <p v-if="modelError" class="epfl-alert epfl-alert-danger" role="alert">{{ modelError }}</p>
 
-        <!-- no file yet: git board init writes the default -->
+        <!-- no file yet: the default is written from here -->
         <div v-else-if="configModel && !configModel.exists" class="fs-start">
           <p class="fs-lead">
-            No project file yet: every <code>ns:value</code> label is a field, in no order. In a terminal, <code>git board init</code> writes
-            the default one: the statuses, priorities, kinds and estimates, the branch names and four views, each explained in a comment.
+            No project file yet: every <code>ns:value</code> label is a field, in no order.
+            <button type="button" class="gb-linkbtn" :disabled="starting" @click="start">{{ starting ? 'Writing…' : 'Write the default file' }}</button>
+            — the statuses, priorities, kinds and estimates, the branch names and four views, each explained in a comment.
           </p>
+          <p v-if="startError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not written.</b> {{ startError }}</p>
         </div>
 
         <p v-else-if="!draft.value.value" class="fs-muted">Loading…</p>
@@ -336,7 +338,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { onLive } from '@/live';
-import { getLabels, getProject, migrateField, type MigratePlan, type ProjectStatus } from '@/api';
+import { getLabels, getProject, initConfig, migrateField, type MigratePlan, type ProjectStatus } from '@/api';
 import type { ConfigField } from '@/configparse';
 import { fieldPresets, takeUnique } from '@/configpresets';
 import { allNumbers, inferType, type FieldType } from '@/fieldinfer';
@@ -1011,6 +1013,22 @@ function runMigration(field: string) {
 const project = ref<ProjectStatus | null>(null);
 const loadProject = () => getProject().then((p) => (project.value = p)).catch(() => {});
 watch(() => route.params.tab, (tab) => tab === 'fields' && void loadProject());
+
+// the default project file, written as `git board init` does, from here
+const starting = ref(false);
+const startError = ref('');
+async function start() {
+  starting.value = true;
+  startError.value = '';
+  try {
+    await initConfig();
+    await draft.load();
+  } catch (e) {
+    startError.value = message(e);
+  } finally {
+    starting.value = false;
+  }
+}
 
 onMounted(() => {
   void loadProject();

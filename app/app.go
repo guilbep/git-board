@@ -285,21 +285,63 @@ func Views(dir string) (map[string]issues.View, error) {
 // AvatarsKey is the git config key saying where pictures come from.
 const AvatarsKey = "board.avatars"
 
-// SetAvatars writes board.avatars in the clone's own config: forge,
-// gravatar or none; "" unsets it, back to forge.
-func (b *Board) SetAvatars(ctx context.Context, mode string) error {
+// SetAvatars writes board.avatars: forge, gravatar or none; "" unsets
+// it, back to forge. Global writes it at git's global level, so every
+// repository of the user reads it; a local one is read over it.
+func (b *Board) SetAvatars(ctx context.Context, mode string, global bool) error {
 	switch mode {
 	case "":
-		_, err := gitRun(ctx, b.Dir, "config", "--local", "--unset-all", AvatarsKey)
+		_, err := gitRun(ctx, b.Dir, "config", scopeFlag(global), "--unset-all", AvatarsKey)
 		if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 5 {
 			return nil // it wasn't set
 		}
 		return err
 	case string(people.Forge), string(people.Gravatar), string(people.None):
-		_, err := gitRun(ctx, b.Dir, "config", "--local", AvatarsKey, mode)
+		_, err := gitRun(ctx, b.Dir, "config", scopeFlag(global), AvatarsKey, mode)
 		return err
 	}
 	return &Error{Class: Usage, Err: fmt.Errorf("%s %q: forge, gravatar or none", AvatarsKey, mode)}
+}
+
+// scopeFlag is where a git config write lands: the clone, or the user.
+func scopeFlag(global bool) string {
+	if global {
+		return "--global"
+	}
+	return "--local"
+}
+
+// SetDatastore names the datastore this clone keeps its board in: the
+// board.datastore key of its own git config ("" : git, the default). The
+// value is opened first, so a name no datastore understands is refused
+// and the clone's board still opens. GIT_BOARD_DATASTORE, when set, wins
+// over what this writes.
+func (b *Board) SetDatastore(ctx context.Context, value string) error {
+	if value != "" && value != "git" {
+		g, err := git.Open(ctx, b.Dir)
+		if err != nil {
+			return err
+		}
+		ds, err := OpenDatastore(ctx, g, b.Dir, value)
+		if err != nil {
+			g.Close()
+			return &Error{Class: Usage, Err: err}
+		}
+		ds.Close()
+		g.Close()
+	}
+	if value == "git" {
+		value = ""
+	}
+	if value == "" {
+		_, err := gitRun(ctx, b.Dir, "config", scopeFlag(false), "--unset-all", DatastoreKey)
+		if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 5 {
+			return nil // it wasn't set: git is the default
+		}
+		return err
+	}
+	_, err := gitRun(ctx, b.Dir, "config", scopeFlag(false), DatastoreKey, value)
+	return err
 }
 
 // Remotes are the repository's git remotes, by name.

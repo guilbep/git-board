@@ -13,7 +13,17 @@
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert"><b>Not done.</b> {{ error }}</p>
     <p v-if="status?.problem" class="epfl-alert epfl-alert-danger" role="alert">[github-project]: {{ status.problem }}</p>
     <p v-else-if="status && !status.project" class="epfl-alert epfl-alert-info" role="note">
-      No GitHub Project is configured: <code>git board project configure --owner &lt;org&gt; --project &lt;number&gt;</code>.
+      <span class="pj-cfg-lead">No GitHub Project is configured. Give it the owner and the number (the one in the Project's URL), and the board writes it here.</span>
+      <form class="pj-cfg" @submit.prevent="configure">
+        <label class="pj-cfg-label">Owner
+          <input v-model="owner" class="epfl-input" type="text" placeholder="EPFL-ENAC" required />
+        </label>
+        <label class="pj-cfg-label">Number
+          <input v-model.number="number" class="epfl-input" type="number" min="1" placeholder="40" required />
+        </label>
+        <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="saving || !owner || !number">{{ saving ? 'Saving…' : 'Configure' }}</button>
+      </form>
+      <p v-if="cfgError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not saved.</b> {{ cfgError }}</p>
     </p>
     <template v-else-if="status">
       <p class="pj-meta">
@@ -73,7 +83,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { applyProject, checkProject, getProject, message, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
+import { applyProject, checkProject, getProject, message, patchConfig, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
+import { configModel, loadConfigModel, takeFile } from '@/configmodel';
 import { safeHref } from '@/links';
 import { issueRef, plural, runWords, shown } from '@/projectview';
 
@@ -101,6 +112,31 @@ function apply(side: 'labels' | 'both') {
   if (window.confirm(`${what}. Conflicts stay held. Go on?`)) void run(() => applyProject(side), side === 'both' ? 'Syncing…' : 'Pulling…');
 }
 
+// the [github-project] table, written from the version the file was read
+// at, then the Project read again; the same flow the forges' forms use
+const owner = ref('');
+const number = ref<number | null>(null);
+const saving = ref(false);
+const cfgError = ref('');
+async function configure() {
+  saving.value = true;
+  cfgError.value = '';
+  try {
+    await loadConfigModel();
+    takeFile(
+      await patchConfig(
+        { 'github-project.owner': owner.value, 'github-project.number': number.value },
+        configModel.value?.hash ?? '',
+      ),
+    );
+    status.value = await getProject();
+  } catch (e) {
+    cfgError.value = message(e);
+  } finally {
+    saving.value = false;
+  }
+}
+
 function resolve(c: ProjectConflict, keep: 'git-board' | 'project') {
   void run(() => resolveProject(issueRef(c), c.field, keep), `Keeping ${keep === 'project' ? 'the Project’s' : 'git-board’s'} value…`);
 }
@@ -126,4 +162,7 @@ onMounted(() => void run(getProject, ''));
 .pj-del { color: var(--danger-fg, var(--fg)); }
 .pj-write { color: var(--info-fg); }
 .pj-warn { color: var(--warning-fg, var(--fg-muted)); }
+.pj-cfg-lead { display: block; margin-bottom: .5rem; }
+.pj-cfg { display: flex; flex-wrap: wrap; align-items: end; gap: .5rem; }
+.pj-cfg-label { display: grid; gap: .25rem; font-size: .875rem; }
 </style>

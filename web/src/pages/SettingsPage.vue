@@ -78,7 +78,8 @@
           <p v-if="avatarError" class="gb-save-error" role="alert"><b>Not saved.</b> {{ avatarError }}</p>
           <p class="gb-hint">
             This sets <code>board.avatars</code> in this repository’s git config, for you alone. A picture that can’t load shows the initials.
-            From a terminal, <code>git config --global board.avatars gravatar</code> sets it for every repository.
+            <button type="button" class="gb-linkbtn" :disabled="avatarSaving" @click="pickAvatarsEverywhere">{{ avatarSaving ? 'Saving…' : 'Set it for every repository of yours' }}</button>
+            writes it at git’s global level, where a repository’s own choice is read over it.
           </p>
         </section>
       </div>
@@ -189,6 +190,20 @@ async function pickAvatars(v: AvatarsMode) {
   avatarError.value = '';
   try {
     me.value = await setMe({ avatars: v });
+  } catch (e) {
+    avatarError.value = message(e);
+  } finally {
+    avatarSaving.value = false;
+  }
+}
+
+// the same choice, written at git's global level, so every repository
+// of the user reads it (a repository's own board.avatars wins over it)
+async function pickAvatarsEverywhere() {
+  avatarSaving.value = true;
+  avatarError.value = '';
+  try {
+    me.value = await setMe({ avatars: avatarChoice.value, global: true });
   } catch (e) {
     avatarError.value = message(e);
   } finally {

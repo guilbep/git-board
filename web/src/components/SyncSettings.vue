@@ -30,7 +30,7 @@
         <tbody>
           <tr v-if="!st.remotes.length">
             <td><b>{{ remote }}</b> <span class="sy-kind">git</span></td>
-            <td colspan="5" class="sy-wrap">{{ kept ? `None: not needed, ${kept}.` : `None: git remote add ${remote} <url>. The git steps are skipped.` }}</td>
+            <td colspan="5" class="sy-wrap">{{ kept ? `None: not needed, ${kept}.` : `None: this clone has no ${remote} remote, so the git steps are skipped.` }}</td>
           </tr>
           <tr v-for="r in st.remotes" :key="r">
             <td><b>{{ r }}</b> <span class="sy-kind">git</span></td>

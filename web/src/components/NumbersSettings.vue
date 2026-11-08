@@ -2,8 +2,7 @@
      (docs/guide/configuration.md, Numbers). Start them: a prefix from the
      repository's name, a start above the forges' numbers (POST
      /api/numbers {prefix, start}); then number the issues that have none
-     ({}). Where they stand (GET /api/numbers) comes later (api.md, 37):
-     `git board numbers` says it meanwhile. -->
+     ({}). Where they stand: this page, and every issue's number. -->
 <template>
   <div class="set-panel nb">
     <h2 class="h4">Numbers</h2>
@@ -38,7 +37,6 @@
         <ul>
           <li>Every issue made here, or imported later, takes the next number when it reaches origin.</li>
           <li>The issues origin has without one take theirs at once: <button type="button" class="gb-linkbtn" :disabled="busy || datastore?.counter === false" @click="numberAll">Number them now</button>.</li>
-          <li>In a terminal: <code>git board numbers</code>.</li>
         </ul>
       </aside>
     </div>

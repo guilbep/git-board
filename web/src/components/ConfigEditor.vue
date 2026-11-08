@@ -21,7 +21,11 @@
       </template>
     </div>
 
-    <p v-if="file && !file.exists && !text" class="gb-hint">No project file yet: every <code>ns:value</code> label is a field, in no order. In a terminal, <code>git board init</code> writes the default one, each key explained in a comment.</p>
+    <p v-if="file && !file.exists && !text" class="gb-hint">
+      No project file yet: every <code>ns:value</code> label is a field, in no order.
+      <button type="button" class="gb-linkbtn" :disabled="initing" @click="init">{{ initing ? 'Writing…' : 'Write the default file' }}</button>
+      — the statuses, priorities, kinds and estimates, the branch names and four views, each explained in a comment, seeded with origin's labels and its Project's fields when it can read them.
+    </p>
 
     <div v-if="reviewing && dirty" class="cfg-diff" aria-label="Changes to save">
       <div v-for="(h, i) in hunks" :key="i" :class="`cfg-d cfg-d${h.op === ' ' ? 'same' : h.op === '+' ? 'add' : h.op === '-' ? 'del' : 'skip'}`">
@@ -100,7 +104,7 @@
 <script setup lang="ts">
 import { noteUse } from '@/keys';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { getConfig, getDocs, isStale, putConfig, type ConfigFile, type DocSection } from '@/api';
+import { getConfig, getDocs, initConfig, isStale, putConfig, type ConfigFile, type DocSection } from '@/api';
 import { takeFile } from '@/configmodel';
 import { checkOf, type ConfigCheck } from '@/configcheck';
 import { docSectionAt } from '@/configsnippets';
@@ -282,6 +286,22 @@ async function load(keepSaved = false) {
     void runCheck();
   } catch (e) {
     saveError.value = message(e);
+  }
+}
+
+// the default file, written as `git board init` does, from here
+const initing = ref(false);
+async function init() {
+  initing.value = true;
+  saveError.value = '';
+  try {
+    await initConfig();
+    emit('saved');
+    await load();
+  } catch (e) {
+    saveError.value = `Not written: ${message(e)}`;
+  } finally {
+    initing.value = false;
   }
 }
 

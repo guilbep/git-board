@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -326,4 +327,29 @@ type copiedRes struct {
 func copyDatastore(ctx context.Context, r copyReq) (copiedRes, error) {
 	c, err := app.CopyDatastore(ctx, board(ctx).Dir, r.From, r.To)
 	return copiedRes{To: c.To, Entities: c.Entities, Counter: c.Counter}, on("to", err)
+}
+
+// putDatastoreReq is the datastore this clone keeps its board in, as
+// board.datastore in its own git config: "" or "git" for git, else the
+// value, a postgres:// URL or markdown:<dir>. A loopback request alone:
+// a URL can hold a password, and the key is the clone's own.
+type putDatastoreReq struct {
+	Value string `json:"value"`
+}
+
+// putDatastore is route 28: the datastore choice, made from the web app.
+// The value is opened first, so a name no datastore understands is
+// refused and the clone's board still opens; the board then opens again,
+// and the pages hear a config event. No restart, no terminal.
+func (s *Server) putDatastore(ctx context.Context, r putDatastoreReq) (keptRes, error) {
+	if err := board(ctx).SetDatastore(ctx, strings.TrimSpace(r.Value)); err != nil {
+		return keptRes{}, on("value", err)
+	}
+	if err := s.boards.reopen(ctx); err != nil {
+		return keptRes{}, err
+	}
+	s.publish(ctx, Event{Kind: "config", By: clientOf(ctx)})
+	h := s.boards.get()
+	defer s.boards.release(h)
+	return datastore(context.WithValue(ctx, boardKey{}, h.b), none{})
 }

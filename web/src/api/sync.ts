@@ -95,6 +95,21 @@ export function storeForgeToken(t: NewToken): Promise<{ forge: string; host: str
   return send('POST', '/api/forges/auth', { body: t });
 }
 
+// the datastore this clone keeps its board in, as board.datastore in its
+// own git config: '' or 'git' for git, else the value (a postgres:// URL,
+// markdown:<dir>). The value is opened first, so a name no datastore
+// understands is refused and the board still opens. No restart.
+export function setDatastore(value: string): Promise<{ name: string; where: string; replica: boolean; counter: boolean }> {
+  return send('PUT', '/api/datastore', { body: { value } });
+}
+
+// the default .git-board.toml, written as `git board init` does: the
+// template ('' the default), seeded with origin's labels and its
+// Project's fields when it can read them. Never overwrites one.
+export function initConfig(template = ''): Promise<{ path: string; lines: string[] }> {
+  return send('POST', '/api/config/init', { body: template ? { template } : {} });
+}
+
 // a forge's way, its direction: push (a backup: the issues go there, and
 // nothing comes back), pull (read-only), or both
 export type ForgeWay = 'push' | 'pull' | 'both';

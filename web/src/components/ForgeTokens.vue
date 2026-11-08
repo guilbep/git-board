@@ -11,7 +11,7 @@
       <div>
         <h3 class="h5">Tokens</h3>
         <p class="ft-lead">
-          Each forge syncs with a token: taken from <code>GITHUB_TOKEN</code> / <code>GITLAB_TOKEN</code>, else git's credential helper — the tokens <code>git board forge status</code> reads. A token is never shown.
+          Each forge syncs with a token: taken from <code>GITHUB_TOKEN</code> / <code>GITLAB_TOKEN</code>, else git's credential helper, as the list below shows. A token is never shown.
           <button type="button" class="gb-linkbtn" @click="guideOpen = true">How forges work</button>
         </p>
       </div>
@@ -65,7 +65,7 @@
             <div>
               <label class="ft-label" for="ft-token">The token</label>
               <input id="ft-token" v-model="draft.token" class="epfl-input" type="password" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" required />
-              <p class="ft-note">It goes to git's credential helper (<code>git credential approve</code>), never to <code>.git-board.toml</code>, and is never shown again. On a terminal, <code>gh auth token | git board forge login &lt;forge&gt;</code> stores the same.</p>
+              <p class="ft-note">It goes to git's credential helper (the same store <code>git credential approve</code> fills), never to <code>.git-board.toml</code>, and is never shown again. Every repository of yours on this machine reads it.</p>
             </div>
             <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
           </div>
@@ -105,7 +105,7 @@ const who = (t: ForgeToken) =>
 // the token, said as forge status says it: found and where, and, checked,
 // whose the forge says it is. Never the token.
 function line(t: ForgeToken): string {
-  if (!t.found) return 'none found — Add a token, or git board forge login';
+  if (!t.found) return 'none found: add one above';
   if (t.error) return `found (${t.source}), but the forge refused it: ${t.error}`;
   if (t.owner && t.login && t.owner.toLowerCase() !== t.login.toLowerCase()) return `found (${t.source}), but it is ${t.owner}'s`;
   if (t.owner) return `found (${t.source}), it is ${t.owner}'s`;
