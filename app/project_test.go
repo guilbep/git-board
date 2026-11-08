@@ -212,8 +212,31 @@ func TestConfigureProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	text, _, _ := ConfigText(b.Dir)
-	if !strings.Contains(string(text), "write = true") {
-		t.Errorf("write lost:\n%s", text)
+	if !strings.Contains(string(text), "write = true") || !strings.Contains(string(text), `fields = ["status", "prio", "mod", "est", "sprint", "moscow", "milestone"]`) {
+		t.Errorf("write lost, or the fields not stated:\n%s", text)
+	}
+	// a board that says its Project holds two fields keeps saying so
+	if _, err := SetConfigKeys(b.Dir, map[string]any{"github-project.fields": []any{"status", "prio"}}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	b2, err := Open(t.Context(), b.Dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b2.Close()
+	held, _ := b2.Config.Tools.GithubProject.Get()
+	if !held.Holds("prio") || held.Holds("moscow") {
+		t.Errorf("two fields held: %v", held.Columns())
+	}
+	// on GitHub, prio stays off the labels; moscow is a label again
+	if !b2.Config.Held("github.com/o/r", "prio:p1") || b2.Config.Held("github.com/o/r", "moscow:must") {
+		t.Errorf("held: prio:p1 %v, moscow:must %v", b2.Config.Held("github.com/o/r", "prio:p1"), b2.Config.Held("github.com/o/r", "moscow:must"))
+	}
+	if _, err := ConfigureProject(b.Dir, held, "o", 2); err != nil {
+		t.Fatal(err)
+	}
+	if text, _, _ := ConfigText(b.Dir); !strings.Contains(string(text), `fields = ["status", "prio"]`) {
+		t.Errorf("configure dropped the board's fields:\n%s", text)
 	}
 	if _, err := ConfigureProject(b.Dir, gp, "EPFL-ENAC", 40); err != nil {
 		t.Fatal(err)

@@ -15,6 +15,7 @@ import (
 	"github.com/guilbep/git-board/domain/issues"
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/forge/github"
+	"github.com/guilbep/git-board/tools"
 )
 
 func TestDecide(t *testing.T) {
@@ -49,7 +50,7 @@ const testURL = "https://github.com/o/r/issues/"
 var ghTable = forge.Table{Name: "gh", Kind: "github", Host: "github.com"}
 
 func syncConfig() *Config {
-	return &Config{Owner: "o", Number: 1, Write: true, Forge: ghTable,
+	return &Config{Owner: "o", Number: 1, Write: true, Holds: tools.DefaultProjectFields, Forge: ghTable,
 		Schema: &issues.Schema{Fields: map[string]issues.Field{
 			"status": {Single: true, Options: []string{"backlog", "comite", "ready", "in-review", "qa"},
 				Project: map[string]string{"qa": "QA Validation"}},

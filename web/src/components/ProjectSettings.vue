@@ -30,6 +30,14 @@
         <b>{{ last?.title || status.project }}</b> <span class="pj-muted">({{ status.project }})</span>
         <template v-if="last"> · {{ last.applied ? 'Ran' : 'Checked' }} {{ when(last.checked_at) }} · {{ runWords(last) }}</template>
       </p>
+      <p class="pj-meta">
+        The Project holds {{ status.fields.join(', ') || 'no field' }}: on GitHub these live in its columns, not in labels.
+        <template v-if="!status.stated">
+          This is the default, and <code>.git-board.toml</code> doesn't say it yet.
+          <button type="button" class="gb-linkbtn" :disabled="saving" @click="writeFields">{{ saving ? 'Writing…' : 'Write it in the file' }}</button>
+        </template>
+      </p>
+      <p v-if="cfgError && status.project" class="epfl-alert epfl-alert-danger" role="alert"><b>Not saved.</b> {{ cfgError }}</p>
       <p v-if="!status.write" class="epfl-alert epfl-alert-info" role="note">
         This board doesn't write to the Project (no <code>write = true</code> under <code>[github-project]</code>): a pull only updates the
         labels here, and keeping git-board's value isn't available.
@@ -83,8 +91,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { applyProject, checkProject, getProject, message, patchConfig, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
-import { configModel, loadConfigModel, takeFile } from '@/configmodel';
+import { applyProject, checkProject, configureProject, getProject, message, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
 import { safeHref } from '@/links';
 import { issueRef, plural, runWords, shown } from '@/projectview';
 
@@ -112,29 +119,28 @@ function apply(side: 'labels' | 'both') {
   if (window.confirm(`${what}. Conflicts stay held. Go on?`)) void run(() => applyProject(side), side === 'both' ? 'Syncing…' : 'Pulling…');
 }
 
-// the [github-project] table, written from the version the file was read
-// at, then the Project read again; the same flow the forges' forms use
+// [github-project] written as project configure writes it (route 58):
+// the owner, the number, and the fields the Project holds
 const owner = ref('');
 const number = ref<number | null>(null);
 const saving = ref(false);
 const cfgError = ref('');
-async function configure() {
+async function save(o: string, n: number) {
   saving.value = true;
   cfgError.value = '';
   try {
-    await loadConfigModel();
-    takeFile(
-      await patchConfig(
-        { 'github-project.owner': owner.value, 'github-project.number': number.value },
-        configModel.value?.hash ?? '',
-      ),
-    );
-    status.value = await getProject();
+    status.value = await configureProject(o, n);
   } catch (e) {
     cfgError.value = message(e);
   } finally {
     saving.value = false;
   }
+}
+const configure = () => save(owner.value.trim(), number.value ?? 0);
+// the default fields, stated in the file: the same Project configured again
+function writeFields() {
+  const [o, n] = (status.value?.project ?? '').split('/');
+  void save(o ?? '', Number(n));
 }
 
 function resolve(c: ProjectConflict, keep: 'git-board' | 'project') {

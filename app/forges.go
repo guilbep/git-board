@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
-	"slices"
 	"strings"
 	"time"
 
@@ -189,7 +188,7 @@ func (b *Board) OpenForges(ctx context.Context, tables []forge.Table) ([]NamedFo
 func (c *Config) SyncsAssignees(key string) bool {
 	gp, _ := c.Tools.GithubProject.Get()
 	inProject := func(field string) bool {
-		return len(c.Schema.Fields[field].Project) > 0 || gp.Number != 0 && slices.Contains(projectFields, field)
+		return len(c.Schema.Fields[field].Project) > 0 || gp.Holds(field)
 	}
 	return forge.Target(c.Schema, inProject, c.Forges.ForgeOf(key), "assignee") == forge.TargetAssignees
 }

@@ -301,17 +301,13 @@ func writeConfig(path, text string) error {
 	return os.WriteFile(path, []byte(text), info.Mode().Perm())
 }
 
-// projectFields are the fields the GitHub Project bridge keeps in step
-// with its Project, once [github-project] names one.
-var projectFields = []string{"status", "prio", "mod", "est", "sprint", "moscow", "milestone"}
-
 // Held says whether the forges' sync keeps a label off the forge of key
 // (forge.Forges.Held): on GitHub, a field the Project holds is the
 // Project's, by its [fields.X] project map or [github-project].
 func (c *Config) Held(key, label string) bool {
 	gp, _ := c.Tools.GithubProject.Get()
 	inProject := func(field string) bool {
-		return len(c.Schema.Fields[field].Project) > 0 || gp.Number != 0 && slices.Contains(projectFields, field)
+		return len(c.Schema.Fields[field].Project) > 0 || gp.Holds(field)
 	}
 	return c.Forges.Held(c.Schema, inProject, key, label)
 }

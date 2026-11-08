@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -69,7 +70,7 @@ func (c *Config) Project() (*ghproject.Config, error) {
 	if len(probs) > 0 {
 		return nil, usage(probs[0].Err)
 	}
-	return &ghproject.Config{Owner: gp.Owner, Number: gp.Number, Write: gp.Write, Schema: c.Schema, Forge: c.githubForge()}, nil
+	return &ghproject.Config{Owner: gp.Owner, Number: gp.Number, Write: gp.Write, Holds: gp.Columns(), Schema: c.Schema, Forge: c.githubForge()}, nil
 }
 
 // projectSession is the bridge opened: its config, the Project, the board.
@@ -170,7 +171,8 @@ func ConfigureProject(dir string, gp tools.GithubProject, owner string, number i
 		if number <= 0 || strings.ContainsAny(owner, "/ \t\r\n") {
 			return "", usage(fmt.Errorf("a Project is an owner and its number: --owner EPFL-ENAC --project 40"))
 		}
-		t := map[string]any{"owner": owner, "number": int64(number)}
+		// the fields it holds are stated: the table's own, else the default
+		t := map[string]any{"owner": owner, "number": int64(number), "fields": slices.Clone(gp.Columns())}
 		if gp.Write && strings.EqualFold(gp.Owner, owner) && gp.Number == number {
 			t["write"] = true
 		}

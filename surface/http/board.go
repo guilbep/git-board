@@ -76,6 +76,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "GET /api/forges/auth", forgeAuths)
 
 	Route(mux, "GET /api/github-project", s.projectStatus)
+	Route(mux, "PUT /api/github-project", s.configureProject)
 	Route(mux, "POST /api/github-project/{action}", s.projectAction)
 
 	Route(mux, "POST /api/markdown", markdown)

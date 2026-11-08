@@ -59,6 +59,8 @@ export interface FieldPlace {
 export interface ProjectStatus {
   project: string; // owner/number, "" when none is configured
   write: boolean;
+  fields: string[]; // the fields the Project holds as columns
+  stated: boolean; // [github-project] fields names them; else they are the default
   last: ProjectRun | null;
   places: FieldPlace[];
   problem?: string;
@@ -67,6 +69,12 @@ export interface ProjectStatus {
 
 export function getProject(): Promise<ProjectStatus> {
   return get('/api/github-project');
+}
+
+// route 58: the Project named, as project configure does; the fields it
+// holds are written with it
+export function configureProject(owner: string, number: number): Promise<ProjectStatus> {
+  return send('PUT', '/api/github-project', { body: { owner, number } });
 }
 
 export function checkProject(): Promise<ProjectStatus> {

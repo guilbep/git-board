@@ -444,12 +444,15 @@ Until then they answer 404 `not-found`.
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: the risk, a status move, approve the plan, the spec's verdict, review and resolve, open, edit or merge a pull, verify, check, sign off (built; below) |
 | 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
 | 52 | `GET /api/github-project` | the GitHub Project bridge: its last check, and where each field lives (*built*) |
-| 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve`; its table is `PATCH /api/config`'s (*built*) |
+| 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve` (*built*) |
+| 58 | `PUT /api/github-project` | `{owner, number}`: `[github-project]` written as `project configure` writes it, the fields it holds stated with it; owner `""` removes it; answers as 52 (*built*) |
 
 **The GitHub Project (52, 53)**, built with the bridge
 (`tools/ghproject`). Only an action reads the Project: a read
-answers the last run, which the server keeps. Both answer `{project,
-write, last, places, problem}`: `project` is `owner/number`, `""` when
+answers the last run, which the server keeps. They answer `{project,
+write, fields, stated, last, places, problem}`: `fields` are those the
+Project holds as its columns, `stated` whether `[github-project] fields`
+names them (else they are the default seven); `project` is `owner/number`, `""` when
 `[github-project]` names none (and `problem` when the table doesn't
 read); `last` the last run, `null` before any, `{project, title,
 checked_at, side, applied, write, truncated, items, skipped, columns,
@@ -719,7 +722,7 @@ built), and the forge-mapping migration (54), ported for v0.12.
 | `POST /api/sync/check` | `POST /api/github-project/check` |
 | `POST /api/sync/apply` | `POST /api/github-project/apply` |
 | `POST /api/sync/resolve` | `POST /api/github-project/resolve`: `keep` the same, `issue` for `number` |
-| `PUT /api/github-project` | `PATCH /api/config`: `[github-project]` |
+| `PUT /api/github-project` | the same route, 58: `{owner, number}` |
 | `DELETE /api/github-project` | `PATCH /api/config` with `null` |
 | `GET /api/start-over` | dropped: starting over is the CLI's (`git board reset`), a rare and destructive act |
 | `POST /api/start-over` | dropped: the same |

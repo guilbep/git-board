@@ -440,7 +440,7 @@ func checkTemplate(cfg *Config) []LintFinding {
 	}
 	gp, _ := cfg.Tools.GithubProject.Get()
 	inProject := func(field string) bool {
-		return len(cfg.Schema.Fields[field].Project) > 0 || gp.Number != 0 && slices.Contains(projectFields, field)
+		return len(cfg.Schema.Fields[field].Project) > 0 || gp.Holds(field)
 	}
 	for _, field := range tmpl.Schema.FieldOrder() {
 		have, ok := cfg.Schema.Fields[field]
