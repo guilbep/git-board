@@ -15,7 +15,6 @@ import (
 	"github.com/guilbep/git-board/domain/issues"
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/forge/github"
-	"github.com/guilbep/git-board/tools"
 )
 
 func TestDecide(t *testing.T) {
@@ -50,7 +49,7 @@ const testURL = "https://github.com/o/r/issues/"
 var ghTable = forge.Table{Name: "gh", Kind: "github", Host: "github.com"}
 
 func syncConfig() *Config {
-	return &Config{Owner: "o", Number: 1, Write: true, Holds: tools.DefaultProjectFields, Forge: ghTable,
+	return &Config{Owner: "o", Number: 1, Write: true, Holds: seven, Forge: ghTable,
 		Schema: &issues.Schema{Fields: map[string]issues.Field{
 			"status": {Single: true, Options: []string{"backlog", "comite", "ready", "in-review", "qa"},
 				Project: map[string]string{"qa": "QA Validation"}},
@@ -705,3 +704,7 @@ func TestSyncDateAndTextColumns(t *testing.T) {
 		t.Errorf("a date that isn't one: %+v", p.Changes[0])
 	}
 }
+
+// seven are the columns a Project holds by default (tools.GithubProject's
+// DefaultProjectFields, which this package may not import).
+var seven = []string{"status", "prio", "mod", "est", "sprint", "moscow", "milestone"}

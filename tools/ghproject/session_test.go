@@ -17,7 +17,6 @@ import (
 	"github.com/guilbep/git-board/kernel"
 	"github.com/guilbep/git-board/store/git"
 	bsync "github.com/guilbep/git-board/sync"
-	"github.com/guilbep/git-board/tools"
 	"github.com/guilbep/git-board/tools/ghproject/projectfake"
 	"github.com/guilbep/git-board/view"
 )
@@ -114,7 +113,7 @@ func TestRunAgainstTheAPI(t *testing.T) {
 	ctx := t.Context()
 	s, ids := linkedBoard(t, 2)
 	f, p := fakeProject(t)
-	c := &Config{Owner: "o", Number: 1, Write: true, Holds: tools.DefaultProjectFields, Schema: s.Schema, Forge: ghTable}
+	c := &Config{Owner: "o", Number: 1, Write: true, Holds: seven, Schema: s.Schema, Forge: ghTable}
 	b := Service{s}
 
 	r, err := Run(ctx, p, b, c, 0, Labels, true)
@@ -210,7 +209,7 @@ func TestAssigneesReachTheIssue(t *testing.T) {
 	s, ids := linkedBoard(t, 2)
 	f, p := fakeProject(t)
 	f.SetAssignable("o/r", "ada", "bob")
-	c := &Config{Owner: "o", Number: 1, Write: true, Holds: tools.DefaultProjectFields, Schema: s.Schema, Forge: ghTable}
+	c := &Config{Owner: "o", Number: 1, Write: true, Holds: seven, Schema: s.Schema, Forge: ghTable}
 	b := Service{s}
 	if _, err := Run(ctx, p, b, c, 0, Both, true); err != nil {
 		t.Fatal(err)
@@ -236,7 +235,7 @@ func TestMapper(t *testing.T) {
 	t.Parallel()
 	s, ids := linkedBoard(t, 2)
 	f, p := fakeProject(t)
-	m := &Mapper{Project: p, Board: Service{s}, Config: &Config{Owner: "o", Number: 1, Write: true, Holds: tools.DefaultProjectFields, Schema: s.Schema, Forge: ghTable}}
+	m := &Mapper{Project: p, Board: Service{s}, Config: &Config{Owner: "o", Number: 1, Write: true, Holds: seven, Schema: s.Schema, Forge: ghTable}}
 	gh, gl := fake.New("github.com/o/r"), fake.New("gitlab.com/o/r")
 	if m.Kind() != "project" || !m.Carries(gh) || m.Carries(gl) {
 		t.Errorf("kind %q, carries GitHub %v, GitLab %v", m.Kind(), m.Carries(gh), m.Carries(gl))
