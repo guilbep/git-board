@@ -26,7 +26,7 @@ A forge is read and written with a token, never kept in git-board's files: `.git
 
 Someone else with a token of their own on the forge, in their own credential helper, has their comments posted as themselves when they sync; the others' are posted by the posting account, under a line naming them.
 
-The GitHub Project is read and written through GitHub's GraphQL API with the GitHub forge's token, found as above: it needs the `read:project` scope to read the Project, `project` to write it. When no `[forges]` table names a login, the Project reads the token of your own account on the host — the one `forge login` stores by default — and a token of yours without `read:project` elsewhere in the credential helper is left alone.
+The GitHub Project is read and written through GitHub's GraphQL API with the GitHub forge's token, found as above: it needs the `read:project` scope to read the Project, `project` to write it. The token is found in this order: the posting `login` of the first GitHub `[forges]` table; else your own account on the host, the one `forge login` stores by default; else, with no account of yours there, any token the credential helper has for the host.
 
 ## Adding a forge
 

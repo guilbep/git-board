@@ -166,3 +166,26 @@ func TestWayBackupNeverFeedsTheBoard(t *testing.T) {
 		t.Fatalf("backup = %q %q, want T2 and the board's body", got.Title, got.Body)
 	}
 }
+
+// A backup made both ways: what is edited there from then on is pulled,
+// as on any forge; the records it kept as a backup make it a sync of what
+// changed since, not a first sync.
+func TestWayBackupBecomesBoth(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	if _, err := CreateIssue(t.Context(), s, NewCreate("a", "T", "B")); err != nil {
+		t.Fatal(err)
+	}
+	fp := fake.New(key)
+	if _, err := Sync(t.Context(), s, ways(fp, bsync.Push), fp); err != nil {
+		t.Fatal(err)
+	}
+	fp.Edit("1", func(is *forge.Issue) { is.Title = "edited once it syncs both ways" })
+	r, err := Sync(t.Context(), s, ways(fp, bsync.Both), fp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if is := only(t, s); is.Title != "edited once it syncs both ways" || r.Created != 0 || r.Restored != 0 || len(fp.All()) != 1 {
+		t.Fatalf("board %q, report %+v, %d on the forge", is.Title, r, len(fp.All()))
+	}
+}

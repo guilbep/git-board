@@ -32,7 +32,7 @@ licences: ## Check every licence, Go modules and the web app's packages
 # Everything CI's test job runs: .github/workflows/ci.yml only sets up Go and
 # Node, then runs this (its e2e job runs web-e2e). The web checks and build come first, in prerequisite order,
 # because the binary embeds web/dist.
-ci: web-check web-build build vet test compat ## Everything CI runs
+ci: web-check web-build build vet test compat proved ## Everything CI runs
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
 
 # git-board-agents (contrib/board-agents): v1's agents and wtx, out of the
@@ -184,6 +184,13 @@ flow: ## Draw docs/spec/data-flow.html again, from the code and docs/spec/flows.
 
 docs: ## Build the docs site (guide, spec, decisions) into site/ (strict)
 	uvx --from zensical==0.0.72 zensical build --strict
+
+# Where a value lives (docs/spec/places.md) names the test proving each
+# case: each must exist, so the page can't cite one that went away.
+proved: ## Check that every test docs/spec/places.md names exists
+	@missing=; for t in $$(grep -ohE '`Test[A-Za-z0-9_]+`' docs/spec/places.md | tr -d '`' | sort -u); do \
+		grep -rqE "^func $$t\(" --include='*_test.go' . || missing="$$missing $$t"; \
+	done; test -z "$$missing" || { echo "docs/spec/places.md names tests that don't exist:$$missing"; exit 1; }
 
 docs-serve: ## Preview the docs site on localhost, rebuilt on save
 	uvx --from zensical==0.0.72 zensical serve

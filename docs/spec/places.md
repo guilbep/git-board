@@ -1,177 +1,129 @@
 # Where a value lives
 
-The board is the one truth. Every forge and the GitHub Project are
-mirrors, and every write a mirror accepts ends in a recorded agreement.
-This page states the model those words name: the three decisions that
-place a value, the agreement that makes a mirror reversible, and the
-rule that replaces each behaviour the config leaves unwritten. [Sync](sync.md)
-gives the run's rules; [Forges](forges.md) gives what each forge needs;
-[Datastores](datastores.md) gives where the board is kept.
+The board is the one truth. Each forge and the GitHub Project is a
+mirror of it: a copy of some of its values, on GitHub or GitLab. Every
+write a mirror accepts ends in a recorded agreement, the value both
+sides last held. This page says where each value lives, and what
+happens when you switch a mirror on, off, or round. Each case names the
+test that proves it. [Sync](sync.md) gives the run's rules, [Forges](forges.md)
+what each forge needs, [Datastores](datastores.md) where the board is kept.
 
-## One truth, many mirrors
+## The board and its mirrors
 
 ```
-                     the board — issues, people, fields as ns:value
-                     labels — in one datastore: git, PostgreSQL or
-                     Markdown files (board.datastore)
+                     the board: issues, people, fields as ns:value
+                     labels, in one datastore (board.datastore)
                           |
          ┌────────────────┼────────────────┐
-    the forge mapper  the forge mapper  the project mapper
-    board ↔ GitHub    board ↔ GitLab    board ↔ the GitHub
-    issues            issues            Project ([github-project])
+     a GitHub forge    a GitLab forge    the GitHub Project
+     its issues        its issues        its columns
 ```
 
-- **The board's value is canonical.** A field's value is a namespaced
-  label in the board (`status:ready`, ADR 0007), whatever the mirrors
-  show. A mirror never becomes the truth by being written to: a pull
-  writes the mirror's value into the board, and from then on the board
-  holds it as its own.
-- **The datastores are not levels.** git, PostgreSQL and Markdown are
-  alternative homes of the *same* board; a clone has exactly one
-  (`board.datastore`). Two clones converge through git — origin, a
-  fetch and a push — not through a forge. The forges alone mode
-  (`store/forgecopy`) is the one exception: a board kept only as the
-  forge's mirror, with no datastore of its own.
-- **The forges are peers, not stages.** GitLab has no Project, so a
-  field that lives in the Project on GitHub lives in a label on GitLab.
-  Neither is "closer to" the board; each mirror shows what it offers.
-- **The Project bridge reads no forge.** It compares the board's label
-  with the Project's column, and is written to by no forge step. In one
-  run (`git board sync`) the steps order git pull → the forges → the
-  Project → git push, and each compares the board with its own mirror.
+- **The board's value is the truth.** A field's value is a label in the
+  board (`status:ready`, ADR 0007). A pull writes a mirror's value into
+  the board, and from then on the board holds it as its own. A mirror
+  can be where a change starts; it is never the truth.
+- **The board is your clone's.** Two clones meet through git (origin, a
+  fetch, a push), not through a forge. Three repositories that share one
+  forge have three boards; the forge is where they meet.
+- **The datastores are homes, not levels.** git, PostgreSQL and Markdown
+  hold the same board; a clone has one. The forge-only datastore is the
+  exception: a board kept only as the forges' copy, with no store of its
+  own (ADR 0002, section 4).
+- **The mirrors are peers, not levels.** A forge and the Project each
+  compare the board with themselves, never with each other. GitLab has
+  no Project, so a field the Project holds on GitHub is a label on
+  GitLab. One `git board sync` runs git pull, the forges, the Project,
+  then git push.
 
 ## The three decisions
 
-Where a value is, and where a change goes, follows from three decisions
-and nothing else. Each has a place in `.git-board.toml`, and each is
-stated where it is decided.
+Where a value is follows from three decisions, and from nothing else.
 
-| Decision | Where it lives | Unwritten |
+| Decision | Where it is written | When it is not written |
 |---|---|---|
-| where the board is kept | `board.datastore` (git config) | git |
-| which forges, and which way | `[forges.<name>]` tables | those `origin` names, both ways |
-| where each field lives on a forge | `[forges.<name>.fields.<field>]` | the type's default, on that forge |
+| Where the board is kept | `board.datastore`, in the clone's git config (it can hold a password, so never in `.git-board.toml`) | git |
+| Which forges, and which way | `[forges.<name>]` tables in `.git-board.toml`, with `way = "push"`, `"pull"` or `"both"` | the projects `origin` names, both ways |
+| Where each field lives | `[forges.<name>.fields.<field>]` mappings, and `[github-project] fields` for the Project | the field type's default on that forge; for the Project, the default seven |
 
-- **Which forges.** The forges are the tables written, else — with no
-  table at all — the projects `origin` names, its fetch URL and every
-  push URL. A table turns the finding off. Discovery is a default, not
-  a hidden channel: adding a remote never silently starts a sync that
-  writes, because creations on a forge never synced with, or 50 or more
-  in one run, wait for consent (`--allow-create`, the Sync page's
-  checkbox). A forge found in the remotes syncs both ways, with no
-  login of its own.
-- **Which way.** A run is a pull, a push, or both, chosen each time the
-  run starts (`git board forge pull|push|sync`, the Sync page's Check
-  and Sync). A forge's own direction is stated too: its table's
-  `way = "push"` (a backup — the run writes to it, and pulls nothing),
-  `way = "pull"` (read-only — the run reads its issues, and writes
-  nothing there), or `way = "both"`, the default
-  ([A run](sync.md#a-run)). A forge found in the remotes has no table,
-  so it is both ways.
-- **Where a field lives.** On each forge, a field's home is its
-  mapping's `to`, else the type's default for that forge's kind:
-  a single select is a label, a date a due date on GitLab, a person the
-  forge's assignees, an issue-typed field sub-issues on GitHub, a
-  milestone the forge's own. Each target a forge offers — GitLab's
-  scoped label, the Project column, the weight — is a mapping's `to`
-  away. On GitHub with a Project, the Project's own fields (`status`,
-  `prio`, `mod`, `est`, `sprint`, `moscow`, `milestone`) live in the
-  Project, and a field a `project` mapping names lives there too.
-  Settings › Fields, **Where it lives**, shows the resolved home of
-  every field on every forge; a forge's row in Settings › Sync says the
-  same, in one line.
+- **Which forges.** With no table, the forges are the projects `origin`
+  names. Writing one table turns that off. A forge found this way never
+  starts creating issues silently: a first sync with a forge, or 50
+  creations or more, waits for consent (`--allow-create`, the Sync
+  page's checkbox).
+- **Which way.** `both` pulls and pushes. `pull` makes a read-only
+  mirror: the run reads it, and writes nothing there. `push` makes a
+  backup: the run writes to it, and pulls nothing; an edit made there is
+  put back to the board's value at the next run, and counted.
+- **Where a field lives.** On a forge, a field's home is its mapping's
+  `to`, else its type's default: a label, the due date on GitLab, the
+  assignees, sub-issues on GitHub, the milestone. On GitHub with a
+  Project, the fields `[github-project] fields` names live in the
+  Project's columns, not in labels. `project configure` and the Project
+  page write that list with the Project. A table without it holds the
+  default seven (`status`, `prio`, `mod`, `est`, `sprint`, `moscow`,
+  `milestone`), and the Project page says the file does not state them
+  yet. Settings › Fields shows the resolved home of each field on each
+  forge.
 
-## The agreement
+## The agreement, and the two conflict rules
 
-Every mirror write ends in a record of what both sides last agreed on.
-That record is what makes a mirror reversible: nothing is ever moved
-again because it was moved once.
+For each field, a run compares three values: the board's, the mirror's,
+and the agreement. On a forge, the agreement is a `seen` record in the
+forge's sync entity ([Last seen](sync.md#last-seen)); on the Project, it
+is the issue's `git-board:<owner>/<number>:<field>` metadata.
 
-- **A forge's record** is a `seen` operation in the forge's sync entity,
-  per field (title, body, status, labels, assignees, each comment).
-  [Last seen](sync.md#last-seen) gives its format.
-- **The Project's record** is the issue's metadata,
-  `git-board:<owner>/<number>:<field>` — the base.
-- **Both serve the same four cases.** For each field, the board's value
-  (G), the mirror's (M) and the agreement (S) are compared: neither
-  changed, nothing; the mirror changed, it is pulled; the board changed,
-  it is pushed; both changed, the later change wins on a forge, and on
-  the Project the field is **held on both sides** until
-  `git board project resolve` keeps one. The table is
-  [the four cases](sync.md#the-four-cases); the bridge's statement is
-  `tools/ghproject`'s header.
-- **Labels are sets, compared per label,** on both the forges and the
-  Project, so changes on both sides merge and cannot conflict.
-- **A write that the mirror accepts is recorded at once** — a run that
-  stops then loses nothing, and never writes the same change twice
+- Neither side changed: nothing moves.
+- One side changed: that side's value goes to the other.
+- Both changed, differently, on a **forge**: the later change wins, the
+  forge's at the same second. A forge's change is already public.
+- Both changed, differently, on the **Project**: the field is held on
+  both sides, named on the Conflicts page, until a person keeps one side
+  (`git board project resolve`, or the page's buttons). The Project
+  never wins by itself.
+- Labels are sets, compared label by label, so two sides that add
+  different labels both keep theirs.
+- An accepted write is recorded at once, so a run that stops loses
+  nothing and never writes the same change twice
   ([Crash recovery](sync.md#crash-recovery)).
 
 ### The reversibility guarantees
 
-Four rules follow from the agreement, and they are the whole of the
-model's reversibility:
+1. **An agreement survives its mirror.** Turn a forge or the Project off,
+   and its records stay. Turn it on again, and a sync moves only what
+   changed since.
+2. **A held label comes back.** When a field stops living in the Project,
+   it flows to GitHub as a label again, and the board's own change wins
+   over a stale copy.
+3. **A home moves only when you ask.** Changing a field's home moves no
+   value by itself. `git board sync --migrate <field>` says what it would
+   set and remove, then does it.
+4. **A Project conflict is never won by itself.** It waits for a person.
 
-1. **An agreement survives its mirror.** Unconfigure a forge or the
-   Project, and its records stay. Reconfigure it — the same project, or
-   a new one — and the records still say what both sides agreed on; a
-   sync moves only what changed since.
-2. **A held label comes back.** When a field's home on a forge stops
-   being the Project (or any non-label target), the field flows to the
-   forge as a label again. Its old labels are read as a fallback until
-   a migration moves them (`git board sync --migrate <field>`, with a
-   preview of what it would set and remove).
-3. **A home's move is explicit and previewed.** Changing where a field
-   lives moves nothing by itself; the old target is read until the
-   migration runs, and the migration says what it would write and
-   remove before it does.
-4. **A conflict is never auto-won.** Both sides changed, differently:
-   the field is held on both, named on the Conflicts page, and moved
-   only by a resolve that a person asked for.
+## Switching, case by case
 
-## The implicit states, and their rules
-
-Nothing in the config should decide something the config doesn't say.
-Each behaviour below was reached without being written; each now has a
-rule that states it, and where the rule is stated. Where a rule is not
-enough — where the state itself should become written — the page says
-so, with its state.
-
-| Implicit state today | Its rule | Written down where | To write |
+| You do | What moves | What stays | Proved by |
 |---|---|---|---|
-| A forge exists because `origin` names it | the forges are the tables, else origin's projects; a table turns the finding off | [Which forges](#the-three-decisions), the guide's Adding a forge | — |
-| A found forge syncs, both ways, with no login | discovery's default; creations wait for consent | [Which forges](#the-three-decisions) | a found forge has no table to state a `way`: written into a table, it is stated |
-| A field lives in the Project on GitHub because `[github-project]` is there, not because a mapping says so | the Project's own fields live there; `Held` keeps their labels off GitHub | [Where a field lives](#the-three-decisions), `forge.Target` | configure the Project by writing its fields' mappings into `[forges.<name>.fields]`, so no table's presence decides another table's behaviour |
-| A host no table names still gets the type's defaults | a synthetic table, its kind from the host's first label | `forge.ForgeOf` | — |
-| The Project bridge reads the token of the first GitHub table's posting login, else yours on the host, else any account | the fallback chain, in order, each step named | [app/project.go](../../app/project.go)'s header, the guide's Tokens | — |
-| A run's direction is how it was started | pull, push and sync are the three ways, chosen per run; a forge's own direction is its table's `way`, both the default | [Which way](#the-three-decisions), [A run](sync.md#a-run) | — |
-| The Project is read until `write = true` | the default, in the table's docs | [ConfigureProject](../../app/project.go), the guide | — |
-| The numbers' counter is on origin, or in the datastore | ADR 0016 states where, and how a clone finds it | [ADR 0016](../adr/0016-project-numbers-are-a-counter-on-origin.md) | — |
-
-The one state the model should outgrow is the Project's. Today,
-configuring `[github-project]` changes where seven fields live on
-GitHub — and which labels GitHub holds — while `[forges.gh]` says
-nothing of it. The rule is stated and the pages show the resolved
-homes, but the elegant shape is the written one: adding the Project
-writes the mappings it implies, and from then on the file says every
-home, the Project's presence among them.
+| Add a GitHub Project | its fields leave GitHub's labels and live in its columns; a pull fills the board from the columns | the board's labels; GitHub's old copies, neither pulled nor removed | `TestConfigureProject`, `TestHeldLabels`, `TestSyncFirstRunImports` |
+| Hold fewer fields in the Project (`fields = ["status", "prio"]`) | the others are labels on GitHub again | the Project's records of every field | `TestConfigureProject` |
+| Remove the Project | its fields flow to GitHub as labels again; the board's change since wins over a stale copy | the Project's records, for when it comes back | `TestHeldAfterSeen` |
+| The board and the Project change one field differently | nothing: the field is held on both sides | both values, on the Conflicts page, until you keep one | `TestSyncConflictIsHeld`, `TestResolveKeepsOneSide`, `TestProjectRun` |
+| The board and a forge change one field differently | the later change; the forge's at the same second | the agreement, updated | `TestPullKeepsLocalChange` |
+| Move a field's home on a forge (a label to the assignees, say) | nothing, until the migration runs; then the old labels go | the old target, read until then | `TestMigrateField` |
+| Make a forge a backup (`way = "push"`) | from then on, only the board's values go there; an edit made there is put back | its records | `TestWayPushOnly`, `TestWayBackupPutBack`, `TestWayBackupNeverFeedsTheBoard` |
+| Make a backup both ways again | what is edited there from then on is pulled; no issue is created twice | its records, so it is not a first sync | `TestWayBackupBecomesBoth` |
+| Make a forge read-only (`way = "pull"`) | its issues are pulled; nothing is written there | its records | `TestWayPullOnly`, `TestWayRuns` |
+| Keep the board in Markdown, from git | Copy, then Keep the board here: every issue, person and record, ids kept | the board in git, untouched | `TestDatastoreCopy`, `TestDatastoreChoose` |
+| Keep the board in git again, from Markdown | the key is unset, and the clone reads git | the Markdown folder; what was written only there is not copied back | `TestDatastoreChoose`; the copy back is **not proven** |
 
 ## The use cases
 
-Each case below is stated as the config that expresses it, and what the
-model answers. Where today's config is enough, the row says so; where a
-key from the table above is wanted, it names it.
-
-| A user wants | The config | The model's answer |
+| You want | The config | What happens |
 |---|---|---|
-| 1. to back its issues up in `github.com/org/repo` | `[forges.backup]` with `way = "push"`, or `git board forge backup <url>` | the run writes to it, and pulls nothing from it; an edit made there is put back to the board's value at the next run, and counted (`TestWayBackupPutBack`) |
-| 2. in `github.com/org/x`, issues in `github.com/org/issue-repo` | a `[forges.issues]` table naming `org/issue-repo` | works: a table names any project, `origin` aside |
-| 3. in `x`, `y`, `z`, issues shared in one `issue-repo` | each repo's table names `org/issue-repo` | works, as a shared bus: each clone's board links to the same forge issues; a change either side pulls or pushes by the four cases; two boards changed the same field, the later wins |
-| 4. `x`, `y`, `z` sharing one GitHub Project | each repo's `[github-project]` names the same Project | works per issue: Project items name their repository, and each board bridges its own; fields shared through the Project's columns reach every repo's board. A Project's field on an issue another repo owns is not that board's to write |
-| 5. from a GitHub Project into a PostgreSQL board | `board.datastore = postgres`, `[github-project]` set, `project pull` | works: the engine is datastore-agnostic; the Project step runs on PostgreSQL as on git |
-| 6. code in GitHub, issues in GitLab | `origin` GitHub, a `[forges.gl]` table naming the GitLab project | works; without the table, discovery would mirror to GitHub too — the table is the explicit no. `way = "pull"` makes the GitLab mirror read-only |
-| 7. code in GitHub, issues in a PostgreSQL or S3 remote | `board.datastore = postgres` | PostgreSQL works; the issues travel with the datastore's address, not with git. S3 is not built: the `Datastore` interface (heads, load, add, versions) is what a store on S3 would implement |
-
-The cases the model answers *as configured* share one property: they
-change none of the three decisions' meanings. The ones that want a new
-key — the backup's `way`, an S3 store — want a decision written that
-today is reached by not writing one.
+| 1. A backup of the issues in `github.com/org/repo` | `[forges.backup]` with `way = "push"`, or Settings › Sync's way select | the run writes there, pulls nothing, and puts back what is edited there |
+| 2. Code in `org/x`, issues in `org/issue-repo` | a `[forges.issues]` table naming `org/issue-repo` | works: a table names any project |
+| 3. Repositories `x`, `y`, `z` sharing one issue repository | each repository's table names `org/issue-repo` | works: each board links to the same forge issues; between two boards, the later change wins |
+| 4. `x`, `y`, `z` sharing one GitHub Project | each `[github-project]` names the same Project | works per issue: each board bridges its own repository's items |
+| 5. A GitHub Project into a PostgreSQL board | `board.datastore = postgres://…`, `[github-project]` set | works: the bridge does not depend on the datastore |
+| 6. Code on GitHub, issues on GitLab | `origin` on GitHub, a `[forges.gl]` table naming the GitLab project | works; the table also stops `origin` being found as a forge. `way = "pull"` makes GitLab read-only |
+| 7. Issues in PostgreSQL or S3, not in git | `board.datastore = postgres://…` | PostgreSQL works. S3 is **not built**: a store would implement the `Datastore` interface (heads, load, add, versions) |

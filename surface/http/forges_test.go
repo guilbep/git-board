@@ -105,7 +105,7 @@ func TestForges(t *testing.T) {
 	}
 }
 
-// Routes 54 and 55: the forges' tokens as forge status reads them, and a
+// Routes 59 and 55: the forges' tokens as forge status reads them, and a
 // token stored in the credential helper (faked) from the body alone,
 // never answered nor logged.
 func TestForgeAuth(t *testing.T) {

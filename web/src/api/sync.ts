@@ -61,7 +61,7 @@ export function addForge(f: NewForge): Promise<{ name: string }> {
   return send('POST', '/api/forges', { body: f });
 }
 
-// The forges' tokens as forge status reads them (routes 54, 55): each
+// The forges' tokens as forge status reads them (routes 59, 55): each
 // forge, and for each of its accounts whether a token is found, and
 // where. check asks each forge whose each token is (the network). Never
 // a token's value.

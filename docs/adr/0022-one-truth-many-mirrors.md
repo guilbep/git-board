@@ -32,31 +32,36 @@ config does not state.**
 
 Three decisions place every value, each with a home in the config:
 
-1. **where the board is kept** — `board.datastore` (git, PostgreSQL,
-   Markdown); a clone has exactly one, and clones converge through git,
-   not through a forge;
+1. **where the board is kept** — `board.datastore`, in the clone's git
+   config, not in the file (git, PostgreSQL, Markdown, or the forges
+   alone, ADR 0002 section 4); a clone has exactly one, and clones
+   converge through git, not through a forge;
 2. **which forges, and which way** — `[forges.<name>]` tables; with no
    table, the projects `origin` names, and a table turns that finding
    off;
 3. **where each field lives on a forge** — `[forges.<name>.fields]`
-   mappings, else the type's default on that forge's kind.
+   mappings, and `[github-project] fields` for the Project's columns,
+   else the type's default on that forge's kind.
 
 Everything else is derived from the agreements: per field, the board's
 value, the mirror's and the value both last agreed on (a `seen` on a
 forge, the issue's `git-board:<owner>/<number>:<field>` metadata under
-the Project); only the side that changed since moves; both changed
-differently, the field is held on both sides until a person resolves
-it. Four reversibility guarantees follow and are stated in the spec
+the Project); only the side that changed since moves. Both changed
+differently: on a forge, the later change wins, because a forge's
+change is already public; on the Project, the field is held on both
+sides until a person resolves it. Four reversibility guarantees follow and are stated in the spec
 ([the reversibility guarantees](../spec/places.md#the-reversibility-guarantees)):
 an agreement survives its mirror; a held label comes back; a home's
-move is explicit and previewed; a conflict is never auto-won.
+move is explicit and previewed; a Project conflict is never auto-won.
+The spec's table of cases names the test that proves each switch, and
+`make proved` fails when one of those tests is gone.
 
 ## The explicit states this commits to
 
 | State | Committed shape | State |
 |---|---|---|
-| A field's home on GitHub follows from `[github-project]`'s presence | configuring the Project writes the mappings it implies into `[forges.<name>.fields]`; no table's presence decides another table's behaviour | the rule is stated and the resolved homes are shown (Settings › Fields, a forge's row in Sync); writing the mappings is **not built** |
-| A run's direction is how it was started | `[forges.<name>] way = "push"` (a mirror that only receives — a backup — or only sends) | **built**, 2026-11-08: `way` is the key, `both` the default; pull, push and sync are still chosen per run |
+| A field's home on GitHub follows from `[github-project]`'s presence | `[github-project] fields = [...]`, the fields the Project holds, written by `project configure` and the Project page; a table without the key holds the default seven, and the page says so (decided 2026-11-08: one key, not mappings copied into each forge table) | **built**, 2026-11-08 |
+| A run's direction is how it was started | `[forges.<name>] way = "push"` (a backup: it only receives, and an edit made there is put back) or `"pull"` (read-only) | **built**, 2026-11-08: `way` is the key, `both` the default; pull, push and sync are still chosen per run |
 | An S3 datastore | a store implementing `Datastore` (heads, load, add, versions) | **not built**; the interface is the commitment |
 
 ## Consequences
@@ -73,8 +78,7 @@ move is explicit and previewed; a conflict is never auto-won.
 - Future features measure against the invariant: a feature that makes a
   mirror behave differently without a written decision is a bug of the
   model, not a feature.
-- The questions the invariant leaves open — what "the only source of
-  truth" says exactly, the three conflict laws, `way`, the Project's
-  written placements, the shared mirrors — are framed, with options
-  and recommendations, in
+- `way` and the Project's fields were decided and built on 2026-11-08.
+  What stays open — the invariant's exact words, and mirrors shared by
+  several repositories — is in
   [the open questions](../design/one-truth/open-questions.md).

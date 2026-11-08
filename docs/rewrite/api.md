@@ -13,7 +13,7 @@
 
 v1's API grew one route per button: 117 routes, 18,000 lines with their
 tests. v2's is designed from what the web app reads and writes, in
-nouns the CLI already prints. It has 56 routes.
+nouns the CLI already prints. It has 59 routes.
 
 The server is `surface/http`. Each route decodes a request, calls
 one method of `app`, and encodes the answer. No rule lives in the
@@ -333,7 +333,7 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 | 36 | `GET /api/forges/credentials` | | `{"items": [{host, login, source}]}` |
 | 37 | `GET /api/numbers` (*later*) | | `{prefix, next, unnumbered}` |
 | 38 | `POST /api/numbers` | `{prefix, start}` or `{}` | `{where, numbered}` |
-| 54 | `GET /api/forges/auth?check=` | | `{"items": [forge status]}` |
+| 59 | `GET /api/forges/auth?check=` | | `{"items": [forge status]}` |
 | 55 | `POST /api/forges/auth` | `{forge, login, token}`; loopback only | 201, `{forge, host, login}` |
 
 **Status (30).** `forges` are the forges the board syncs with: its
@@ -385,8 +385,8 @@ non-default way alone), or both, and answers the state it left. 36 lists
 the tokens
 `forge status` finds, with nothing asked of a forge; never one's value.
 
-**The tokens (54, 55)** are `forge status`'s, for the web app's Tokens
-section: 54 answers each forge, and for each of its accounts (the
+**The tokens (59, 55)** are `forge status`'s, for the web app's Tokens
+section: 59 answers each forge, and for each of its accounts (the
 posting login, yours on the host) whether a token is found and where,
 as `{name, kind, host, project, sync, way, discovered, tokens}` with a
 token `{login, role, found, source, owner, error}` — `role` is
@@ -622,7 +622,10 @@ credentials of a URL.
 
 117 routes in v1 (`internal/server/server.go`); 54 in v2: 32 built in
 M5, 7 *later* and 14 with their domain in M6 (the GitHub Project's two
-built), and the forge-mapping migration (54), ported for v0.12.
+built), and the forge-mapping migration (54), ported for v0.12. Five
+more came with the web app's settings forms (2026-11-07 and 08): the
+tokens (55, 59), init (56), a git remote (57), and the Project named
+(58).
 
 | v1 | v2 |
 |---|---|
