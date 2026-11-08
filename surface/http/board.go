@@ -54,24 +54,26 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/config/init", s.initConfig)
 
 	Route(mux, "GET /api/datastore", datastore)
-	putMux := http.NewServeMux()
-	Route(putMux, "PUT /api/datastore", s.putDatastore)
-	mux.Handle("PUT /api/datastore", loopbackOnly(putMux))
-	copyMux := http.NewServeMux()
-	Route(copyMux, "POST /api/datastore/copy", copyDatastore)
-	mux.Handle("POST /api/datastore/copy", loopbackOnly(copyMux))
+	// what writes a secret, or says where the board goes, answers on
+	// loopback alone (localRoutes)
+	local := http.NewServeMux()
+	Route(local, "PUT /api/datastore", s.putDatastore)
+	Route(local, "POST /api/datastore/copy", copyDatastore)
+	Route(local, "POST /api/forges", s.addForge)
+	Route(local, "POST /api/forges/auth", s.storeToken)
+	Route(local, "POST /api/remotes/{name}", s.addRemote)
+	for _, p := range localRoutes {
+		mux.Handle(p, loopbackOnly(local))
+	}
 
 	Route(mux, "GET /api/sync", s.syncStatus)
 	Route(mux, "POST /api/sync", s.startSync)
 	Route(mux, "POST /api/remotes/{name}/{action}", remote)
-	Route(mux, "POST /api/remotes/{name}", s.addRemote)
 	Route(mux, "POST /api/numbers", numbers)
-	Route(mux, "POST /api/forges", s.addForge)
 	Route(mux, "PATCH /api/forges/{name}", s.patchForge)
 	Route(mux, "DELETE /api/forges/{name}", s.removeForge)
 	Route(mux, "GET /api/forges/credentials", credentials)
 	Route(mux, "GET /api/forges/auth", forgeAuths)
-	Route(mux, "POST /api/forges/auth", s.storeToken)
 
 	Route(mux, "GET /api/github-project", s.projectStatus)
 	Route(mux, "POST /api/github-project/{action}", s.projectAction)

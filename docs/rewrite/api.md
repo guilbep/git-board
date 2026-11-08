@@ -121,7 +121,11 @@ server's): a script without an `Origin` is refused too. It gates:
   without such a change, and every dry run, pass.
 
 Notes, yanks and comments on a release are records, and pass. The
-datastore's copy (29) answers on loopback alone, as before.
+datastore's copy (29) answers on loopback alone, as before, and so do
+the other routes that write a secret or say where the board goes: 28,
+33 and 55 (a token to git's credential helper), 57 (a git remote).
+`localRoutes` (`surface/http/guard.go`) lists them, and
+`TestLocalRoutes` refuses each from another address.
 
 ## Routes
 
@@ -322,15 +326,15 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
 | 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
-| 57 | `POST /api/remotes/{name}` | `{url}` | 204 |
-| 33 | `POST /api/forges` | `{kind, url, name, login, token, sync, way}` | 201, `{name}` |
+| 57 | `POST /api/remotes/{name}` | `{url}`; loopback only | 204 |
+| 33 | `POST /api/forges` | `{kind, url, name, login, token, sync, way}`; loopback only | 201, `{name}` |
 | 34 | `PATCH /api/forges/{name}` | `{sync, way}` | `{name, sync, way}` |
 | 35 | `DELETE /api/forges/{name}` | | 204 |
 | 36 | `GET /api/forges/credentials` | | `{"items": [{host, login, source}]}` |
 | 37 | `GET /api/numbers` (*later*) | | `{prefix, next, unnumbered}` |
 | 38 | `POST /api/numbers` | `{prefix, start}` or `{}` | `{where, numbered}` |
 | 54 | `GET /api/forges/auth?check=` | | `{"items": [forge status]}` |
-| 55 | `POST /api/forges/auth` | `{forge, login, token}` | 201, `{forge, host, login}` |
+| 55 | `POST /api/forges/auth` | `{forge, login, token}`; loopback only | 201, `{forge, host, login}` |
 
 **Status (30).** `forges` are the forges the board syncs with: its
 `[forges]` tables, or those found in origin's URLs (`discovered`), each

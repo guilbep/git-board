@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,7 +72,7 @@ func TestForges(t *testing.T) {
 	if got := want[forgeSyncRes](t, a.do("PATCH", "/api/forges/gh", map[string]any{"sync": false}), http.StatusOK); got.Sync || got.Name != "gh" {
 		t.Errorf("patched: %+v", got)
 	}
-	if got := want[forgeSyncRes](t, a.do("PATCH", "/api/forges/gh", map[string]any{"way": "pull"}), http.StatusOK); got.Way != "pull" {
+	if got := want[forgeSyncRes](t, a.do("PATCH", "/api/forges/gh", map[string]any{"way": "pull"}), http.StatusOK); got.Way != "pull" || got.Sync {
 		t.Errorf("way: %+v", got)
 	}
 	if text := file(); !strings.Contains(text, `way = "pull"`) {
@@ -157,5 +158,32 @@ func TestForgeAuth(t *testing.T) {
 	want[map[string]any](t, a.do("POST", "/api/forges/auth", map[string]any{"forge": "gh"}), http.StatusBadRequest)
 	if strings.Contains(a.logs(), "s3cret") {
 		t.Errorf("the token is logged:\n%s", a.logs())
+	}
+}
+
+// The routes that write a secret, or say where the board goes, answer on
+// loopback alone: from another address each is refused, and writes
+// nothing.
+func TestLocalRoutes(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	a := newAPI(t, dir)
+	before := read(t, filepath.Join(dir, ".git-board.toml"))
+	for _, route := range localRoutes {
+		method, path, _ := strings.Cut(route, " ")
+		path = strings.ReplaceAll(path, "{name}", "origin")
+		for _, from := range []string{"192.0.2.1:1234", "[2001:db8::1]:1234"} {
+			req := httptest.NewRequest(method, path, strings.NewReader(`{"value":"git","token":"t","forge":"gh","url":"https://x.org/o/r","kind":"github"}`))
+			req.RemoteAddr, req.Host = from, "127.0.0.1:8080" // a remote client, past the Host check
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			a.s.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "localhost only") {
+				t.Errorf("%s from %s = %d %s", route, from, rec.Code, rec.Body)
+			}
+		}
+	}
+	if got := read(t, filepath.Join(dir, ".git-board.toml")); got != before {
+		t.Errorf("a refused request wrote:\n%s", got)
 	}
 }

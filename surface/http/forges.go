@@ -3,10 +3,12 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/guilbep/git-board/app"
+	"github.com/guilbep/git-board/kernel"
 )
 
 // The forges' tables and tokens (docs/rewrite/api.md, routes 33 to 36):
@@ -46,19 +48,12 @@ func (s *Server) patchForge(ctx context.Context, r forgeReq) (forgeSyncRes, erro
 	if r.Sync == nil && r.Way == "" {
 		return forgeSyncRes{}, invalid("sync", errNoSync)
 	}
-	way := "" // the table's way before the write; the write alone changes it
-	for _, f := range board(ctx).Config.Forges.List {
-		if f.Name == r.Name {
-			way = f.Direction()
-		}
-	}
 	err := s.writeConfig(ctx, func() error {
 		b := board(ctx)
 		if r.Way != "" {
 			if err := b.SetForgeWay(r.Name, r.Way); err != nil {
 				return on("way", err)
 			}
-			way = r.Way
 		}
 		if r.Sync != nil {
 			if err := b.SetForgeSync(r.Name, *r.Sync); err != nil {
@@ -70,11 +65,15 @@ func (s *Server) patchForge(ctx context.Context, r forgeReq) (forgeSyncRes, erro
 	if err != nil {
 		return forgeSyncRes{}, err
 	}
-	sync := true
-	if r.Sync != nil {
-		sync = *r.Sync
+	// the table as the board opened again reads it, not the request
+	h := s.boards.get()
+	defer s.boards.release(h)
+	for _, f := range h.b.Config.Forges.List {
+		if f.Name == r.Name {
+			return forgeSyncRes{Name: f.Name, Sync: f.Sync, Way: f.Direction()}, nil
+		}
 	}
-	return forgeSyncRes{Name: r.Name, Sync: sync, Way: way}, nil
+	return forgeSyncRes{}, on("sync", fmt.Errorf("%w: forge %q was removed meanwhile", kernel.ErrNotFound, r.Name))
 }
 
 func (s *Server) removeForge(ctx context.Context, r forgeReq) (Reply, error) {
