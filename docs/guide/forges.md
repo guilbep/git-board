@@ -55,7 +55,7 @@ Adding writes a `[forges.<name>]` table, and syncs nothing: the first sync is yo
 A forge's table states its `way`, the direction the sync takes with it:
 
 - `way = "both"`, the default: the sync pulls from it, then pushes to it.
-- `way = "push"`, a backup: the issues go there, and nothing comes back. An edit made on the backup is drift — the run reports it, and never takes it as truth. The backup's own row in Settings › Sync says *push only, a backup*, and a `git board forge pull` says nothing was pulled from it.
+- `way = "push"`, a backup: the issues go there, and nothing comes back. An edit made on the backup never reaches the board: the next run puts the board's value back there, and says so (*put back on a backup*). A comment someone adds on the backup stays there. The backup's own row in Settings › Sync says *push only, a backup*, and a `git board forge pull` says nothing was pulled from it.
 - `way = "pull"`, read-only: the sync reads its issues, and writes nothing there.
 
 Settings › Sync sets it per row; `git board forge backup <url>` writes it in one step — the easy path to a backup:

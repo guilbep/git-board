@@ -32,10 +32,12 @@ export function stepWords(s: SyncStep): string {
   return `${where ? `${where}: ` : ''}${s.line || [s.what, s.issue].filter(Boolean).join(' ')}${count}`;
 }
 
+const reportNames = { created: 'created', updated: 'updated', posted: 'posted', pushed: 'pushed', restored: 'put back on a backup' } as const;
+
 // the counts of a forge run: "2 created, 3 updated, 1 posted"
 export function reportWords(r: SyncRun['report']): string {
   if (!r) return '';
-  const parts = (['created', 'updated', 'posted', 'pushed'] as const).filter((k) => r[k]).map((k) => `${n(r[k])} ${k}`);
+  const parts = (Object.keys(reportNames) as (keyof typeof reportNames)[]).filter((k) => r[k]).map((k) => `${n(r[k] ?? 0)} ${reportNames[k]}`);
   return parts.length ? parts.join(', ') : 'nothing to change';
 }
 

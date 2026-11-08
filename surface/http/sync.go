@@ -54,6 +54,7 @@ type report struct {
 	Unchanged int `json:"unchanged"`
 	Posted    int `json:"posted"`
 	Pushed    int `json:"pushed"`
+	Restored  int `json:"restored"` // a backup's own edits, put back
 }
 
 // maxSteps is how many steps a run keeps: the progress events carry
@@ -212,7 +213,7 @@ func (s *Server) runSync(ctx context.Context, b *app.Board, run *Run, r syncReq)
 		}
 		got, err := b.SyncForges(ctx, app.Way(r.Way), app.ForgeRun{Forges: fs, AllowCreate: r.AllowCreate, DryRun: r.DryRun, See: see})
 		mu.Lock()
-		rep = &report{Created: got.Created, Updated: got.Updated, Unchanged: got.Unchanged, Posted: got.Posted, Pushed: got.Pushed}
+		rep = &report{Created: got.Created, Updated: got.Updated, Unchanged: got.Unchanged, Posted: got.Posted, Pushed: got.Pushed, Restored: got.Restored}
 		mu.Unlock()
 		return err
 	}

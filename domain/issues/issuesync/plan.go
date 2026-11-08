@@ -162,7 +162,11 @@ func (r *run) plan(p *project, is *Issue, fi forge.Issue, who map[string]string,
 		if bsync.Unwrap(sv).Forked() {
 			gv, fv, sv = forkText(gv), forkText(fv), forkText(sv)
 		}
-		switch decide(gv, fv, sv, origin(t.ch) == key, t.ch.Time, t.ft) {
+		v := decide(gv, fv, sv, origin(t.ch) == key, t.ch.Time, t.ft)
+		if v == pullIt && p.way == bsync.Push { // a backup takes nothing: its own edit is put back
+			v, p.putBack[is.ID] = pushIt, true
+		}
+		switch v {
 		case agreed:
 			if seen[t.name] != t.f {
 				pl.sops = append(pl.sops, seenOp(is.Author, now, is.ID, t.name, t.f))
@@ -448,7 +452,9 @@ type item struct {
 
 // sets runs the four cases on each item, in order. It returns the items to
 // pull and to push, and last seen once the pulls and the agreed are in.
-func sets(items map[string]*item, pull, push bool) (pulled, pushed []string, base []string) {
+// backup turns each pull into a push of git-board's side (a forge whose
+// way is push), and putBack says one was.
+func sets(items map[string]*item, pull, push, backup bool) (pulled, pushed []string, base []string, putBack bool) {
 	for _, k := range slices.Sorted(maps.Keys(items)) {
 		it := items[k]
 		s := it.s
@@ -466,7 +472,10 @@ func sets(items map[string]*item, pull, push bool) (pulled, pushed []string, bas
 				pushed = append(pushed, k)
 			}
 		default:
-			if pull {
+			switch {
+			case backup && push:
+				pushed, putBack = append(pushed, k), true
+			case pull:
 				pulled = append(pulled, k)
 				keep = it.f
 			}
@@ -475,7 +484,7 @@ func sets(items map[string]*item, pull, push bool) (pulled, pushed []string, bas
 			base = append(base, k)
 		}
 	}
-	return pulled, pushed, base
+	return pulled, pushed, base, putBack
 }
 
 func sign(on bool) string {
@@ -514,7 +523,8 @@ func (r *run) planLabels(pl *plan, p *project, is *Issue, fi forge.Issue, pull, 
 			at(l).s = true
 		}
 	}
-	pulled, pushed, base := sets(items, pull, push)
+	pulled, pushed, base, back := sets(items, pull, push, p.way == bsync.Push)
+	p.putBack[is.ID] = p.putBack[is.ID] || back
 	base = slices.Sorted(slices.Values(append(base, held...)))
 	for _, l := range pulled {
 		if items[l].f {
@@ -638,7 +648,8 @@ func (r *run) planAssignees(pl *plan, p *project, is *Issue, fi forge.Issue, pul
 	for _, id := range split(seen["assignees"]) {
 		at(id).s = true
 	}
-	pulled, pushed, base := sets(items, pull, push)
+	pulled, pushed, base, back := sets(items, pull, push, p.way == bsync.Push)
+	p.putBack[is.ID] = p.putBack[is.ID] || back
 	for _, id := range pulled {
 		if items[id].f {
 			add = append(add, "assignee:"+accounts[id].Login)

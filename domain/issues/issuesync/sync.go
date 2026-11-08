@@ -67,6 +67,11 @@ type Options struct {
 	// its origin, "joined" for a mirror the fork posted, "posted" and
 	// "pushed". Nil hears nothing.
 	Did func(forge, what, issue string, ops int)
+	// Ways is each forge's own way, by its key ([forges.<name>] way, ADR
+	// 0022): a pull-only forge is written to never, and a push-only one, a
+	// backup, is read from only to put the board's values back there. A
+	// forge it names not is both.
+	Ways map[string]bsync.Way
 	// Mirrors are forge issues the fork made one issue, from its own data,
 	// each group's places as "<key>#<number>", keys in any case (sync.md's
 	// "Switching from the fork"). Nil leaves the fork's texts to say.
@@ -91,7 +96,9 @@ type Options struct {
 // forge issues the pull read: made into issues, written to, or left as they
 // were. Posted counts the issues created on forges, and Pushed the linked
 // forge issues the push wrote to.
-type Report struct{ Created, Updated, Unchanged, Posted, Pushed int }
+// Restored counts the issues of a backup (a forge whose way is push)
+// that the run put back to the board's values: changed there, never taken.
+type Report struct{ Created, Updated, Unchanged, Posted, Pushed, Restored int }
 
 // Sync pulls from every forge, then pushes to every forge, as sync.md's "A
 // run" says. A failed write stops it with the error; what was written stays
@@ -135,34 +142,23 @@ type listed struct {
 	fi forge.Issue
 }
 
-// wayer is a forge that states its direction (a [forges.<name>] way,
-// ADR 0022): the run pulls from those that pull, and pushes to those
-// that push. One that states none is both, the key's default.
-type wayer interface{ ForgeWay() bsync.Way }
-
-// wayOf is f's direction: its ForgeWay, or both when it states none.
-func wayOf(f forge.Forge) bsync.Way {
-	if w, ok := f.(wayer); ok {
-		if way := w.ForgeWay(); way != "" {
-			return way
-		}
-	}
-	return bsync.Both
-}
-
 // project is one forge project in a run.
 type project struct {
-	f      forge.Forge
-	key    string
-	way    bsync.Way // the table's way: the run pulls from those that pull, and pushes to those that push
-	vis    forge.Visibility
-	me     forge.Account
-	st     *state
-	first  bool                     // no sync entity when the run started
-	list   []forge.Issue            // the pull's listing, read before any write
-	listed map[string]forge.Issue   // forge id -> as read this run
-	tokens map[string]forge.Forge   // account id -> its view, nil when it has no token
-	acc    map[string]forge.Account // person id -> their account on this server
+	f   forge.Forge
+	key string
+	way bsync.Way // the forge's own way (Options.Ways)
+	// pull and push are this run's, for this forge: the run's way and the
+	// forge's, both. Every step reads these, never the run's alone.
+	pull, push bool
+	putBack    map[string]bool // issue id -> a backup's own edit the push puts back
+	vis        forge.Visibility
+	me         forge.Account
+	st         *state
+	first      bool                     // no sync entity when the run started
+	list       []forge.Issue            // the pull's listing, read before any write
+	listed     map[string]forge.Issue   // forge id -> as read this run
+	tokens     map[string]forge.Forge   // account id -> its view, nil when it has no token
+	acc        map[string]forge.Account // person id -> their account on this server
 }
 
 func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.Forge, pull, push bool) (_ Report, err error) {
@@ -172,6 +168,7 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 		return Report{}, err
 	}
 	defer j.Unlock()
+	wayOf := func(f forge.Forge) bsync.Way { return cmp.Or(opt.Ways[f.Key()], bsync.Both) }
 	if opt.Issue == "" { // every forge whose sync is on takes part
 		var keys []string
 		for _, f := range forges {
@@ -220,7 +217,8 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 			}
 			continue
 		}
-		p := &project{f: f, key: f.Key(), way: wayOf(f), vis: vis, listed: map[string]forge.Issue{}, tokens: map[string]forge.Forge{}, acc: map[string]forge.Account{}}
+		way := wayOf(f)
+		p := &project{f: f, key: f.Key(), way: way, pull: pull && way.Pulls(), push: push && way.Pushes(), putBack: map[string]bool{}, vis: vis, listed: map[string]forge.Issue{}, tokens: map[string]forge.Forge{}, acc: map[string]forge.Account{}}
 		var merr error
 		if p.me, merr = f.Me(ctx); merr != nil {
 			if err := leave(p.key, fmt.Errorf("posting account: %w", merr)); err != nil {
@@ -249,7 +247,7 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 	}
 	if pull {
 		for _, p := range r.projects {
-			if !p.way.Pulls() {
+			if !p.pull {
 				continue // push-only: writes go there, and nothing is read from it as truth
 			}
 			if err := r.pullFrom(p); err != nil {
@@ -266,14 +264,14 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 	}
 	if push {
 		for _, p := range r.projects {
-			if !pull || !p.way.Pulls() {
+			if !p.pull {
 				// a push alone links by marker first, and so does a forge
 				// the run never pulls: its listing is read to be written to
 				if err := r.relink(p); err != nil {
 					return r.report, err
 				}
 			}
-			if !p.way.Pushes() {
+			if !p.push {
 				continue // pull-only: the run reads it, and writes nothing there
 			}
 			if err := r.pushTo(p); err != nil {
@@ -823,6 +821,23 @@ func (r *run) pushTo(p *project) error {
 	if r.opt.Issue != "" {
 		ids = []string{r.opt.Issue}
 	}
+	if p.way == bsync.Push {
+		// a backup: what changed there since its last run is read whole, so
+		// the plan sees it and puts the board's values back
+		for _, fi := range p.list {
+			if _, linked := p.st.links[fi.ID]; !linked {
+				continue
+			}
+			whole, err := p.f.Complete(r.ctx, fi)
+			if errors.Is(err, forge.ErrNotFound) || errors.Is(err, forge.ErrConfidential) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("syncer: forge issue #%s: %w", fi.Number, err)
+			}
+			p.listed[whole.ID] = whole
+		}
+	}
 	var todo []*Issue
 	for _, id := range ids {
 		if is, ok := r.issues[id]; ok && r.mayCreate(p, is) {
@@ -869,8 +884,12 @@ func (r *run) pushTo(p *project) error {
 			fi = got
 			p.listed[fi.ID] = fi
 		}
-		_, pushed, _, err := r.reconcile(p, id, fi, r.pull, true)
-		if pushed {
+		_, pushed, _, err := r.reconcile(p, id, fi, p.pull, true)
+		switch {
+		case pushed && p.putBack[id]:
+			r.report.Restored++
+			r.did(p.key, "restored", id, 0)
+		case pushed:
 			r.report.Pushed++
 			r.did(p.key, "pushed", id, 0)
 		}

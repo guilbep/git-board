@@ -163,7 +163,7 @@ key from the table above is wanted, it names it.
 
 | A user wants | The config | The model's answer |
 |---|---|---|
-| 1. to back its issues up in `github.com/org/repo` | `[forges.backup]` with `way = "push"`, or `git board forge backup <url>` | the run writes to it, and pulls nothing from it; an edit made there is drift, reported and never taken |
+| 1. to back its issues up in `github.com/org/repo` | `[forges.backup]` with `way = "push"`, or `git board forge backup <url>` | the run writes to it, and pulls nothing from it; an edit made there is put back to the board's value at the next run, and counted (`TestWayBackupPutBack`) |
 | 2. in `github.com/org/x`, issues in `github.com/org/issue-repo` | a `[forges.issues]` table naming `org/issue-repo` | works: a table names any project, `origin` aside |
 | 3. in `x`, `y`, `z`, issues shared in one `issue-repo` | each repo's table names `org/issue-repo` | works, as a shared bus: each clone's board links to the same forge issues; a change either side pulls or pushes by the four cases; two boards changed the same field, the later wins |
 | 4. `x`, `y`, `z` sharing one GitHub Project | each repo's `[github-project]` names the same Project | works per issue: Project items name their repository, and each board bridges its own; fields shared through the Project's columns reach every repo's board. A Project's field on an issue another repo owns is not that board's to write |

@@ -244,7 +244,7 @@ export interface SyncRun {
   ended_at?: string;
   state: 'running' | 'done' | 'failed';
   steps: SyncStep[];
-  report?: { created: number; updated: number; unchanged: number; posted: number; pushed: number };
+  report?: { created: number; updated: number; unchanged: number; posted: number; pushed: number; restored?: number };
   error?: string;
 }
 

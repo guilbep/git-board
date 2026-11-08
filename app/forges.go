@@ -261,6 +261,8 @@ func (e SyncEvent) Text(dry bool, name string) string {
 		l = "create " + name
 	case "pushed":
 		l = "send the changes of " + name
+	case "restored":
+		l = "put back the board's values on " + name + ", changed on the backup"
 	case "warning", "waiting":
 		return e.Line
 	case "left":
@@ -345,16 +347,18 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	if see == nil {
 		see = func(SyncEvent) {}
 	}
-	names := map[string]string{} // forge key -> name
+	names := map[string]string{}   // forge key -> name
+	ways := map[string]bsync.Way{} // forge key -> its table's way
 	ids := new(int)
 	var fs []forge.Forge
 	for _, f := range run.Forges {
-		names[f.Key()] = f.Name
-		fs = append(fs, (&counted{f: f.Forge, name: f.Name, way: forgeWayOf(f.Way), dry: run.DryRun, ids: ids, see: see}).wrap())
+		names[f.Key()], ways[f.Key()] = f.Name, forgeWayOf(f.Way)
+		fs = append(fs, (&counted{f: f.Forge, name: f.Name, dry: run.DryRun, ids: ids, see: see}).wrap())
 	}
 	_, forgeOnly := b.Kernel.Store().(*forgecopy.Store)
 	cfg := b.Config
 	opt := issuesync.Options{
+		Ways:           ways,
 		ForgeOnly:      forgeOnly,
 		PublishPrivate: cfg.Forges.PublishPrivate,
 		Local: func(meta map[string]string) bool {
@@ -381,7 +385,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 		},
 		Did: func(key, what, id string, ops int) {
 			w := "pull"
-			if what == "posted" || what == "pushed" {
+			if what == "posted" || what == "pushed" || what == "restored" {
 				w = "push"
 			}
 			see(SyncEvent{Forge: names[key], Way: w, What: what, Issue: id, Ops: ops})

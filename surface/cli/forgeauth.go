@@ -181,8 +181,8 @@ func newForgeBackup() *cobra.Command {
 		Short: "Add a forge as a backup: the issues go there, and nothing comes back",
 		Long: `Add a forge whose table says way = "push": git board sync and git board
 forge push send the issues there, and nothing is pulled from it. An edit
-made on the backup is drift: the run reports it, and never takes it as
-truth.
+made on the backup never reaches the board: the next run puts the board's
+value back there, and says so.
 
 <url> is the project's address, like https://gitlab.example.com/team/repo.
 The kind comes from the host's name: a host that names gitlab is GitLab,
