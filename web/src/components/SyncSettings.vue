@@ -30,7 +30,14 @@
         <tbody>
           <tr v-if="!st.remotes.length">
             <td><b>{{ remote }}</b> <span class="sy-kind">git</span></td>
-            <td colspan="5" class="sy-wrap">{{ kept ? `None: not needed, ${kept}.` : `None: this clone has no ${remote} remote, so the git steps are skipped.` }}</td>
+            <td v-if="kept" colspan="5" class="sy-wrap">None: not needed, {{ kept }}.</td>
+            <td v-else colspan="5" class="sy-wrap">
+              <span>None: this clone has no {{ remote }} remote, so the git steps are skipped.</span>
+              <form class="sy-addremote" @submit.prevent="addOrigin">
+                <input v-model="originUrl" class="epfl-input" type="url" placeholder="https://github.com/org/repo.git" required spellcheck="false" />
+                <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="addingRemote || !originUrl">{{ addingRemote ? 'Adding…' : `Add the ${remote} remote` }}</button>
+              </form>
+            </td>
           </tr>
           <tr v-for="r in st.remotes" :key="r">
             <td><b>{{ r }}</b> <span class="sy-kind">git</span></td>
@@ -149,7 +156,7 @@ import { keptIn, needsGit } from '@/datastore';
 import { placesSummary } from '@/fieldplaces';
 import { datastore, loadDatastore } from '@/kept';
 import { onLive } from '@/live';
-import { setForgeWay, type ForgeWay } from '@/api/sync';
+import { setForgeWay, addRemote, type ForgeWay } from '@/api/sync';
 import { loadSync, syncStatus } from '@/sync';
 import { reportWords, remoteWords, stepWords } from '@/ways';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
@@ -188,6 +195,24 @@ const remoteLine = ref<Record<string, string>>({});
 
 // a board kept elsewhere than git: what needs git is disabled, saying why
 const kept = computed(() => keptIn(datastore.value));
+
+// the origin remote, added from here: a URL, then the page reads the
+// sync again and the git steps are on
+const originUrl = ref('');
+const addingRemote = ref(false);
+async function addOrigin() {
+  addingRemote.value = true;
+  error.value = '';
+  try {
+    await addRemote(remote, originUrl.value.trim());
+    originUrl.value = '';
+    await loadSync();
+  } catch (e) {
+    error.value = message(e);
+  } finally {
+    addingRemote.value = false;
+  }
+}
 const noGit = (what: string) => needsGit(datastore.value, what);
 const kindName = (k: string) => ({ github: 'GitHub', gitlab: 'GitLab' })[k] ?? k;
 // the forge a remote's URL names, when one does
@@ -304,6 +329,8 @@ onMounted(reload);
 .sy-head h2 { margin-bottom: .375rem; }
 .sy-lead { max-width: 44rem; color: var(--fg-muted); }
 .sy-actions, .sy-run { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.sy-addremote { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .375rem; }
+.sy-addremote .epfl-input { max-width: 24rem; }
 .sy-note { font-size: .8125rem; color: var(--fg-muted); }
 .sy-off { color: var(--fg-muted); }
 .sy-kind { margin-left: .25rem; font-size: .8125rem; color: var(--fg-muted); }

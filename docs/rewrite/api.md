@@ -218,7 +218,7 @@ opened it, you are assigned).
 | 16 | `GET /api/fields` | | `{name: field}` |
 | 17 | `GET /api/people` | | `{"items": [person]}`, as `me --ls --json` |
 | 18 | `GET /api/me` | | `{me, avatars}` |
-| 19 | `PUT /api/me` | `{id}`, or `{name, email}`, or `{avatars}` | the same as 18 |
+| 19 | `PUT /api/me` | `{id}`, or `{name, email}`, or `{avatars, global}` | the same as 18 |
 | 54 | `POST /api/fields/{name}/migrate` | `dry_run` | `{plans, error}`, as `sync --migrate` |
 
 **Labels (15)** are the labels in use, each with its open and closed
@@ -247,7 +247,9 @@ dates red once past: the new web app colors those itself.
 **Me (18, 19).** `me` is the person who writes, or `null`. `{id}` writes
 as that person (`me <id>`), `{name, email}` makes one and writes as
 them (`me --new`), `{avatars}` sets `board.avatars` (`forge`,
-`gravatar`, `none`).
+`gravatar`, `none`) in the clone's own config; with `global: true` at
+git's global level, so every repository of the user reads it, a local
+one read over it.
 
 ### The inbox
 
@@ -265,6 +267,7 @@ them (`me --new`), `{avatars}` sets `board.avatars` (`forge`,
 | 24 | `PUT /api/config` | `If-Match`; `dry_run`; `{text}` | the same as 23 |
 | 25 | `PATCH /api/config` | `If-Match`; `dry_run`; `{set: {key: value}}` | the same as 23 |
 | 26 | `GET /api/docs/{page}` (*later*) | | `{"items": [{title, html}]}` |
+| 56 | `POST /api/config/init` | `{template}` (none: the default) | 201, `{path, lines}` |
 
 `schema_version` is the file's schema (1 for a file without one; the
 versioned schema and its upgrades are built beside this). `keys` are
@@ -285,6 +288,12 @@ doesn't read or a file left broken. With `dry_run=1` they check and
 answer the file they would write, and write nothing: v1's
 `/api/config/check`. Views are `[views]`: saving one is a `PATCH`.
 
+**Init (56)** writes the default `.git-board.toml`, as `git board init`
+does: the template `template` names (a built-in one, a file, or a URL;
+none: the default), seeded with origin's labels and its Project's fields
+when it can read them. It never overwrites one: a file there already is
+an error, 409. `lines` are what reading the forge said.
+
 **Docs (26)** are the guide's sections the settings show beside a form:
 `configuration`, `forges`.
 
@@ -293,13 +302,16 @@ answer the file they would write, and write nothing: v1's
 | | Route | Request | Response |
 |---|---|---|---|
 | 27 | `GET /api/datastore` | | `{name, where, replica, counter}` |
-| 28 | `PUT /api/datastore` (*later*) | `dry_run`; `{url}` | the same as 27 |
+| 28 | `PUT /api/datastore` | `{value}`; loopback only | the same as 27 |
 | 29 | `POST /api/datastore/copy` | `{from, to}` | `{to, entities, counter}` |
 
 `replica` says the board can be pulled and pushed (git), `counter` that
-it hands out project numbers. `PUT` points the clone at another
-datastore (`board.datastore`); with `dry_run=1` it opens it and says
-what it holds, and changes nothing (v1's `/api/datastore/test`). A copy
+it hands out project numbers. `PUT` (28) points the clone at another
+datastore: `board.datastore` in its own git config, `""` or `git` for
+git. The value is opened first, so a name no datastore understands is
+refused and the clone's board still opens; the board then opens again
+and the pages hear a `config` event. `dry_run` (open it and say what it
+holds, v1's `/api/datastore/test`) comes later. A copy
 (`from` and `to` are `board.datastore` values: `""` is git, and the
 datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 
@@ -310,6 +322,7 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
 | 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
+| 57 | `POST /api/remotes/{name}` | `{url}` | 204 |
 | 33 | `POST /api/forges` | `{kind, url, name, login, token, sync, way}` | 201, `{name}` |
 | 34 | `PATCH /api/forges/{name}` | `{sync, way}` | `{name, sync, way}` |
 | 35 | `DELETE /api/forges/{name}` | | 204 |
@@ -345,7 +358,9 @@ run did, `{created, updated, unchanged, posted, pushed}`.
 **Remotes (32)** run at once. A fetch answers what a pull would
 receive and a push would send, of `issues` and `people`
 (`{receive, send}`); a pull and a push answer their `note` (the numbers
-handed out). **Forges (33 to 36)** are `[forges]` tables, written as
+handed out). Adding one (57) is the `git remote add` the sync steps
+want, done from the web app: a name in the path and its URL in the
+body; a name the clone has already is refused. **Forges (33 to 36)** are `[forges]` tables, written as
 `PATCH /api/config` writes a key: the board opens again and the pages
 hear a `config` event. The token goes to git's credential helper (`git
 credential approve`, as `forge login`), never the file (ADR 0010), and is

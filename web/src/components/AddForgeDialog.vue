@@ -61,7 +61,7 @@
           <div>
             <label class="af-legend" for="af-token">A token <span class="gb-hint af-inline">optional</span></label>
             <input id="af-token" v-model="draft.token" class="epfl-input" type="password" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" :disabled="!!added" />
-            <p class="gb-hint">{{ forge.name }} needs {{ forge.token }}. It goes to git's credential helper (<code>git credential approve</code>), never to the file. Empty: one already there, or in <code>{{ draft.target === 'gitlab' ? 'GITLAB_TOKEN' : 'GITHUB_TOKEN' }}</code>; <code>git board forge login</code> stores one later.</p>
+            <p class="gb-hint">{{ forge.name }} needs {{ forge.token }}. It goes to git's credential helper (the same store <code>git credential approve</code> fills), never to the file. Empty: one already there, or in <code>{{ draft.target === 'gitlab' ? 'GITLAB_TOKEN' : 'GITHUB_TOKEN' }}</code>; the Tokens table's Add a token stores one later.</p>
           </div>
           <p v-if="added" class="epfl-alert epfl-alert-success" role="status"><b>{{ added }}</b> is added to <code>.git-board.toml</code>.</p>
           <p v-else-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>

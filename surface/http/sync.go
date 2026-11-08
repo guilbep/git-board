@@ -280,6 +280,22 @@ func remote(ctx context.Context, r remoteReq) (remoteRes, error) {
 	return res, err
 }
 
+// addRemoteReq adds a git remote, from the Sync page: a name in the
+// path, its URL in the body.
+type addRemoteReq struct {
+	Name string `path:"name"`
+	URL  string `json:"url"`
+}
+
+// addRemote is the git remote the sync steps want, added from the web
+// app. It answers 204: the page reads GET /api/sync again.
+func (s *Server) addRemote(ctx context.Context, r addRemoteReq) (Reply, error) {
+	if err := board(ctx).AddRemote(ctx, r.Name, strings.TrimSpace(r.URL)); err != nil {
+		return Reply{}, on("url", err)
+	}
+	return Reply{Status: http.StatusNoContent}, nil
+}
+
 type numbersReq struct {
 	Prefix string `json:"prefix"`
 	Start  int    `json:"start"`

@@ -34,6 +34,12 @@ export function remoteAction(name: string, action: 'fetch' | 'pull' | 'push'): P
   return send('POST', `/api/remotes/${enc(name)}/${action}`, {});
 }
 
+// a git remote, added from the page: the name (origin most of the time)
+// and its URL. A name the clone has already is refused.
+export function addRemote(name: string, url: string): Promise<void> {
+  return send('POST', `/api/remotes/${enc(name)}`, { body: { url } });
+}
+
 // {prefix, start} starts numbering; {} numbers the issues that have none
 export function numbers(start?: { prefix: string; start: number }): Promise<Numbered> {
   return send('POST', '/api/numbers', { body: start ?? {} });
