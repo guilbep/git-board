@@ -27,8 +27,10 @@ This page builds on ADR 0007 (each field is a label), and on ADR 0008
   account of the first GitHub forge table. Then your own account on
   the host. Then any account on the host. The code and the guide state
   this order.
-- ADR 0022 commits to three changes that are not built. The changes
-  are: a direction key for each forge, the Project field homes written
+- ADR 0022 commits to three changes. One is built: the direction key
+  for each forge (`way = "push"`, `"pull"`, or `"both"`, Q3), with the
+  command `git board forge backup`. Two are not: the Project field
+  homes written
   into the forge tables, and an S3 datastore.
 
 ## Q1. What the invariant says, word for word
@@ -89,33 +91,31 @@ a person keeps one side.
 
 ## Q3. A mirror that only receives: the direction key
 
-Use case 1 wants a backup (a forge that receives the issues, and sends
-nothing). The design proposes a forge table with `way = "push"`. A push
-creates and updates issues. Nothing pulls from the backup. An edit made
-on the backup is drift (a change on the mirror that the board did not
-make). The run reports drift, and does not take it as truth.
+Built on 2026-11-08, as proposed. A forge table states
+`way = "push"`, `"pull"`, or `"both"`, both the default
+([A run](../../spec/sync.md#a-run)). The run filters its directions per
+forge: a push-only forge is pulled from never, a pull-only one written
+to never, and a push-only forge's journal lines are dropped each run,
+because its pull never reads them. The questions of the build, and
+their answers:
 
-The key opens these questions. Answer them before the build.
-
-- Is a backup mirror a link like the others? A link records a seen
-  value for each write. A push-only forge then holds complete records,
-  and the model needs no new kind of record. Proposal: yes. The key
-  `way` filters the directions of the run, and changes nothing else.
-- Does a forge without pulls still record a run? A push records a run
-  today. The forge then lists its issues from the last run. The missing
-  pull is missing by design, and not by an omission in the journal. No
-  change.
-- What does the Sync page show for a push-only forge? Options: no Check
-  button, or a Check that counts the sends only. The row shows the
-  words push only. Decide these words with the design of the Sync page.
-- The value `way = "pull"` gives a read-only mirror: the sync reads its
-  issues, and writes nothing back. Use case 6 with private-forge limits
-  needs this value. The same milestone carries both values.
-
-Proposal: build `way` as one key with the values `push`, `pull`, and
-`both`. Add the words of the Sync page in the same milestone. This
-change removes the last state that the configuration does not state:
-the direction of a run.
+- Is a backup mirror a link like the others? Yes, as proposed: the key
+  filters the directions of the run, and changes nothing else. A
+  push-only forge holds complete records.
+- Does a forge without pulls still record a run? It does, when it
+  wrote: the run drop follows `wrote`, as for every forge. The missing
+  pull is missing by design.
+- What does the Sync page show? The row says the way in words, in a
+  select: both ways, push only a backup, read only. A Check keeps its
+  place: it counts the sends of a push-only forge, and pulls nothing
+  for it. A `forge pull` run says, in a line, that nothing is pulled
+  from a push-only forge.
+- The value `way = "pull"` gives the read-only mirror of use case 6.
+  Built in the same milestone, with the releases: a read-only forge
+  takes no release either.
+- The one command: `git board forge backup <url>` adds the forge with
+  `way = "push"`, reads the kind from the host's name, and stores the
+  token at the hidden prompt ([the guide](../../guide/forges.md#the-way-of-a-mirror)).
 
 ## Q4. Write the Project field homes into the forge tables
 
@@ -192,8 +192,8 @@ invariant, and each raises the order of one piece.
 | Piece | Serves | Size |
 |---|---|---|
 | The definition section in ADR 0022 | the wording of the invariant | an edit |
-| The key `way` for each forge | the GitLab backup, use case 1 and 6 | the configuration, the engine, the words of the Sync page |
-| One command that adds a backup forge | the easy command line of 2026-11-08 | a command on the forge commands |
+| The key `way` for each forge | the GitLab backup, use case 1 and 6 | **built** on 2026-11-08, with `git board forge backup` (Q3) |
+| One command that adds a backup forge | the easy command line of 2026-11-08 | **built**: `git board forge backup <url>`, with Q3 |
 | The datastore question at the first open | decision one, made visible | a first-run step in the app, git as the default |
 | The Project homes written into the forge tables | the last implicit state | the configure command, the migration, and the removal of the Project clause |
 | A filter for the issues of a forge | the shared forge | the configuration and the engine, only if Q5 finds the want |

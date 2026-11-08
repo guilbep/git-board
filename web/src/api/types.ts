@@ -219,6 +219,7 @@ export interface SyncForge {
   host: string;
   login?: string;
   sync: boolean;
+  way: string; // push (a backup), pull (read-only), or both
   discovered?: boolean; // found in origin's URLs, no [forges] table
 }
 

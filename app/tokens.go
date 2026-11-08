@@ -40,6 +40,7 @@ type ForgeStatus struct {
 	Host       string        `json:"host"`
 	Project    string        `json:"project"`
 	Sync       bool          `json:"sync"`
+	Way        string        `json:"way"`                  // push, pull, or both
 	Discovered bool          `json:"discovered,omitempty"` // found in the git remotes, not in .git-board.toml
 	Tokens     []TokenStatus `json:"tokens"`
 }
@@ -85,7 +86,7 @@ func (b *Board) ForgeStatuses(ctx context.Context, check bool) ([]ForgeStatus, e
 	}
 	out := []ForgeStatus{}
 	for _, f := range forges {
-		st := ForgeStatus{Name: f.Name, Kind: f.Kind, Host: f.Host, Project: cmp.Or(f.Path, f.Project), Sync: f.Sync, Discovered: f.Discovered}
+		st := ForgeStatus{Name: f.Name, Kind: f.Kind, Host: f.Host, Project: cmp.Or(f.Path, f.Project), Sync: f.Sync, Way: f.Direction(), Discovered: f.Discovered}
 		logins := [][2]string{{f.Login, "posting"}}
 		if mine := b.myLogin(ctx, f.Host); mine != "" && mine != f.Login {
 			logins = append(logins, [2]string{mine, "you"})

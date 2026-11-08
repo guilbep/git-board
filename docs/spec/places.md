@@ -62,9 +62,12 @@ stated where it is decided.
   login of its own.
 - **Which way.** A run is a pull, a push, or both, chosen each time the
   run starts (`git board forge pull|push|sync`, the Sync page's Check
-  and Sync). There is no per-forge direction in the config today; the
-  way a mirror may write is [a proposed key](#the-implicit-states-and-their-rules)
-  (`way = "push"`), not a built one.
+  and Sync). A forge's own direction is stated too: its table's
+  `way = "push"` (a backup — the run writes to it, and pulls nothing),
+  `way = "pull"` (read-only — the run reads its issues, and writes
+  nothing there), or `way = "both"`, the default
+  ([A run](sync.md#a-run)). A forge found in the remotes has no table,
+  so it is both ways.
 - **Where a field lives.** On each forge, a field's home is its
   mapping's `to`, else the type's default for that forge's kind:
   a single select is a label, a date a due date on GitLab, a person the
@@ -136,11 +139,11 @@ so, with its state.
 | Implicit state today | Its rule | Written down where | To write |
 |---|---|---|---|
 | A forge exists because `origin` names it | the forges are the tables, else origin's projects; a table turns the finding off | [Which forges](#the-three-decisions), the guide's Adding a forge | — |
-| A found forge syncs, both ways, with no login | discovery's default; creations wait for consent | [Which forges](#the-three-decisions) | `way` per forge, for a mirror that only receives (a backup) or only sends |
+| A found forge syncs, both ways, with no login | discovery's default; creations wait for consent | [Which forges](#the-three-decisions) | a found forge has no table to state a `way`: written into a table, it is stated |
 | A field lives in the Project on GitHub because `[github-project]` is there, not because a mapping says so | the Project's own fields live there; `Held` keeps their labels off GitHub | [Where a field lives](#the-three-decisions), `forge.Target` | configure the Project by writing its fields' mappings into `[forges.<name>.fields]`, so no table's presence decides another table's behaviour |
 | A host no table names still gets the type's defaults | a synthetic table, its kind from the host's first label | `forge.ForgeOf` | — |
 | The Project bridge reads the token of the first GitHub table's posting login, else yours on the host, else any account | the fallback chain, in order, each step named | [app/project.go](../../app/project.go)'s header, the guide's Tokens | — |
-| A run's direction is how it was started | pull, push and sync are the three ways; nothing persists one | [Which way](#the-three-decisions) | the same `way` key |
+| A run's direction is how it was started | pull, push and sync are the three ways, chosen per run; a forge's own direction is its table's `way`, both the default | [Which way](#the-three-decisions), [A run](sync.md#a-run) | — |
 | The Project is read until `write = true` | the default, in the table's docs | [ConfigureProject](../../app/project.go), the guide | — |
 | The numbers' counter is on origin, or in the datastore | ADR 0016 states where, and how a clone finds it | [ADR 0016](../adr/0016-project-numbers-are-a-counter-on-origin.md) | — |
 
@@ -160,12 +163,12 @@ key from the table above is wanted, it names it.
 
 | A user wants | The config | The model's answer |
 |---|---|---|
-| 1. to back its issues up in `github.com/org/repo` | a `[forges.backup]` table naming the repo, run `forge push` | works, by running the push alone; nothing pulls back. A persisted `way = "push"` would make the backup a property of the forge, not of the command typed |
+| 1. to back its issues up in `github.com/org/repo` | `[forges.backup]` with `way = "push"`, or `git board forge backup <url>` | the run writes to it, and pulls nothing from it; an edit made there is drift, reported and never taken |
 | 2. in `github.com/org/x`, issues in `github.com/org/issue-repo` | a `[forges.issues]` table naming `org/issue-repo` | works: a table names any project, `origin` aside |
 | 3. in `x`, `y`, `z`, issues shared in one `issue-repo` | each repo's table names `org/issue-repo` | works, as a shared bus: each clone's board links to the same forge issues; a change either side pulls or pushes by the four cases; two boards changed the same field, the later wins |
 | 4. `x`, `y`, `z` sharing one GitHub Project | each repo's `[github-project]` names the same Project | works per issue: Project items name their repository, and each board bridges its own; fields shared through the Project's columns reach every repo's board. A Project's field on an issue another repo owns is not that board's to write |
 | 5. from a GitHub Project into a PostgreSQL board | `board.datastore = postgres`, `[github-project]` set, `project pull` | works: the engine is datastore-agnostic; the Project step runs on PostgreSQL as on git |
-| 6. code in GitHub, issues in GitLab | `origin` GitHub, a `[forges.gl]` table naming the GitLab project | works; without the table, discovery would mirror to GitHub too — the table is the explicit no |
+| 6. code in GitHub, issues in GitLab | `origin` GitHub, a `[forges.gl]` table naming the GitLab project | works; without the table, discovery would mirror to GitHub too — the table is the explicit no. `way = "pull"` makes the GitLab mirror read-only |
 | 7. code in GitHub, issues in a PostgreSQL or S3 remote | `board.datastore = postgres` | PostgreSQL works; the issues travel with the datastore's address, not with git. S3 is not built: the `Datastore` interface (heads, load, add, versions) is what a store on S3 would implement |
 
 The cases the model answers *as configured* share one property: they

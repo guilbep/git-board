@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/kernel"
 	"github.com/guilbep/git-board/store/git"
+	bsync "github.com/guilbep/git-board/sync"
 	"github.com/guilbep/git-board/view"
 )
 
@@ -29,6 +31,7 @@ import (
 type counted struct {
 	f    forge.Forge
 	name string
+	way  bsync.Way // the table's way (ADR 0022): the run pulls from those that pull
 	dry  bool
 	ids  *int // a dry run's made-up ids, shared by every account's view
 	see  func(SyncEvent)
@@ -36,6 +39,10 @@ type counted struct {
 }
 
 var _ forge.Forge = (*counted)(nil)
+
+// ForgeWay is c's way, as the run reads it (issuesync's wayer): the
+// table's way, both when it states none.
+func (c *counted) ForgeWay() bsync.Way { return cmp.Or(c.way, bsync.Both) }
 
 // replying is a counted forge whose comments form threads: it forwards
 // forge.Replier, which counted alone would hide, so a reply lands as a

@@ -60,9 +60,32 @@ func TestForges(t *testing.T) {
 		want[map[string]any](t, a.do("POST", "/api/forges", bad), http.StatusBadRequest)
 	}
 
+	if got := want[forgeNameRes](t, a.do("POST", "/api/forges", map[string]any{"kind": "github", "url": "https://github.com/o/b", "name": "bk", "way": "push"}), http.StatusCreated); got.Name != "bk" {
+		t.Fatalf("added %q", got.Name)
+	}
+	if text := file(); !strings.Contains(text, "[forges.bk]") || !strings.Contains(text, `way = "push"`) {
+		t.Errorf("the backup's table:\n%s", text)
+	}
+	want[map[string]any](t, a.do("POST", "/api/forges", map[string]any{"kind": "github", "url": "https://github.com/o/x", "name": "x", "way": "send"}), http.StatusBadRequest)
+
 	if got := want[forgeSyncRes](t, a.do("PATCH", "/api/forges/gh", map[string]any{"sync": false}), http.StatusOK); got.Sync || got.Name != "gh" {
 		t.Errorf("patched: %+v", got)
 	}
+	if got := want[forgeSyncRes](t, a.do("PATCH", "/api/forges/gh", map[string]any{"way": "pull"}), http.StatusOK); got.Way != "pull" {
+		t.Errorf("way: %+v", got)
+	}
+	if text := file(); !strings.Contains(text, `way = "pull"`) {
+		t.Errorf("the table's way:\n%s", text)
+	}
+	if got := want[forgeSyncRes](t, a.do("PATCH", "/api/forges/gh", map[string]any{"way": "both"}), http.StatusOK); got.Way != "both" {
+		t.Errorf("way: %+v", got)
+	}
+	now := file()
+	gh := now[:strings.Index(now, "[forges.gl]")]
+	if strings.Contains(gh, "way =") || !strings.Contains(file(), `way = "push"`) {
+		t.Errorf("both is the default, gh's table says no way:\n%s", file())
+	}
+	want[map[string]any](t, a.do("PATCH", "/api/forges/gh", map[string]any{"way": "send"}), http.StatusBadRequest)
 	want[map[string]any](t, a.do("PATCH", "/api/forges/gh", map[string]any{}), http.StatusBadRequest)
 	want[map[string]any](t, a.do("PATCH", "/api/forges/nope", map[string]any{"sync": true}), http.StatusNotFound)
 

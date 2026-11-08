@@ -567,7 +567,15 @@ forge, and never makes a thing twice.
 
 ## A run
 
-A run syncs git-board with every project it is given:
+A run syncs git-board with every project it is given. Each project's
+`[forges.<name>]` table states its `way`, the direction the run takes
+with it (ADR 0022): `push`, a mirror that only receives (a backup — the
+run writes to it, and pulls nothing from it, so an edit made there is
+drift to report, never truth to take); `pull`, a read-only mirror (the
+run reads its issues, and writes nothing there); or `both`, the
+default, which pulls and pushes. The run reads every project's listing
+whatever its way: the push compares against it, and a push-only forge's
+push links by marker first:
 
 1. It takes the run's lock: an OS lock (`flock`, or `LockFileEx` on
    Windows) on `board/sync.lock` in git's common directory, held while the
@@ -580,13 +588,13 @@ A run syncs git-board with every project it is given:
 2. It reads each project's visibility, and its posting account. A project
    whose visibility it can't read is left out, and the run returns that
    error at its end; a posting account it can't read stops it.
-3. It pulls from each project: the issues listed as updated since that
-   project's last `run`, or every issue when there is none. A listing reads
-   a request per page: an issue whose comments cost a request of their own
-   is listed partial, and the pull completes each issue as it reaches it,
-   before anything reads its comments.
-4. It pushes to each project. As every project is pulled first, an issue
-   pulled from one goes to the others in the same run.
+3. It pulls from each project whose way pulls: the issues listed as
+   updated since that project's last `run`, or every issue when there is
+   none. A listing reads a request per page: an issue whose comments cost
+   a request of their own is listed partial, and the pull completes each
+   issue as it reaches it, before anything reads its comments.
+4. It pushes to each project whose way pushes. As every project is pulled
+   first, an issue pulled from one goes to the others in the same run.
 5. It records a `run` in each project's sync entity it wrote to.
 
 **Going on after a cut.** The lock file also holds the run's journal:
@@ -606,7 +614,7 @@ Nothing is journaled for an issue the pull didn't finish:
 - one skipped because its issue isn't here;
 - a mirror waiting for the walk's end, until it is pulled.
 
-A run that records its `run` for a project drops the journal's lines for that project: the next run lists from that start. A run drops, at its start, the lines of a project it isn't given: a forge taken out of the sync, or turned off, takes them along. A pull that walks a listing to its end marks it so: the journal still serves the next run, but that pull isn't cut. A reset of the board (`git board reset --hard`, either form) empties the journal, as what it says was pulled went with the refs; it refuses while a sync runs. A run of one issue alone neither reads the journal nor adds to it, and a dry run keeps its own, on its own copy. Only an added line moves the file's time, which says when a cut run stopped.
+A run that records its `run` for a project drops the journal's lines for that project: the next run lists from that start. A run drops, at its start, the lines of a project it isn't given, and of a push-only one (its pull never reads the journal): a forge taken out of the sync, or turned off, takes them along. A pull that walks a listing to its end marks it so: the journal still serves the next run, but that pull isn't cut. A reset of the board (`git board reset --hard`, either form) empties the journal, as what it says was pulled went with the refs; it refuses while a sync runs. A run of one issue alone neither reads the journal nor adds to it, and a dry run keeps its own, on its own copy. Only an added line moves the file's time, which says when a cut run stopped.
 
 It reports how many forge issues it created, updated or left unchanged in
 git-board, and how many issues it created or wrote to on the forges. Its

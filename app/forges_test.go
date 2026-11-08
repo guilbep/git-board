@@ -38,7 +38,7 @@ func TestSyncForges(t *testing.T) {
 	f := fake.New("example.com/p")
 	f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: "There", Body: "made there"})
 	var events []string
-	run := ForgeRun{Forges: []NamedForge{{"p", f}}, See: func(e SyncEvent) { events = append(events, e.Forge+" "+e.What) }}
+	run := ForgeRun{Forges: []NamedForge{{Name: "p", Forge: f}}, See: func(e SyncEvent) { events = append(events, e.Forge+" "+e.What) }}
 
 	// a first sync creates nothing without consent
 	if _, err := b.SyncForges(t.Context(), WaySync, run); err != nil {
@@ -109,7 +109,7 @@ func TestSyncForgesRendersMarkdown(t *testing.T) {
 	}
 	f := fake.New("example.com/p")
 	f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: "Pulled into a file", Body: "made there"})
-	if _, err := b.SyncForges(t.Context(), WayPull, ForgeRun{Forges: []NamedForge{{"p", f}}}); err != nil {
+	if _, err := b.SyncForges(t.Context(), WayPull, ForgeRun{Forges: []NamedForge{{Name: "p", Forge: f}}}); err != nil {
 		t.Fatal(err)
 	}
 	files, _ := filepath.Glob(filepath.Join(dir, "issues", "*.md"))
@@ -151,7 +151,7 @@ func TestSyncForgesCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	var lines []string
-	run := ForgeRun{Forges: []NamedForge{{"p", f}}, DryRun: true, See: func(e SyncEvent) {
+	run := ForgeRun{Forges: []NamedForge{{Name: "p", Forge: f}}, DryRun: true, See: func(e SyncEvent) {
 		if l := e.Text(true, e.Issue[:min(7, len(e.Issue))]); l != "" {
 			lines = append(lines, l)
 		}
@@ -202,7 +202,7 @@ func TestSyncForgesReplies(t *testing.T) {
 	}
 	f := fake.New("example.com/p")
 	var events []string
-	run := ForgeRun{Forges: []NamedForge{{"p", f}}, AllowCreate: true, See: func(e SyncEvent) { events = append(events, e.What) }}
+	run := ForgeRun{Forges: []NamedForge{{Name: "p", Forge: f}}, AllowCreate: true, See: func(e SyncEvent) { events = append(events, e.What) }}
 	if _, err := b.SyncForges(t.Context(), WayPush, run); err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestSyncForgesPublishesReleases(t *testing.T) {
 	}
 	f := fake.New("example.com/p")
 	var events []string
-	run := ForgeRun{Forges: []NamedForge{{"p", f}}, DryRun: true, See: func(e SyncEvent) {
+	run := ForgeRun{Forges: []NamedForge{{Name: "p", Forge: f}}, DryRun: true, See: func(e SyncEvent) {
 		if e.What == "release" {
 			events = append(events, e.Text(true, ""))
 		}

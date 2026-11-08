@@ -56,7 +56,7 @@ move is explicit and previewed; a conflict is never auto-won.
 | State | Committed shape | State |
 |---|---|---|
 | A field's home on GitHub follows from `[github-project]`'s presence | configuring the Project writes the mappings it implies into `[forges.<name>.fields]`; no table's presence decides another table's behaviour | the rule is stated and the resolved homes are shown (Settings › Fields, a forge's row in Sync); writing the mappings is **not built** |
-| A run's direction is how it was started | `[forges.<name>] way = "push"` (a mirror that only receives — a backup — or only sends) | **not built**; pull, push and sync are chosen per run |
+| A run's direction is how it was started | `[forges.<name>] way = "push"` (a mirror that only receives — a backup — or only sends) | **built**, 2026-11-08: `way` is the key, `both` the default; pull, push and sync are still chosen per run |
 | An S3 datastore | a store implementing `Datastore` (heads, load, add, versions) | **not built**; the interface is the commitment |
 
 ## Consequences

@@ -48,6 +48,7 @@ export interface NewForge {
   login?: string;
   token?: string;
   sync?: boolean;
+  way?: ForgeWay; // '': both
 }
 
 export function addForge(f: NewForge): Promise<{ name: string }> {
@@ -73,6 +74,7 @@ export interface ForgeAuth {
   host: string;
   project: string;
   sync: boolean;
+  way: string; // push (a backup), pull (read-only), or both
   discovered?: boolean; // found in origin's URLs, no [forges] table
   tokens: ForgeToken[];
 }
@@ -91,4 +93,12 @@ export interface NewToken {
 
 export function storeForgeToken(t: NewToken): Promise<{ forge: string; host: string; login: string }> {
   return send('POST', '/api/forges/auth', { body: t });
+}
+
+// a forge's way, its direction: push (a backup: the issues go there, and
+// nothing comes back), pull (read-only), or both
+export type ForgeWay = 'push' | 'pull' | 'both';
+
+export function setForgeWay(name: string, way: ForgeWay): Promise<{ name: string; sync: boolean; way: string }> {
+  return send('PATCH', `/api/forges/${enc(name)}`, { body: { way } });
 }

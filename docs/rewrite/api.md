@@ -310,8 +310,8 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
 | 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
-| 33 | `POST /api/forges` | `{kind, url, name, login, token, sync}` | 201, `{name}` |
-| 34 | `PATCH /api/forges/{name}` | `{sync}` | `{name, sync}` |
+| 33 | `POST /api/forges` | `{kind, url, name, login, token, sync, way}` | 201, `{name}` |
+| 34 | `PATCH /api/forges/{name}` | `{sync, way}` | `{name, sync, way}` |
 | 35 | `DELETE /api/forges/{name}` | | 204 |
 | 36 | `GET /api/forges/credentials` | | `{"items": [{host, login, source}]}` |
 | 37 | `GET /api/numbers` (*later*) | | `{prefix, next, unnumbered}` |
@@ -353,18 +353,23 @@ never answered nor logged. Adding one (33): `kind` is `github` or
 `gitlab`, `url` the project's address (`https://github.com/o/r`, `.git`
 and GitLab's `/-/…` taken off); `name` defaults to `gh`, `gl`, then
 `gh2`… the first free; `sync` to on; the token is for `login`, else
-your own account on the host. A GitLab project is written by its id, read
+your own account on the host; `way` is the mirror's direction, `push`
+(a backup), `pull` (read-only) or `both`, the default. A GitLab project
+is written by its id, read
 from the forge with that token. With no table yet, the forges found in
 the remotes get theirs first (a table turns the finding off), read once
 through the forge as a sync reads them; one that already names the
-project refuses it, 400 `invalid`. 34 and 35 change a table the file has:
-a forge found in the remotes has none, 404. 36 lists the tokens
+project refuses it, 400 `invalid`. 34 and 35 change a table the file
+has: a forge found in the remotes has none, 404. 34 takes `sync`, or
+`way` (one of the three, `both` removing the key — the file says a
+non-default way alone), or both, and answers the state it left. 36 lists
+the tokens
 `forge status` finds, with nothing asked of a forge; never one's value.
 
 **The tokens (54, 55)** are `forge status`'s, for the web app's Tokens
 section: 54 answers each forge, and for each of its accounts (the
 posting login, yours on the host) whether a token is found and where,
-as `{name, kind, host, project, sync, discovered, tokens}` with a
+as `{name, kind, host, project, sync, way, discovered, tokens}` with a
 token `{login, role, found, source, owner, error}` — `role` is
 `posting` or `you`; with `check=1` the forge is asked whose each token
 is, `owner` the login it says (or `error` what it answered instead).

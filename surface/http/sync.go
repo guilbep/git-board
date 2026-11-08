@@ -72,6 +72,7 @@ type forgeRes struct {
 	Host       string `json:"host"`
 	Login      string `json:"login,omitempty"`
 	Sync       bool   `json:"sync"`
+	Way        string `json:"way"` // push (a backup), pull (read-only), or both
 	Discovered bool   `json:"discovered,omitempty"`
 }
 
@@ -83,7 +84,7 @@ func (s *Server) syncStatus(ctx context.Context, _ none) (syncRes, error) {
 		return res, err
 	}
 	for _, t := range tables {
-		res.Forges = append(res.Forges, forgeRes{Name: t.Name, Kind: t.Kind, Project: t.Project, Host: t.Host, Login: t.Login, Sync: t.Sync, Discovered: t.Discovered})
+		res.Forges = append(res.Forges, forgeRes{Name: t.Name, Kind: t.Kind, Project: t.Project, Host: t.Host, Login: t.Login, Sync: t.Sync, Way: t.Direction(), Discovered: t.Discovered})
 	}
 	if res.Remotes, err = b.Remotes(ctx); res.Remotes == nil {
 		res.Remotes = []string{}

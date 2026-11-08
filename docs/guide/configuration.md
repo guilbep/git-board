@@ -362,6 +362,13 @@ host = "gitlab.epfl.ch"
 project = "42400"
 login = "guilbep"
 sync = true
+
+[forges.backup]
+kind = "gitlab"
+host = "gitlab.example.com"
+project = "42"
+sync = true
+way = "push"
 ```
 
 | Key | Type | Default | What it does |
@@ -373,6 +380,7 @@ sync = true
 | `host` | string | `github.com`, `gitlab.com` | The forge's host, for GitHub Enterprise or a GitLab instance. |
 | `login` | string | none | The posting account: who sync writes as, for the people without a token there. |
 | `sync` | true / false | false | Takes part in the sync. Off, the forge is kept but left out. |
+| `way` | `push`, `pull` or `both` | `both` | The mirror's direction (ADR 0022). `push`: the issues go there, and nothing is pulled from it — a backup ([The way of a mirror](forges.md#the-way-of-a-mirror)). `pull`: read-only, the sync reads its issues and writes nothing there. |
 
 No token goes in this file, which is committed. A token comes from `GITHUB_TOKEN` (github.com only), `GITHUB_ENTERPRISE_TOKEN` (the host `GITHUB_ENTERPRISE_HOST` names) or `GITLAB_TOKEN` (the host `GITLAB_HOST` names, `gitlab.com` by default), else from git's credential helper for the host and login: `git credential fill`. A helper with nothing for that login is asked once more for the host alone, as a keychain keeps a host's token without a username; a person's token counts only when the forge says it is theirs.
 

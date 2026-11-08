@@ -25,6 +25,11 @@ type Table struct {
 	Host    string `toml:"host"`    // default github.com, gitlab.com
 	Login   string `toml:"login"`   // the posting account
 	Sync    bool   `toml:"sync"`
+	// Way is the mirror's direction, as ADR 0022 states it: push (a
+	// backup: writes go there, nothing is pulled), pull (read-only: the
+	// run reads its issues, and writes nothing there), or both (the
+	// default, ""). Empty is stated, not implied: the key's default.
+	Way string `toml:"way"`
 	// Fields maps a field to where it lives on this forge: only the
 	// overrides of its type's default.
 	Fields map[string]FieldMapping `toml:"fields"`
@@ -143,6 +148,22 @@ func (t Tables) parse(tables map[string]toml.Primitive) (Forges, error) {
 	return res, nil
 }
 
+// The ways of a mirror ([forges.<name>] way, ADR 0022): what a run does
+// with a forge. Empty is both, the key's stated default.
+const (
+	WayPush = "push" // writes go there; nothing is pulled from it
+	WayPull = "pull" // its issues are read; nothing is written there
+	WayBoth = "both" // pulled, then pushed
+)
+
+// Direction is the way a run gives f: the table's way, both when empty.
+func (f Table) Direction() string {
+	if f.Way == "" {
+		return WayBoth
+	}
+	return f.Way
+}
+
 // checkForge fills the host's default, and refuses a table git-board
 // can't sync with.
 func checkForge(f *Table) error {
@@ -166,6 +187,11 @@ func checkForge(f *Table) error {
 	}
 	if !forgeLogin.MatchString(f.Login) {
 		return fmt.Errorf("%s login: a login, not %q", where, f.Login)
+	}
+	switch f.Way {
+	case "", WayPush, WayPull, WayBoth:
+	default:
+		return fmt.Errorf("%s way: push, pull or both, not %q", where, f.Way)
 	}
 	return nil
 }

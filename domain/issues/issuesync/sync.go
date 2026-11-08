@@ -135,10 +135,26 @@ type listed struct {
 	fi forge.Issue
 }
 
+// wayer is a forge that states its direction (a [forges.<name>] way,
+// ADR 0022): the run pulls from those that pull, and pushes to those
+// that push. One that states none is both, the key's default.
+type wayer interface{ ForgeWay() bsync.Way }
+
+// wayOf is f's direction: its ForgeWay, or both when it states none.
+func wayOf(f forge.Forge) bsync.Way {
+	if w, ok := f.(wayer); ok {
+		if way := w.ForgeWay(); way != "" {
+			return way
+		}
+	}
+	return bsync.Both
+}
+
 // project is one forge project in a run.
 type project struct {
 	f      forge.Forge
 	key    string
+	way    bsync.Way // the table's way: the run pulls from those that pull, and pushes to those that push
 	vis    forge.Visibility
 	me     forge.Account
 	st     *state
@@ -159,7 +175,9 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 	if opt.Issue == "" { // every forge whose sync is on takes part
 		var keys []string
 		for _, f := range forges {
-			keys = append(keys, f.Key())
+			if wayOf(f).Pulls() { // a push-only forge's pull reads the journal never: its lines go
+				keys = append(keys, f.Key())
+			}
 		}
 		j.Keep(keys)
 	}
@@ -202,7 +220,7 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 			}
 			continue
 		}
-		p := &project{f: f, key: f.Key(), vis: vis, listed: map[string]forge.Issue{}, tokens: map[string]forge.Forge{}, acc: map[string]forge.Account{}}
+		p := &project{f: f, key: f.Key(), way: wayOf(f), vis: vis, listed: map[string]forge.Issue{}, tokens: map[string]forge.Forge{}, acc: map[string]forge.Account{}}
 		var merr error
 		if p.me, merr = f.Me(ctx); merr != nil {
 			if err := leave(p.key, fmt.Errorf("posting account: %w", merr)); err != nil {
@@ -231,6 +249,9 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 	}
 	if pull {
 		for _, p := range r.projects {
+			if !p.way.Pulls() {
+				continue // push-only: writes go there, and nothing is read from it as truth
+			}
 			if err := r.pullFrom(p); err != nil {
 				return r.report, err
 			}
@@ -245,10 +266,15 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 	}
 	if push {
 		for _, p := range r.projects {
-			if !pull {
+			if !pull || !p.way.Pulls() {
+				// a push alone links by marker first, and so does a forge
+				// the run never pulls: its listing is read to be written to
 				if err := r.relink(p); err != nil {
 					return r.report, err
 				}
+			}
+			if !p.way.Pushes() {
+				continue // pull-only: the run reads it, and writes nothing there
 			}
 			if err := r.pushTo(p); err != nil {
 				return r.report, err

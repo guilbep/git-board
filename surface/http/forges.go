@@ -33,21 +33,48 @@ func (s *Server) addForge(ctx context.Context, r app.NewForge) (Reply, error) {
 type forgeReq struct {
 	Name string `path:"name"`
 	Sync *bool  `json:"sync"`
+	Way  string `json:"way"` // when set: push, pull, or both
 }
 
 type forgeSyncRes struct {
 	Name string `json:"name"`
 	Sync bool   `json:"sync"`
+	Way  string `json:"way"`
 }
 
 func (s *Server) patchForge(ctx context.Context, r forgeReq) (forgeSyncRes, error) {
-	if r.Sync == nil {
+	if r.Sync == nil && r.Way == "" {
 		return forgeSyncRes{}, invalid("sync", errNoSync)
 	}
-	if err := s.writeConfig(ctx, func() error { return board(ctx).SetForgeSync(r.Name, *r.Sync) }); err != nil {
-		return forgeSyncRes{}, on("sync", err)
+	way := "" // the table's way before the write; the write alone changes it
+	for _, f := range board(ctx).Config.Forges.List {
+		if f.Name == r.Name {
+			way = f.Direction()
+		}
 	}
-	return forgeSyncRes{r.Name, *r.Sync}, nil
+	err := s.writeConfig(ctx, func() error {
+		b := board(ctx)
+		if r.Way != "" {
+			if err := b.SetForgeWay(r.Name, r.Way); err != nil {
+				return on("way", err)
+			}
+			way = r.Way
+		}
+		if r.Sync != nil {
+			if err := b.SetForgeSync(r.Name, *r.Sync); err != nil {
+				return on("sync", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return forgeSyncRes{}, err
+	}
+	sync := true
+	if r.Sync != nil {
+		sync = *r.Sync
+	}
+	return forgeSyncRes{Name: r.Name, Sync: sync, Way: way}, nil
 }
 
 func (s *Server) removeForge(ctx context.Context, r forgeReq) (Reply, error) {

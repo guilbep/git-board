@@ -55,7 +55,7 @@ func projectBoard(t *testing.T) (*Board, *projectfake.Fake) {
 	for _, title := range []string{"One", "Two"} {
 		f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: title})
 	}
-	if _, err := b.SyncForges(ctx, WayPull, ForgeRun{Forges: []NamedForge{{"gh", f}}}); err != nil {
+	if _, err := b.SyncForges(ctx, WayPull, ForgeRun{Forges: []NamedForge{{Name: "gh", Forge: f}}}); err != nil {
 		t.Fatal(err)
 	}
 	b.Close()

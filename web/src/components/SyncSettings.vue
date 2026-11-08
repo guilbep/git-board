@@ -61,6 +61,13 @@
                   <input type="checkbox" :checked="f.sync" :disabled="busy === f.name || running" @change="toggle(f.name, ($event.target as HTMLInputElement).checked)" />
                   <span>{{ f.sync ? 'On' : 'Off' }}</span>
                 </label>
+                <div v-if="!f.discovered" class="sy-note">
+                  <select class="sy-way" :value="f.way" :disabled="busy === f.name || running" :aria-label="`The way of ${f.name}`" @change="setWay(f.name, ($event.target as HTMLSelectElement).value as ForgeWay)">
+                    <option value="both">both ways</option>
+                    <option value="push">push only, a backup</option>
+                    <option value="pull">read only</option>
+                  </select>
+                </div>
               </td>
               <td>{{ f.login ? `as ${f.login}` : 'no token found' }}</td>
               <td />
@@ -112,7 +119,7 @@
         <div class="gb-dialog-body">
           <ul class="gb-plain-list">
             <li><span><b>git pull from {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
-            <li v-for="f in forges.filter((x) => x.sync)" :key="f.name"><span><b>{{ f.name }}</b>: both ways</span></li>
+            <li v-for="f in forges.filter((x) => x.sync)" :key="f.name"><span><b>{{ f.name }}</b>: {{ wayWords(f.way) }}</span></li>
             <li><span><b>git push to {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
           </ul>
           <label class="sy-check"><input v-model="allowCreate" type="checkbox" /> Create issues on a forge never synced with, or 50 or more at once (a forge may email everyone watching it, once per issue)</label>
@@ -142,6 +149,7 @@ import { keptIn, needsGit } from '@/datastore';
 import { placesSummary } from '@/fieldplaces';
 import { datastore, loadDatastore } from '@/kept';
 import { onLive } from '@/live';
+import { setForgeWay, type ForgeWay } from '@/api/sync';
 import { loadSync, syncStatus } from '@/sync';
 import { reportWords, remoteWords, stepWords } from '@/ways';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
@@ -248,6 +256,22 @@ async function writeForge(name: string, value: unknown) {
 const toggle = (name: string, on: boolean) => writeForge(name, on);
 const remove = (name: string) => writeForge(name, null);
 
+// the way of a mirror, in words, and set: push only sends, read only takes
+const wayWords = (way: string) => ({ push: 'push only, a backup', pull: 'read only', both: 'both ways' })[way] ?? way;
+
+async function setWay(name: string, way: ForgeWay) {
+  busy.value = name;
+  error.value = '';
+  try {
+    await setForgeWay(name, way);
+    await loadSync();
+  } catch (e) {
+    error.value = message(e);
+  } finally {
+    busy.value = '';
+  }
+}
+
 async function start(r: SyncRequest) {
   starting.value = true;
   startError.value = '';
@@ -289,6 +313,7 @@ onMounted(reload);
 .gb-table-wrap > .gb-table { min-width: 46rem; }
 .sy-switch { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-weight: 700; }
 .sy-switch input { width: 1.125rem; height: 1.125rem; accent-color: var(--primary-hover); }
+.sy-way { max-width: 11rem; padding: .125rem .25rem; font: inherit; font-size: .8125rem; color: var(--fg); }
 .sy-confirm-row td { background: var(--warning-bg); }
 .sy-confirm-row p { margin: 0 0 .5rem; }
 .sy-confirm-row .epfl-btn + .epfl-btn { margin-left: .5rem; }

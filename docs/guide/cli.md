@@ -380,6 +380,15 @@ The token is read at a hidden prompt on a terminal, else from the first
 line of stdin; never from the command line. It is for `--login`, by
 default your own account on that host, else the forge's posting account.
 
+`forge backup <url>` is the one command to a backup: it adds the forge
+with `way = "push"` — the issues go there, and nothing comes back — and
+stores its token the same way
+([The way of a mirror](forges.md#the-way-of-a-mirror)):
+
+```bash
+git board forge backup https://gitlab.example.com/team/repo
+```
+
 ## `close`, `reopen`, `move`
 
 ```bash

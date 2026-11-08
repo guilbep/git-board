@@ -20,7 +20,8 @@ import (
 
 // NewForge is a forge to add: its kind, its project's address, a name
 // ("": gh, gl, then gh2… the first free), the posting login, a token
-// ("": none stored) and whether it syncs.
+// ("": none stored), whether it syncs, and its way (forge.Table's way,
+// "": both).
 type NewForge struct {
 	Kind  string `json:"kind"`
 	URL   string `json:"url"`
@@ -28,6 +29,7 @@ type NewForge struct {
 	Login string `json:"login"`
 	Token string `json:"token"`
 	Sync  *bool  `json:"sync"` // absent: on
+	Way   string `json:"way"`  // push, pull, or both ("")
 }
 
 var forgeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
@@ -59,7 +61,12 @@ func (b *Board) AddForge(ctx context.Context, n NewForge) (string, error) {
 	if n.Name = strings.TrimSpace(n.Name); n.Name != "" && !forgeName.MatchString(n.Name) {
 		return "", invalidForge("%q: a forge's name is letters, digits, - and _", n.Name)
 	}
-	f := forge.Table{Kind: n.Kind, Host: u.Host, Project: project, Login: strings.TrimSpace(n.Login), Sync: n.Sync == nil || *n.Sync}
+	switch n.Way {
+	case "", forge.WayPush, forge.WayPull, forge.WayBoth:
+	default:
+		return "", invalidForge("way %q: push, pull or both", n.Way)
+	}
+	f := forge.Table{Kind: n.Kind, Host: u.Host, Project: project, Login: strings.TrimSpace(n.Login), Sync: n.Sync == nil || *n.Sync, Way: n.Way}
 	set := map[string]any{}
 	var taken []string
 	if b.Config.Forges.Discover {
@@ -121,7 +128,7 @@ func (b *Board) AddForge(ctx context.Context, n NewForge) (string, error) {
 }
 
 // forgeTable is f as its table writes it: the host when not the kind's
-// own, the login when set.
+// own, the login when set, the way when not both.
 func forgeTable(f forge.Table) map[string]any {
 	t := map[string]any{"kind": f.Kind, "project": f.Project, "sync": f.Sync}
 	if f.Host != map[string]string{"github": "github.com", "gitlab": "gitlab.com"}[f.Kind] {
@@ -129,6 +136,9 @@ func forgeTable(f forge.Table) map[string]any {
 	}
 	if f.Login != "" {
 		t["login"] = f.Login
+	}
+	if f.Way != "" && f.Way != forge.WayBoth {
+		t["way"] = f.Way
 	}
 	return t
 }
@@ -148,6 +158,26 @@ func (b *Board) SetForgeSync(name string, on bool) error {
 		return err
 	}
 	_, err := SetConfigKeys(b.Dir, map[string]any{"forges." + name + ".sync": on}, "", false)
+	return err
+}
+
+// SetForgeWay sets forge name's way, its direction (forge.Table's way):
+// push (a backup: writes go there, nothing is pulled), pull (read-only),
+// or both. Both is the key's default, so the file says nothing then.
+func (b *Board) SetForgeWay(name, way string) error {
+	if err := b.tableNamed(name); err != nil {
+		return err
+	}
+	switch way {
+	case forge.WayPush, forge.WayPull, forge.WayBoth:
+	default:
+		return &Error{Class: Usage, Code: "invalid", Err: fmt.Errorf("way %q: push, pull or both", way)}
+	}
+	v := any(nil) // both: the key's default, no line in the file
+	if way == forge.WayPush || way == forge.WayPull {
+		v = way
+	}
+	_, err := SetConfigKeys(b.Dir, map[string]any{"forges." + name + ".way": v}, "", false)
 	return err
 }
 
