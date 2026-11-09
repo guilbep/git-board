@@ -217,3 +217,34 @@ func TestForgeFoundMadeReadOnly(t *testing.T) {
 		t.Errorf("forges after: %+v", st.Forges)
 	}
 }
+
+// Route 56 from another address: a template's path or URL is refused (it
+// would read this machine's files, or the network), a built-in name
+// answers.
+func TestInitTemplateFromElsewhere(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	if err := os.Remove(filepath.Join(dir, ".git-board.toml")); err != nil {
+		t.Fatal(err)
+	}
+	a := newAPI(t, dir)
+	init := func(template string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/api/config/init", strings.NewReader(`{"template":"`+template+`"}`))
+		req.RemoteAddr, req.Host = "192.0.2.1:1234", "127.0.0.1:8080"
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		a.s.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	for _, tpl := range []string{"/etc/hosts", "https://example.org/t.toml", "../x.toml"} {
+		if rec := init(tpl); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "localhost only") {
+			t.Errorf("template %s from elsewhere = %d %s", tpl, rec.Code, rec.Body)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git-board.toml")); !os.IsNotExist(err) {
+		t.Fatalf("a refused init wrote the file: %v", err)
+	}
+	if rec := init("enac"); rec.Code != http.StatusCreated {
+		t.Errorf("the built-in enac from elsewhere = %d %s", rec.Code, rec.Body)
+	}
+}

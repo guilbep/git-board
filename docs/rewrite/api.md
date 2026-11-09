@@ -271,7 +271,7 @@ one read over it.
 | 24 | `PUT /api/config` | `If-Match`; `dry_run`; `{text}` | the same as 23 |
 | 25 | `PATCH /api/config` | `If-Match`; `dry_run`; `{set: {key: value}}` | the same as 23 |
 | 26 | `GET /api/docs/{page}` (*later*) | | `{"items": [{title, html}]}` |
-| 56 | `POST /api/config/init` | `{template}` (none: the default) | 201, `{path, lines}` |
+| 56 | `POST /api/config/init` | `{template}` (none: the default); a path or a URL on loopback only | 201, `{path, lines}` |
 
 `schema_version` is the file's schema (1 for a file without one; the
 versioned schema and its upgrades are built beside this). `keys` are

@@ -175,6 +175,26 @@ func loopbackOnly(next http.Handler) http.Handler {
 	})
 }
 
+type loopbackKey struct{}
+
+// markLoopback tells the route behind it whether the request came over
+// loopback (fromLoopback), for a route that refuses only some requests
+// elsewhere.
+func markLoopback(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		ip := net.ParseIP(host)
+		ok := err == nil && ip != nil && ip.IsLoopback()
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), loopbackKey{}, ok)))
+	})
+}
+
+// fromLoopback says the request came over loopback (markLoopback).
+func fromLoopback(ctx context.Context) bool {
+	ok, _ := ctx.Value(loopbackKey{}).(bool)
+	return ok
+}
+
 func sameHost(origin, host string) bool {
 	u, err := url.Parse(origin)
 	return err == nil && u.Host == host

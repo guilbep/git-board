@@ -52,7 +52,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "GET /api/config", getConfig)
 	Route(mux, "PUT /api/config", s.putConfig)
 	Route(mux, "PATCH /api/config", s.patchConfig)
-	Route(mux, "POST /api/config/init", s.initConfig)
+	// a template's path or URL reads this machine's files or the network:
+	// on loopback alone (initConfig)
+	initMux := http.NewServeMux()
+	Route(initMux, "POST /api/config/init", s.initConfig)
+	mux.Handle("POST /api/config/init", markLoopback(initMux))
 
 	Route(mux, "GET /api/datastore", datastore)
 	// what writes a secret, or says where the board goes, answers on
@@ -387,6 +391,9 @@ type initRes struct {
 // fields when it can read them. It never overwrites one: a file there
 // already is an error, 409.
 func (s *Server) initConfig(ctx context.Context, r initConfigReq) (Reply, error) {
+	if strings.ContainsAny(r.Template, `/\.:`) && !fromLoopback(ctx) {
+		return Reply{}, on("template", forbidden(errors.New("a template's path or URL answers on localhost only: a built-in name answers anywhere")))
+	}
 	var res initRes
 	err := s.writeConfig(ctx, func() (err error) {
 		res.Path, res.Lines, err = app.InitConfig(ctx, board(ctx).Dir, r.Template)
