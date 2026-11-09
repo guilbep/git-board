@@ -29,6 +29,10 @@ test('a new board offers the Start page, and its steps move the board on', async
   await expect(page.getByTestId('me-done')).toContainText('Ada');
 
   // the file: none yet, written on demand
+  await expect(page.getByLabel('Start from')).toHaveValue('');
+  await page.getByLabel('Start from').selectOption('enac');
+  await expect(page.getByRole('button', { name: 'Write the file now' })).toBeVisible();
+  await page.getByLabel('Start from').selectOption('');
   await page.getByRole('button', { name: 'Write the default file now' }).click();
   await expect(page.getByRole('button', { name: 'Write the default file now' })).toHaveCount(0);
 

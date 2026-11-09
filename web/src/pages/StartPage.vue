@@ -57,8 +57,19 @@
 
         <p v-if="st.file.state === 'none'" class="gb-hint gb-start-file">
           This board has no project file yet, and the defaults hold. The settings you change write <code>.git-board.toml</code>: commit it to share it with your team.
-          <button type="button" class="gb-linkbtn" :disabled="busy" @click="writeFile">Write the default file now</button>
         </p>
+        <div v-if="st.file.state === 'none'" class="gb-start-row" data-test="template">
+          <label class="gb-hint" for="start-template">Start from</label>
+          <select id="start-template" v-model="template" class="epfl-input gb-start-input" :disabled="busy">
+            <option value="">the default</option>
+            <option value="enac">ENAC's template (its labels and GitHub Project)</option>
+            <option value="other">a URL or a path</option>
+          </select>
+          <input v-if="template === 'other'" v-model="templateAt" class="epfl-input gb-start-input" placeholder="https://… or a file path" aria-label="The template's URL or path" spellcheck="false" :disabled="busy" />
+          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy || (template === 'other' && !templateAt.trim())" @click="writeFile">
+            {{ template === '' ? 'Write the default file now' : 'Write the file now' }}
+          </button>
+        </div>
       </li>
 
       <!-- 3. log in -->
@@ -181,7 +192,11 @@ async function act(fn: () => Promise<unknown>) {
   }
 }
 const setWay = (name: string, way: ForgeWay) => act(() => setForgeWay(name, way));
-const writeFile = () => act(() => initConfig());
+// ponytail: the built-in templates (app/starter) are listed here; a route
+// that lists them waits for a third one
+const template = ref<'' | 'enac' | 'other'>('');
+const templateAt = ref('');
+const writeFile = () => act(() => initConfig(template.value === 'other' ? templateAt.value.trim() : template.value));
 
 let poll: ReturnType<typeof setInterval> | undefined;
 async function go(dry: boolean) {
@@ -230,6 +245,7 @@ onBeforeUnmount(() => {
 .gb-start-goal .epfl-btn, .gb-start-step > .epfl-btn, .gb-start-step .epfl-btn-sm { justify-self: start; }
 .gb-start-row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin: 0; }
 .gb-start-file { margin-top: var(--space-2); }
+.gb-start-input { width: auto; min-width: 12rem; }
 .gb-start-report { margin: 0; }
 .gb-start-end { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
 .gb-linkbtn { padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
