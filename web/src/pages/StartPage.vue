@@ -51,6 +51,7 @@
           <p v-else-if="goal === 'markdown'">
             The issues become Markdown files in a folder of the repository, which you edit with any text editor.
             <router-link to="/settings/datastore">Open Settings › Datastore</router-link>: copy the board into a folder, then keep it there.
+            For a copy once, <a :href="markdownExportURL()" download data-test="md-export">download the issues as Markdown</a>.
           </p>
           <p v-else-if="goal === 'project'">
             The fields live in the columns of a GitHub Project.
@@ -107,7 +108,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { getState, getSync, initConfig, message, setForgeWay, startSync, type BoardState, type ForgeWay, type SyncForge, type SyncRun } from '@/api';
+import { getState, getSync, initConfig, markdownExportURL, message, setForgeWay, startSync, type BoardState, type ForgeWay, type SyncForge, type SyncRun } from '@/api';
 import { configModel } from '@/configmodel';
 import { me } from '@/me';
 import { onLive } from '@/live';

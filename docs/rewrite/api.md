@@ -13,7 +13,7 @@
 
 v1's API grew one route per button: 117 routes, 18,000 lines with their
 tests. v2's is designed from what the web app reads and writes, in
-nouns the CLI already prints. It has 60 routes.
+nouns the CLI already prints. It has 61 routes.
 
 The server is `surface/http`. Each route decodes a request, calls
 one method of `app`, and encodes the answer. No rule lives in the
@@ -308,6 +308,7 @@ an error, 409. `lines` are what reading the forge said.
 | 27 | `GET /api/datastore` | | `{name, where, replica, counter}` |
 | 28 | `PUT /api/datastore` | `{value}`; loopback only | the same as 27 |
 | 29 | `POST /api/datastore/copy` | `{from, to}` | `{to, entities, counter}` |
+| 61 | `GET /api/export/markdown` | | a zip of `NNN-slug.md`, one per issue, as `git board export --md` writes them |
 
 `replica` says the board can be pulled and pushed (git), `counter` that
 it hands out project numbers. `PUT` (28) points the clone at another
@@ -318,6 +319,8 @@ and the pages hear a `config` event. `dry_run` (open it and say what it
 holds, v1's `/api/datastore/test`) comes later. A copy
 (`from` and `to` are `board.datastore` values: `""` is git, and the
 datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
+The export (61) is a copy that the board does not read back. The Datastore
+page and the Start page download it.
 
 ### Sync: forges and remotes
 

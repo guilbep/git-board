@@ -37,6 +37,8 @@ test('a new board offers the Start page, and its steps move the board on', async
   await expect(page.getByTestId('goal-panel').getByRole('button', { name: 'Add the backup forge' })).toBeVisible();
   await page.getByText('Keep the issues as Markdown files').click();
   await expect(page.getByTestId('goal-panel').getByRole('link', { name: 'Open Settings › Datastore' })).toBeVisible();
+  const zip = await request.get(`${board}${await page.getByTestId('md-export').getAttribute('href')}`);
+  expect(zip.headers()['content-type']).toBe('application/zip');
 
   // no command anywhere on the page
   await expect(page.locator('main')).not.toContainText('git board');

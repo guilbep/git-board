@@ -154,6 +154,9 @@ $EDITOR issues/0042-export-csv.md
 git board import --md issues
 ```
 
+In the web app, select **Download the issues as Markdown** in Settings ›
+Datastore. You get the same files in a zip.
+
 ## The forges alone
 
 ```sh

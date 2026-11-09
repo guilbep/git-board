@@ -64,6 +64,8 @@
             <li :class="d.counter ? 'ds-yes' : 'ds-no'"><b>{{ d.counter ? 'Yes' : 'No' }}</b> project numbers (<router-link to="/settings/numbers">Numbers</router-link>)</li>
             <li class="ds-yes"><b>Yes</b> forge sync, the same ids everywhere</li>
           </ul>
+          <p><a class="epfl-btn epfl-btn-secondary epfl-btn-sm" :href="markdownExportURL()" download data-test="md-export">Download the issues as Markdown</a></p>
+          <p class="gb-hint">One NNN-slug.md per issue, in a zip: a copy, which the board does not read back.</p>
           <p>A board moves out of git by copying it: every id stays, so the markers sync left on the forges stay true. The git refs aren’t touched.</p>
         </aside>
       </div>
@@ -73,7 +75,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { copyDatastore, message } from '@/api';
+import { copyDatastore, markdownExportURL, message } from '@/api';
 import { setDatastore } from '@/api/sync';
 import { folderProblem, kinds, urlProblem, valueOf, type StoreKind } from '@/datastore';
 import { datastore, loadDatastore } from '@/kept';

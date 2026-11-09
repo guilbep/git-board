@@ -90,6 +90,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/environments/{env}/deploy", s.deploy)
 	Route(mux, "GET /api/uploads", uploadStatus)
 	mux.HandleFunc("GET /api/media", media)
+	mux.HandleFunc("GET /api/export/markdown", exportMarkdown)
 	mux.HandleFunc("POST /api/uploads", s.upload)
 	Route(mux, "GET /api/issues/{id}/cycle", issueCycle)
 	Route(mux, "POST /api/issues/{id}/cycle/{action}", cycleAct)
