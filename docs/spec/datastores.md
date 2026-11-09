@@ -262,11 +262,9 @@ folder, `<folder>/v2/md-<16 hex>.versions`, with the file's stat: its
 size, mtime, ctime and inode. A file whose stat is the one kept is not
 read again.
 
-A version is kept only under two conditions:
-
-- The file last changed (its ctime, or its mtime when later) a second or
-  more before the read.
-- Its stat is the same before and after the read.
+A version is kept only when the file last changed a second or more
+before the read, and its stat is the same before and after the read. The
+last change is the ctime, or the mtime when it is later.
 
 A version must change whenever the file does. A coarse clock can give two
 writes in one tick the same mtime, and `git checkout` writes files at the

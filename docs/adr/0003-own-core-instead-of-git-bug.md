@@ -41,9 +41,11 @@ A feature belongs to the core when it serves one of these goals:
 Releases and deploys are in the core. Which issue went out in which
 version, and where that version runs, is part of owning the issues.
 
-The development cycle, the agents and the worktrees are not the core.
-They are opt-in ([ADR 0001](0001-check-results-are-signed-git-notes.md),
-section 10).
+The development cycle is not the core. It is opt-in
+([ADR 0001](0001-check-results-are-signed-git-notes.md), section 10).
+The coding agents and `wtx` keep no data. They are a binary of their own,
+`git-board-agents`
+([ADR 0006](0006-go-git-reads-git-binary-moves-refs.md), section 4).
 
 ### 2. Its own data model, not compatible with git-bug
 

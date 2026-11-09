@@ -406,7 +406,7 @@ to = "label"
 
 On GitHub with `[github-project]`, the fields that its `fields` key names go to the Project's columns.
 
-The sync writes labels and native assignees only. A label whose field goes elsewhere on a forge is held there: the sync never sends it, never pulls it and never removes it. A `milestone:` label is always held. So a field that goes to a milestone, a due date or sub-issues stays in git-board alone on that forge. Settings › Fields shows where each field goes on each forge.
+The sync writes labels and native assignees only. A label is held on a forge unless its field goes to a label or a scoped label there: the sync never sends it, never pulls it and never removes it. A `milestone:` label is always held. The assignees go to the forge's own assignees, and the Project's fields go to its columns. A field with any other home stays in git-board alone on that forge. Settings › Fields shows where each field goes on each forge.
 
 ## Attachments
 

@@ -44,8 +44,8 @@ nav = [
     { "Proof notes" = "spec/proof.md" },
   ] },
   { "Decisions" = [
-    { "The spec's decisions" = "spec/decisions.md" },
     { "The decisions" = "adr/index.md" },
+    { "The spec's decisions" = "spec/decisions.md" },
     { "ADR 0003: the board is the team's" = "adr/0003-own-core-instead-of-git-bug.md" },
     { "ADR 0002: where the board is kept" = "adr/0002-datastores.md" },
     { "ADR 0004: issues are operation logs, fields are labels" = "adr/0004-entities-are-operation-logs.md" },

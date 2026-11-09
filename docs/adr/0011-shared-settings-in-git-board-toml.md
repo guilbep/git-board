@@ -31,7 +31,7 @@ signs the proof notes.
 - The kernel and the datastores never read it. Each domain declares and
   reports the problems of its own table (`conf/`, `app/config.go`).
 - A gate reads it from the base branch, never from the branch under
-  review (`app/verify.go`, `AtBase`;
+  review (`app/verify.go`, `AtBase`, and
   [ADR 0001](0001-check-results-are-signed-git-notes.md), section 5).
 - It never holds a secret: no token
   ([ADR 0010](0010-tokens-from-env-or-git-credential-helper.md)), no S3
@@ -41,11 +41,10 @@ signs the proof notes.
 
 The file states its format's version in a top-level `schema = N`. A file
 with no `schema` is version 1. git-board migrates the file between
-versions, up and down, and edits only the lines that change.
-
-- An older file is read migrated in memory, and written upgraded on the
-  next explicit write.
-- A newer file is read for what git-board knows, and never written.
+versions, up and down, and edits only the lines that change. git-board
+reads an older file migrated in memory, and writes it upgraded on the
+next explicit write. It reads a newer file for what it knows, and never
+writes it.
 
 ### 3. Each clone's own configuration is local git config
 

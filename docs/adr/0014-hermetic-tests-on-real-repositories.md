@@ -12,8 +12,8 @@
 
 git-board talks to git, to GitHub and GitLab, and to a developer's
 credential helper. A test that reaches one of them can post to a real
-forge with the developer's token, read their global git config, depend on
-the network, or pass on one machine alone. Several agents run tests in
+forge with the developer's token. It can also read their global git
+config, depend on the network, or pass on one machine alone. Several agents run tests in
 parallel worktrees on one machine.
 
 Every dependency is code to audit, to build with `CGO_ENABLED=0`, and to
@@ -24,8 +24,8 @@ git-board in a tool that is not GPL.
 
 ### 1. A test binary is sealed off the network and the user's tokens
 
-A package's `TestMain` calls `hermetic.Run` (`hermetic/hermetic.go`).
-Before any test runs:
+Every test package's `TestMain` calls `hermetic.Run`
+(`hermetic/hermetic.go`). Before any test runs:
 
 - `http.DefaultTransport` dials loopback hosts alone, with no proxy.
 - The forge tokens and hosts, the proxies and `GIT_BOARD_DATASTORE` are
@@ -36,6 +36,11 @@ Before any test runs:
   repositories.
 - `BOARD_LIVE` skips the seal for the live tests, which choose their own
   scratch projects.
+
+The code does not hold this rule yet. On 2026-11-09, 15 packages of the
+module call `hermetic.Run`, and `app` and `surface/cli` are among those
+that do not. No test of the module fails a package without the seal.
+`contrib/board-agents` has one, `TestEveryPackageIsSealed`.
 
 ### 2. Real repositories and fakes, not mocks
 
@@ -97,8 +102,6 @@ Bad, and accepted:
 - Tests that start git are slower than mocks. `make ci` takes minutes.
 - The seal covers `http.DefaultTransport` only. A client with its own
   transport goes around it.
-- In v0.12, 15 packages call `hermetic.Run`, and no test fails a package
-  that does not. `app` and `surface/cli` are among those that do not.
 - Tests that set environment variables or change directory run serially.
 - The scan reads an SPDX `OR` as an `AND`, so "MIT OR GPL-3.0" fails.
 - Some libraries are out of reach, such as a GPL keyring or diff library.

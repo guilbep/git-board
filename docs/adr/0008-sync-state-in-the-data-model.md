@@ -84,20 +84,19 @@ The table of defaults is in
 On GitHub with a Project, the fields that `[github-project] fields` names
 live in the Project's columns.
 
-The forge sync writes labels and native assignees only. A label whose
-field lives elsewhere on that forge is held: never sent, never pulled and
-never removed there. `milestone:` is always held. A field mapped to a
-milestone, a due date or sub-issues therefore lives in git-board alone on
-that forge.
+The forge sync writes labels and native assignees only. A label is held
+on a forge unless its field goes to a label or a scoped label there. The
+sync never sends, pulls or removes a held label. `milestone:` is always
+held. The assignees go to the forge's own assignees, and the Project's
+fields go to its columns through the bridge. Any other home leaves the
+field in git-board alone on that forge.
 
 ### 6. Each forge table states its way
 
-`[forges.<name>] way` is `both` (the default), `push` or `pull`.
-
-- `push` makes a backup. The sync writes to it and pulls nothing, and the
-  next run puts back an edit made there.
-- `pull` makes a read-only mirror. The sync reads it and writes nothing
-  there.
+`[forges.<name>] way` is `both` (the default), `push` or `pull`. With
+`push`, the forge is a backup: the sync writes to it, pulls nothing, and
+puts back an edit made there at the next run. With `pull`, the forge is
+a read-only mirror: the sync reads it and writes nothing there.
 
 ### 7. Other fixed rules
 

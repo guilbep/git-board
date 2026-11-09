@@ -23,17 +23,17 @@ The goals are local first, speed, proof kept in git, and async first. A
 reviewer pulls the repository, reads the status, and trusts the check.
 Every commit carries its own proof.
 
-The development cycle, the agents and the worktrees came after the core.
-They change fast and need tools that many users do not have.
+The development cycle that reads this proof came after the core. It
+changes fast and needs tools that many users do not have.
 
 ## Decision
 
 ### 1. A result is one signed line in a git note
 
-The line names the check, the result (`PASSED` or `FAILED`), the content
-key, the runner's platform and tools, the commit, the time, the log's
-hash and the signature. [Proof notes](../spec/proof.md#the-line) gives
-its format.
+The line names the check, its result (`PASSED` or `FAILED`) and its
+content key. It also names the runner's platform and tools, the commit,
+the time, the log's hash and the signature.
+[Proof notes](../spec/proof.md#the-line) gives its format.
 
 ### 2. Notes live in one ref per writer
 
@@ -142,9 +142,12 @@ file's list there (`app/config.go`).
   every command. On, it is refused.
 - `domain/cycle` computes whenever someone asks. The application decides
   whether anyone asks.
-- A feature leaves `[experimental]` when it has a guide page, no open
-  high-severity issue, the core working the same with it on or off, and
-  a team that used it for a release.
+- The switch also accepts `agents` and `worktrees`, v0.11's names. They
+  turn nothing on: the agents are their own binary
+  ([ADR 0006](0006-go-git-reads-git-binary-moves-refs.md), section 4).
+- A feature leaves `[experimental]` when four things are true. It has a
+  guide page and no open high-severity issue. The core works the same
+  with it on or off. A team used it for a release.
 
 ## Consequences
 

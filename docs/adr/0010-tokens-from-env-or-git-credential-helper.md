@@ -39,9 +39,9 @@ git-board stores no token itself, in git or anywhere.
 - Settings and `git board forge login` store a new token with
   `git credential approve` (`app/tokens.go`). No page shows a token back.
 - A base URL is `https://`, except on loopback.
-- The GitHub Project bridge takes the GitHub forge's token: the posting
-  account of the first GitHub table, else yours on the host, else any
-  account on `github.com`.
+- The GitHub Project bridge takes the GitHub forge's token. It is the
+  posting account's of the first GitHub table, else yours on the host,
+  else any account's on `github.com`.
 
 The S3 keys for attachments are plain environment variables of the server
 ([ADR 0002](0002-datastores.md), section 7).
@@ -73,17 +73,19 @@ covers the releases' cut, promotion, adoption, deploy and rollback, and a
 configuration write that changes `[release]`, `[cycle.tests]`,
 `[cycle.checks]` or `cycle.signers` (`surface/http/code.go`).
 
-- The gate refuses the request when the server listens beyond loopback,
-  whoever asks.
-- Otherwise the request comes from loopback, with the board's own page as
-  its `Origin`. A script without an `Origin` is refused.
+The gate refuses the request when the server listens beyond loopback,
+whoever asks. Otherwise the request must come from loopback, with the
+board's own page as its `Origin`. A script without an `Origin` is
+refused.
 
 ### 4. What reaches a secret or another store answers on localhost alone
 
 Some routes answer on a loopback address alone (`localRoutes`,
-`loopbackOnly`): a datastore's value, which can hold a password, and a
-copy into one; a token stored in git's credential helper; a git remote
-added.
+`loopbackOnly`):
+
+- a datastore's value, which can hold a password, and a copy into one
+- a token stored in git's credential helper
+- a git remote added
 
 ## Consequences
 

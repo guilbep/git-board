@@ -95,7 +95,7 @@ format, with `namespaces="git-board-ci"`. Its path is `[cycle] signers`,
   starts again.
 - `notes.rewriteRef` is never set for these refs.
 
-## Verify a proof by hand
+## A proof read by hand
 
 1. Read the check's `run`, `env` and `files` from the base branch's
    `.git-board.toml`.

@@ -70,8 +70,8 @@ proof notes stay in git, whatever keeps the board.
 only truth ([ADR 0008](0008-sync-state-in-the-data-model.md)), so this
 datastore keeps no board of its own. It keeps a disposable copy of what
 this machine read of the forges, in `<folder>/forge-copy.git`
-(`store/forgecopy`). The sync fills it, and a write goes to the forge at
-once.
+(`store/forgecopy`). The sync fills it, and takes the copy's own writes
+to the forges.
 
 - Everything in the copy came from a forge, so a copy that is lost costs
   one full pull, and makes no duplicate.
@@ -102,6 +102,8 @@ deleted at any time.
   per view version (`view.PGSchema`).
 - A file of an older version is deleted and built again, never migrated.
 - Each query first catches up with the heads that moved.
+- A broken entity never fails a query. The view keeps it out, and lists
+  it apart.
 
 ### 7. Attachments go to S3, not into the board
 
