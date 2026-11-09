@@ -16,6 +16,7 @@ export interface ForgeState {
   way: 'push' | 'pull' | 'both';
   state: 'off' | 'no-token' | 'first' | 'on' | 'synced';
   discovered?: boolean;
+  device?: boolean; // logs in in the browser
   token?: string;
   last_run?: string;
 }

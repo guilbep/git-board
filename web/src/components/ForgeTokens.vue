@@ -24,6 +24,16 @@
     </div>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
 
+    <div v-if="dev && dev.state !== 'none'" class="ft-device" role="status" data-test="device">
+      <template v-if="dev.state === 'waiting'">
+        <p>Open <a :href="dev.verification_uri" target="_blank" rel="noopener">{{ dev.verification_uri }}</a> and type this code:</p>
+        <p class="ft-code"><code>{{ dev.user_code }}</code> <button type="button" class="gb-linkbtn" @click="copyCode">{{ copied ? 'Copied' : 'Copy' }}</button></p>
+        <p class="ft-note">This page waits for GitHub's answer<template v-if="dev.expires_at">, until {{ new Date(dev.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</template>.</p>
+      </template>
+      <p v-else-if="dev.state === 'done'" class="epfl-alert epfl-alert-success">Logged in: a token for {{ dev.login }} is stored in git's credential helper.</p>
+      <p v-else class="epfl-alert epfl-alert-danger">The login did not finish: {{ dev.error }}</p>
+    </div>
+
     <div v-if="items.length" class="gb-table-wrap">
       <table class="gb-table">
         <thead><tr><th>Forge</th><th>Account</th><th>Token</th></tr></thead>
@@ -35,7 +45,12 @@
                 <div class="ft-note">{{ f.host }} · {{ f.project }}</div>
               </td>
               <td>{{ who(t) }}</td>
-              <td>{{ line(t) }}</td>
+              <td>
+                {{ line(t) }}
+                <button v-if="i === 0 && f.device" type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm ft-login" :disabled="busy || dev?.state === 'waiting'" @click="loginInBrowser(f.name)">
+                  Log in with GitHub
+                </button>
+              </td>
             </tr>
           </template>
         </tbody>
@@ -83,8 +98,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
-import { getForgeAuth, message, storeForgeToken, type ForgeAuth, type ForgeToken } from '@/api';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { getDeviceLogin, getForgeAuth, message, startDeviceLogin, storeForgeToken, type DeviceLogin, type ForgeAuth, type ForgeToken } from '@/api';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import GbIcon from '@/components/GbIcon.vue';
 
@@ -148,7 +163,44 @@ async function store() {
   }
 }
 
+// a login in the browser: the code shown, GitHub's answer polled
+const dev = ref<DeviceLogin | null>(null);
+const copied = ref(false);
+let poll: ReturnType<typeof setInterval> | undefined;
+async function loginInBrowser(forge: string) {
+  error.value = '';
+  copied.value = false;
+  try {
+    dev.value = await startDeviceLogin(forge);
+  } catch (e) {
+    error.value = message(e);
+    return;
+  }
+  if (dev.value.verification_uri) window.open(dev.value.verification_uri, '_blank', 'noopener');
+  clearInterval(poll);
+  poll = setInterval(async () => {
+    const d = await getDeviceLogin().catch(() => null);
+    if (!d || d.user_code !== dev.value?.user_code) return;
+    dev.value = d;
+    if (d.state === 'waiting') return;
+    clearInterval(poll);
+    if (d.state === 'done') {
+      await load();
+      emit('changed');
+    }
+  }, 1000);
+}
+async function copyCode() {
+  try {
+    await navigator.clipboard.writeText(dev.value?.user_code ?? '');
+    copied.value = true;
+  } catch {
+    // no clipboard: the code is on the page
+  }
+}
+
 onMounted(() => void load());
+onBeforeUnmount(() => clearInterval(poll));
 </script>
 
 <style scoped>
@@ -164,6 +216,9 @@ onMounted(() => void load());
 .ft-label { display: block; margin-bottom: .375rem; font-weight: 700; }
 .ft-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: auto; padding-top: .5rem; }
 .gb-grow { flex: 1; }
+.ft-device { display: grid; gap: .5rem; padding: .75rem 1rem; border: 1px solid var(--border-strong); }
+.ft-code code { font-size: 1.5rem; letter-spacing: .1em; }
+.ft-login { margin-left: .5rem; }
 .gb-linkbtn { padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 @media (max-width: 47.99rem) {
   .ft-dialog form { padding: 1.25rem 1rem; }

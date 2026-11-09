@@ -82,6 +82,7 @@ export interface ForgeAuth {
   sync: boolean;
   way: string; // push (a backup), pull (read-only), or both
   discovered?: boolean; // found in origin's URLs, no [forges] table
+  device?: boolean; // logs in in the browser (the OAuth device flow, routes 62 and 63)
   tokens: ForgeToken[];
 }
 
@@ -99,6 +100,26 @@ export interface NewToken {
 
 export function storeForgeToken(t: NewToken): Promise<{ forge: string; host: string; login: string }> {
   return send('POST', '/api/forges/auth', { body: t });
+}
+
+// a login in the browser (the OAuth device flow): the code to type at
+// verification_uri, then the outcome. The token never reaches the page.
+export interface DeviceLogin {
+  forge?: string;
+  state: 'none' | 'waiting' | 'done' | 'failed';
+  user_code?: string;
+  verification_uri?: string;
+  expires_at?: string;
+  login?: string; // done: whose token was stored
+  error?: string; // failed: why
+}
+
+export function startDeviceLogin(forge: string): Promise<DeviceLogin> {
+  return send('POST', '/api/forges/auth/device', { body: { forge } });
+}
+
+export function getDeviceLogin(): Promise<DeviceLogin> {
+  return get('/api/forges/auth/device');
 }
 
 // the datastore this clone keeps its board in, as board.datastore in its
