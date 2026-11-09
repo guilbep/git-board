@@ -569,7 +569,7 @@ forge, and never makes a thing twice.
 
 A run syncs git-board with every project it is given. Each project's
 `[forges.<name>]` table states its `way`, the direction the run takes
-with it (ADR 0022): `push`, a mirror that only receives (a backup — the
+with it (ADR 0008): `push`, a mirror that only receives (a backup — the
 run writes to it, and pulls nothing from it: an edit made there is
 put back to the board's value at the next run, which counts it as
 restored, and it never reaches the board); `pull`, a read-only mirror (the

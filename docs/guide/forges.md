@@ -15,7 +15,7 @@ A failed pull stops the steps after it. A forge or the Project that fails is tol
 
 A forge doesn't replace a remote: the people who use git-board pull and push the issues with git; a forge is for the people who stay on GitHub or GitLab.
 
-The model behind all of it is **one truth, many mirrors**: the board holds every field's value as a label; each forge and the GitHub Project show it as whatever they offer, per field; and every write either side accepts is recorded as the value both sides last agreed on, so switching a mirror on, off or round moves only what changed since. [The spec's Where a value lives](../spec/places.md) states it; [ADR 0022](../adr/0022-one-truth-many-mirrors.md) records it.
+The model behind all of it is **one truth, many mirrors**: the board holds every field's value as a label; each forge and the GitHub Project show it as whatever they offer, per field; and every write either side accepts is recorded as the value both sides last agreed on, so switching a mirror on, off or round moves only what changed since. [The spec's Where a value lives](../spec/places.md) states it; [ADR 0008](../adr/0008-sync-state-in-the-data-model.md) records it.
 
 ## Tokens
 

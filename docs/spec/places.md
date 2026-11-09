@@ -20,7 +20,7 @@ what each forge needs, [Datastores](datastores.md) where the board is kept.
 ```
 
 - **The board's value is the truth.** A field's value is a label in the
-  board (`status:ready`, ADR 0007). A pull writes a mirror's value into
+  board (`status:ready`, ADR 0004). A pull writes a mirror's value into
   the board, and from then on the board holds it as its own. A mirror
   can be where a change starts; it is never the truth.
 - **The board is your clone's.** Two clones meet through git (origin, a

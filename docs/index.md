@@ -43,18 +43,17 @@ kept, in the store you choose (git, PostgreSQL or Markdown files).
       the agreement that makes a mirror reversible, and the rule for
       each behaviour the config leaves unwritten.
 - **The decisions**: [the spec's](spec/decisions.md), the choices it
-  starts from, each linked to the PRD; and the architecture decision
-  records, from [ADR 0001](adr/0001-check-results-are-signed-git-notes.md)
-  to [ADR 0022](adr/0022-one-truth-many-mirrors.md):
-  why git-board has its own core ([0003](adr/0003-own-core-instead-of-git-bug.md)),
-  keeps issues as operation logs ([0004](adr/0004-entities-are-operation-logs.md)),
-  syncs forges as mirrors ([0008](adr/0008-sync-state-in-the-data-model.md)),
-  lets you choose where the board is kept ([0002](adr/0002-datastores.md)),
-  what it is for ([0018](adr/0018-own-your-issues-work-in-progress-is-opt-in.md)),
-  how the core is layered ([0020](adr/0020-the-core-in-layers.md)), why
-  v0.12 is new code on the same data ([0021](adr/0021-git-board-v2-same-data-new-code.md)),
-  and the one-truth-many-mirrors invariant with the explicit states it
-  commits to ([0022](adr/0022-one-truth-many-mirrors.md)).
+  starts from, each linked to the PRD, and the nine architecture
+  decision records, read in order on [The decisions](adr/index.md):
+  the board is the team's ([0003](adr/0003-own-core-instead-of-git-bug.md)),
+  where it is kept ([0002](adr/0002-datastores.md)),
+  issues as operation logs and fields as labels ([0004](adr/0004-entities-are-operation-logs.md)),
+  the shared and the personal configuration ([0011](adr/0011-shared-settings-in-git-board-toml.md)),
+  one truth and many mirrors ([0008](adr/0008-sync-state-in-the-data-model.md)),
+  no stored secret and a local server ([0010](adr/0010-tokens-from-env-or-git-credential-helper.md)),
+  one binary in layers ([0006](adr/0006-go-git-reads-git-binary-moves-refs.md)),
+  the tests and the licences ([0014](adr/0014-hermetic-tests-on-real-repositories.md)),
+  and proof in git notes with the opt-in cycle ([0001](adr/0001-check-results-are-signed-git-notes.md)).
 
 ## The core
 

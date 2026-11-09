@@ -41,6 +41,30 @@ A datastore's ids, kinds and the rules of [Entities](data-model.md#entities)
 are git's: a kind is `issue`, `person`, `sync` or `release`; an id is 40
 lowercase hex digits.
 
+## Capabilities
+
+What a datastore gives beyond the packs is a field of `store.Caps`
+(`store/store.go`). A datastore without a capability leaves its field
+nil, and a feature that needs it fails with `store.ErrMissing` and a
+sentence ([ADR 0002](../adr/0002-datastores.md), section 3).
+
+| Capability | What needs it | git | PostgreSQL | Markdown folder | Forges alone |
+|---|---|---|---|---|---|
+| `Pinned`: a version names its packs for good | loads with no recheck | yes | no | no | yes |
+| `Shared`: every machine reads the same store | the view and the lock on the server | no | yes | no | no |
+| `Counter`: a counter with compare-and-swap | project numbers | `refs/board/seq` | a row | `.board/numbers`, on the default branch | no |
+| `Locker`: a lock that every machine shares | one forge sync at a time per board | no | an advisory lock | no | no |
+| `Remote`: fetch, push, start over | git remotes, Sync's git part, Start over | yes | no | no | yes, its copy's |
+| `SQL`: a database for the view | the view beside the board | no | yes | no | no |
+| `Put`: takes another datastore's packs as they are | `git board datastore copy` | yes | yes | yes | yes |
+
+A datastore without `Locker` takes the machine's lock, `<folder>/sync.lock`.
+The journal of a sync run stays the machine's on every datastore.
+
+The code repository gives the rest, whatever keeps the board: branches,
+diffs, tags, and the proof notes. A git-board with no clone goes without
+them, and so without the cycle's gates.
+
 ## PostgreSQL
 
 A board kept in PostgreSQL is one database (`board.datastore` holds its
@@ -228,6 +252,28 @@ folder made before it.
 reading the hand edits in to the last file rendered, so a server and a
 command never read an edit in twice nor render over each other. It waits
 up to a minute. The OS lets it go when its holder dies.
+
+### The heads, and the stat cache
+
+A listing of the heads needs each file's version, and a version is a hash
+of the whole file. At 5,000 issues, that is 34 MB to read on each
+listing. So `store/md/heads.go` keeps each version in this machine's
+folder, `<folder>/v2/md-<16 hex>.versions`, with the file's stat: its
+size, mtime, ctime and inode. A file whose stat is the one kept is not
+read again.
+
+A version is kept only under two conditions:
+
+- The file last changed (its ctime, or its mtime when later) a second or
+  more before the read.
+- Its stat is the same before and after the read.
+
+A version must change whenever the file does. A coarse clock can give two
+writes in one tick the same mtime, and `git checkout` writes files at the
+time of the checkout. A file written again within that second has the
+stat of the first write, so a version read then is not kept. A missed
+change is an old page and an old view with nothing to tell, so the cache
+trusts no recent file.
 
 ### The counter in a folder
 

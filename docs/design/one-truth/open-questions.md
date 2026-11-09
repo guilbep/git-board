@@ -1,6 +1,6 @@
 # One truth, many mirrors: the open questions
 
-[ADR 0022](../../adr/0022-one-truth-many-mirrors.md) states the
+[ADR 0008](../../adr/0008-sync-state-in-the-data-model.md), section 1, states the
 invariant: the board is the only source of truth, and each forge and
 the GitHub Project are mirrors. [Where a value lives](../../spec/places.md)
 gives the model and the table of cases, each with its test. This page
@@ -8,7 +8,7 @@ keeps only what is still open, and what was decided, with its date.
 
 ## Decided
 
-- 2026-11-07: the invariant (ADR 0022); the Project bridge's token
+- 2026-11-07: the invariant (ADR 0022, now ADR 0008); the Project bridge's token
   order (the first GitHub table's posting login, else yours on the host,
   else any account there).
 - 2026-11-08: `way = "push" | "pull" | "both"` on each forge table, both
@@ -25,7 +25,7 @@ keeps only what is still open, and what was decided, with its date.
   later-wins setting.
 - 2026-11-08: logging in to a forge from the web app is an OAuth device
   flow (the user clicks, types a short code on the forge, and the token
-  goes to git's credential helper). It needs an ADR that amends ADR 0013,
+  goes to git's credential helper). It needs an ADR that amends ADR 0010 (it absorbed ADR 0013),
   and an OAuth app on each host (one shipped for github.com; one an
   admin registers on gitlab.epfl.ch).
 - 2026-11-08: issues shown outside the app: first a read-only site
@@ -55,7 +55,7 @@ It commits to three statements, each to confirm:
 - Authorship is not truth: a value pulled from the Project is first the
   Project's; after the pull the board holds it as its own.
 
-Proposal: add the definition to ADR 0022, in a section named What the
+Proposal: add the definition to ADR 0008, in a section named What the
 invariant says.
 
 ## Q2. Mirrors shared by several repositories
@@ -64,7 +64,7 @@ Use cases 3 and 4 share one mirror across repositories. Three questions
 are left:
 
 - **A filter per forge.** A board may want only its own issues from a
-  shared forge (`issues = "label:x"`). Not built, and ADR 0022 does not
+  shared forge (`issues = "label:x"`). Not built, and ADR 0008 does not
   commit to it. Decide whether the want is real first; the alternative is
   one issue repository per code repository, shared only through the
   Project.
