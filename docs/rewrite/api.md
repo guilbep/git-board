@@ -391,8 +391,11 @@ is written by its id, read
 from the forge with that token. With no table yet, the forges found in
 the remotes get theirs first (a table turns the finding off), read once
 through the forge as a sync reads them; one that already names the
-project refuses it, 400 `invalid`. 34 and 35 change a table the file
-has: a forge found in the remotes has none, 404. 34 takes `sync`, or
+project refuses it, 400 `invalid`. 35 removes a table the file
+has: a forge found in the remotes has none, 404. 34 on a forge found in
+the remotes writes the found forges' tables first, as 33 does, so one
+call makes it read-only. A GitHub project is written as the URL names
+it, with no token. A GitLab one is read through the forge for its id. 34 takes `sync`, or
 `way` (one of the three, `both` removing the key — the file says a
 non-default way alone), or both, and answers the state it left. 36 lists
 the tokens

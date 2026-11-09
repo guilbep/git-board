@@ -32,15 +32,11 @@
 
         <div v-if="goal" class="gb-start-goal" data-test="goal-panel">
           <template v-if="goal === 'see' || goal === 'both' || goal === 'backup'">
-            <p v-for="f in tableForges" :key="f.name" class="gb-start-row">
-              <span><b>{{ f.name }}</b> · {{ f.project }}: {{ wayWords(f.way) }}</span>
+            <p v-for="f in st.forges" :key="f.name" class="gb-start-row" data-test="goal-forge">
+              <span><b>{{ f.name }}</b> · {{ f.project }}: {{ wayWords(f.way) }}<template v-if="f.discovered">, found in your git remotes</template></span>
               <button v-if="goal !== 'backup' && f.way !== wantWay" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="setWay(f.name, wantWay)">
                 Make it {{ wayWords(wantWay) }}
               </button>
-            </p>
-            <p v-for="f in foundForges" :key="f.name" class="gb-hint">
-              Found in your git remotes: <b>{{ f.project }}</b>, synced both ways.
-              <template v-if="goal === 'see'">To make it read-only, add it as a forge with the way Read only.</template>
             </p>
             <p v-if="goalDone" class="gb-hint" data-test="goal-done">Done: {{ goalDoneWords }}</p>
             <button v-else type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" @click="adding = true">
@@ -141,7 +137,6 @@ const wantWay = computed<ForgeWay>(() => ({ see: 'pull', both: 'both', backup: '
 const wayWords = (way: string) => ({ push: 'a backup (push only)', pull: 'read only', both: 'both ways' })[way] ?? way;
 
 const myName = computed(() => me.value?.me?.name ?? st.value?.me.id?.slice(0, 7) ?? '');
-const tableForges = computed(() => st.value?.forges.filter((f) => !f.discovered) ?? []);
 const foundForges = computed(() => st.value?.forges.filter((f) => f.discovered) ?? []);
 const foundAsSync = computed<SyncForge[]>(() => foundForges.value.map((f) => ({ name: f.name, kind: f.kind, project: f.project, host: '', sync: true, way: f.way, discovered: true })));
 function doneFor(g: Goal | ''): boolean {

@@ -63,12 +63,11 @@
                 </div>
               </td>
               <td>
-                <span v-if="f.discovered" title="A forge found in the remotes syncs: give the forges tables in .git-board.toml to leave one out">On</span>
-                <label v-else class="sy-switch">
+                <label class="sy-switch" :title="f.discovered ? 'A change writes the forges found in the remotes into .git-board.toml' : undefined">
                   <input type="checkbox" :checked="f.sync" :disabled="busy === f.name || running" @change="toggle(f.name, ($event.target as HTMLInputElement).checked)" />
                   <span>{{ f.sync ? 'On' : 'Off' }}</span>
                 </label>
-                <div v-if="!f.discovered" class="sy-note">
+                <div class="sy-note">
                   <select class="sy-way" :value="f.way" :disabled="busy === f.name || running" :aria-label="`The way of ${f.name}`" @change="setWay(f.name, ($event.target as HTMLSelectElement).value as ForgeWay)">
                     <option value="both">both ways</option>
                     <option value="push">push only, a backup</option>

@@ -51,12 +51,12 @@ func (s *Server) patchForge(ctx context.Context, r forgeReq) (forgeSyncRes, erro
 	err := s.writeConfig(ctx, func() error {
 		b := board(ctx)
 		if r.Way != "" {
-			if err := b.SetForgeWay(r.Name, r.Way); err != nil {
+			if err := b.SetForgeWay(ctx, r.Name, r.Way); err != nil {
 				return on("way", err)
 			}
 		}
 		if r.Sync != nil {
-			if err := b.SetForgeSync(r.Name, *r.Sync); err != nil {
+			if err := b.SetForgeSync(ctx, r.Name, *r.Sync); err != nil {
 				return on("sync", err)
 			}
 		}

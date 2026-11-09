@@ -187,3 +187,33 @@ func TestLocalRoutes(t *testing.T) {
 		t.Errorf("a refused request wrote:\n%s", got)
 	}
 }
+
+// A forge found in the git remotes has no table: PATCH writes one, with
+// the other found ones, so one click makes it read-only.
+func TestForgeFoundMadeReadOnly(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	gitRun(t, dir, "remote", "add", "origin", "https://github.com/o/r.git")
+	a := newAPI(t, dir)
+	st := want[app.State](t, a.do("GET", "/api/state", nil), http.StatusOK)
+	if len(st.Forges) != 1 || !st.Forges[0].Discovered {
+		t.Fatalf("forges %+v, want one found in origin", st.Forges)
+	}
+	name := st.Forges[0].Name
+	got := want[forgeSyncRes](t, a.do("PATCH", "/api/forges/"+name, map[string]any{"way": "pull"}), http.StatusOK)
+	if got.Way != "pull" || !got.Sync {
+		t.Fatalf("patched: %+v", got)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".git-board.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range []string{"[forges." + name + "]", `project = "o/r"`, `way = "pull"`} {
+		if !strings.Contains(string(data), w) {
+			t.Errorf("the file has no %s:\n%s", w, data)
+		}
+	}
+	if st := want[app.State](t, a.do("GET", "/api/state", nil), http.StatusOK); len(st.Forges) != 1 || st.Forges[0].Discovered || st.Forges[0].Way != "pull" {
+		t.Errorf("forges after: %+v", st.Forges)
+	}
+}

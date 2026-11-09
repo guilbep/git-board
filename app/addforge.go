@@ -70,17 +70,9 @@ func (b *Board) AddForge(ctx context.Context, n NewForge) (string, error) {
 	set := map[string]any{}
 	var taken []string
 	if b.Config.Forges.Discover {
-		var left []string // one that can't be read would be turned off unsaid
-		found, err := b.Forges(ctx, func(line string) {
-			if strings.Contains(line, " is left out: ") {
-				left = append(left, line)
-			}
-		})
+		found, err := b.foundToWrite(ctx)
 		if err != nil {
 			return "", err
-		}
-		if len(left) > 0 {
-			return "", invalidForge("the forges found in the remotes would be dropped, and one can't be written: %s", strings.Join(left, "; "))
 		}
 		for _, g := range found {
 			if strings.EqualFold(g.Host+"/"+g.Project, f.Host+"/"+f.Project) || strings.EqualFold(g.Host+"/"+g.Path, f.Host+"/"+f.Project) {
@@ -143,31 +135,91 @@ func forgeTable(f forge.Table) map[string]any {
 	return t
 }
 
-// tableNamed is the file's forge called name, else NotFound: a forge
-// found in the remotes has no table to change.
+// foundToWrite are the forges found in the git remotes, to be written as
+// tables: a table turns the found ones off. A GitHub project is written
+// as the URL names it, with no token needed: GitHub answers a renamed
+// one at its old name too. A GitLab table names the project by its id,
+// which only the forge says: one that cannot be read refuses the write,
+// since it would be turned off unsaid. Two URLs of one project are one
+// table.
+func (b *Board) foundToWrite(ctx context.Context) ([]forge.Table, error) {
+	found, err := b.FoundForges(ctx, func(string) {})
+	if err != nil {
+		return nil, err
+	}
+	var out []forge.Table
+	var left []string
+	seen := map[string]bool{}
+	for _, f := range found {
+		if f.Kind == "gitlab" {
+			id, err := resolveProject(ctx, f)
+			if err != nil {
+				left = append(left, fmt.Sprintf("forge %s, %s %s: %v", f.Name, f.Host, f.Project, err))
+				continue
+			}
+			f.Path, f.Project = f.Project, id
+		}
+		if key := strings.ToLower(f.Host + "/" + f.Project); !seen[key] {
+			seen[key] = true
+			out = append(out, f)
+		}
+	}
+	if len(left) > 0 {
+		return nil, invalidForge("the forges found in the remotes would be dropped, and one can't be written: %s", strings.Join(left, "; "))
+	}
+	return out, nil
+}
+
+// tableNamed is the file's forge called name, else NotFound.
 func (b *Board) tableNamed(name string) error {
 	if slices.ContainsFunc(b.Config.Forges.List, func(f forge.Table) bool { return f.Name == name }) {
 		return nil
 	}
-	return fmt.Errorf("%w: forge %q has no table in %s (one found in the git remotes is added first)", kernel.ErrNotFound, name, conf.FileName)
+	return fmt.Errorf("%w: forge %q has no table in %s", kernel.ErrNotFound, name, conf.FileName)
+}
+
+// setForgeKey sets forge name's key to v (nil removes it). A forge found
+// in the git remotes gets its table then, with the other found ones,
+// as Add a forge writes them: one click makes it read-only, with no
+// table to write first.
+func (b *Board) setForgeKey(ctx context.Context, name, key string, v any) error {
+	if b.tableNamed(name) == nil {
+		_, err := SetConfigKeys(b.Dir, map[string]any{"forges." + name + "." + key: v}, "", false)
+		return err
+	}
+	if !b.Config.Forges.Discover {
+		return b.tableNamed(name)
+	}
+	found, err := b.foundToWrite(ctx)
+	if err != nil {
+		return err
+	}
+	set := map[string]any{}
+	for _, g := range found {
+		t := forgeTable(g)
+		if g.Name == name {
+			if t[key] = v; v == nil {
+				delete(t, key)
+			}
+		}
+		set["forges."+g.Name] = t
+	}
+	if _, ok := set["forges."+name]; !ok {
+		return b.tableNamed(name)
+	}
+	_, err = SetConfigKeys(b.Dir, set, "", false)
+	return err
 }
 
 // SetForgeSync turns forge name's sync on or off, in its table.
-func (b *Board) SetForgeSync(name string, on bool) error {
-	if err := b.tableNamed(name); err != nil {
-		return err
-	}
-	_, err := SetConfigKeys(b.Dir, map[string]any{"forges." + name + ".sync": on}, "", false)
-	return err
+func (b *Board) SetForgeSync(ctx context.Context, name string, on bool) error {
+	return b.setForgeKey(ctx, name, "sync", on)
 }
 
 // SetForgeWay sets forge name's way, its direction (forge.Table's way):
 // push (a backup: writes go there, nothing is pulled), pull (read-only),
 // or both. Both is the key's default, so the file says nothing then.
-func (b *Board) SetForgeWay(name, way string) error {
-	if err := b.tableNamed(name); err != nil {
-		return err
-	}
+func (b *Board) SetForgeWay(ctx context.Context, name, way string) error {
 	switch way {
 	case forge.WayPush, forge.WayPull, forge.WayBoth:
 	default:
@@ -177,8 +229,7 @@ func (b *Board) SetForgeWay(name, way string) error {
 	if way == forge.WayPush || way == forge.WayPull {
 		v = way
 	}
-	_, err := SetConfigKeys(b.Dir, map[string]any{"forges." + name + ".way": v}, "", false)
-	return err
+	return b.setForgeKey(ctx, name, "way", v)
 }
 
 // RemoveForge removes forge name's table; its token stays in git's
