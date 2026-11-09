@@ -111,18 +111,17 @@ that opens an empty board.
    step and keeps the same place in the flow.
 4. Look at the first run. The app runs a dry run and shows its counts:
    issues to pull, issues to create, fields to write.
-5. Run it. Then the app opens on the board.
+5. Run it. The Open the board button then opens the board.
 
 | Goal | What the app writes | Step 4 asks for consent |
 |---|---|---|
-| See my forge's issues here | the forge from `origin`, `way = "pull"` | no, because nothing is created on the forge |
+| See my forge's issues here | `way = "pull"` on a forge table; a forge found in `origin` needs a table first, which Add a forge writes | no, because nothing is created on the forge |
 | Work here, and keep the forge in step | `way = "both"` | yes, when the board holds issues the forge does not have |
 | Keep a backup on another forge | a `[forges.backup]` table, `way = "push"` | yes |
 | Keep the issues as Markdown files | `board.datastore = markdown:<dir>`, then the copy | no |
 | Plan in a GitHub Project | `[github-project]` with `fields`, and `write` if you select it | no |
 
-Each step writes one decision, and the page shows the line that it
-writes. The CLI gets the same flow without a prompt: `git board state`
+Each step writes one decision. The CLI gets the same flow without a prompt: `git board state`
 prints the next actions in order, and `git board` with no argument
 stays as it is.
 
@@ -234,6 +233,9 @@ Not built yet:
 - The datastore's display name in one function. (`refs/board/switched`
   is now one constant, `switchedRef`.)
 - A template choice on the Start page.
+- The line that each step writes, shown on the page.
+- Making a forge found in `origin` read-only in one click: today the
+  page tells you to add it as a forge with the way Read only.
 - Markdown export from the web app, and a reload of a file edited by
   hand.
 

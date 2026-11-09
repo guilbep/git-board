@@ -664,12 +664,16 @@ function onKey(e: KeyboardEvent) {
   newOpen.value = true;
 }
 onMounted(() => window.addEventListener('keydown', onKey));
-// a new board, with no issue at all: its empty state offers the Start page
+// a new board, with no issue at all: its empty state offers the Start
+// page. The state is asked only when the list is empty with no filter
+// changed, and again each time it is.
 const isNew = ref(false);
-onMounted(async () => {
+watch([total, modified], async ([n, changed]) => {
+  isNew.value = false;
+  if (n !== 0 || changed) return;
   const st = await getState().catch(() => null);
-  isNew.value = st?.phase === 'new' && st.issues === 0;
-});
+  isNew.value = st?.phase === 'new' && st.issues === 0 && total.value === 0;
+}, { immediate: true });
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 // live updates (live.ts): another page or a sync changed the issues or the
