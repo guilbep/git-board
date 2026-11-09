@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"os/exec"
 	"testing"
-
-	"github.com/guilbep/git-board/forge/github"
 )
 
 // FakeGitHubLogin serves github.com's device flow and the API's /user on
@@ -60,10 +58,10 @@ func TestDeviceLogin(t *testing.T) {
 	}
 
 	srv := fakeGitHubLogin(t, "gho_secret", "ada")
-	cid, api, login, approve := github.ClientID, GitHubAPI, GitHubLogin, ApproveToken
-	t.Cleanup(func() { github.ClientID, GitHubAPI, GitHubLogin, ApproveToken = cid, api, login, approve })
+	cid, api, login, approve := GitHubClientID, GitHubAPI, GitHubLogin, ApproveToken
+	t.Cleanup(func() { GitHubClientID, GitHubAPI, GitHubLogin, ApproveToken = cid, api, login, approve })
 	var stored string
-	github.ClientID, GitHubAPI, GitHubLogin = "cid", srv.URL, srv.URL
+	GitHubClientID, GitHubAPI, GitHubLogin = "cid", srv.URL, srv.URL
 	ApproveToken = func(_ context.Context, baseURL, login, token string) error {
 		stored = baseURL + " " + login + " " + token
 		return nil

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/app"
-	"github.com/guilbep/git-board/forge/github"
 )
 
 // Routes 62 and 63: the device flow from the page. The page gets the code
@@ -30,9 +29,11 @@ func TestDeviceRoutes(t *testing.T) {
 	})
 	gh := httptest.NewServer(mux)
 	defer gh.Close()
-	cid, api, login, approve := github.ClientID, app.GitHubAPI, app.GitHubLogin, app.ApproveToken
-	t.Cleanup(func() { github.ClientID, app.GitHubAPI, app.GitHubLogin, app.ApproveToken = cid, api, login, approve })
-	github.ClientID, app.GitHubAPI, app.GitHubLogin = "cid", gh.URL, gh.URL
+	cid, api, login, approve := app.GitHubClientID, app.GitHubAPI, app.GitHubLogin, app.ApproveToken
+	t.Cleanup(func() {
+		app.GitHubClientID, app.GitHubAPI, app.GitHubLogin, app.ApproveToken = cid, api, login, approve
+	})
+	app.GitHubClientID, app.GitHubAPI, app.GitHubLogin = "cid", gh.URL, gh.URL
 	stored := make(chan string, 1)
 	app.ApproveToken = func(_ context.Context, baseURL, login, token string) error {
 		stored <- baseURL + " " + login + " " + token

@@ -17,13 +17,17 @@ import (
 // hours, which would mean keeping a refresh token.
 
 // GitHubLogin is github.com's address for the device flow: "" is
-// https://github.com; tests, a fake.
-var GitHubLogin = ""
+// https://github.com; tests, a fake. GitHubClientID is the build's OAuth
+// App (github.ClientID, set at build time); tests set their own.
+var (
+	GitHubLogin    = ""
+	GitHubClientID = github.ClientID
+)
 
 // DeviceLogin says whether forge f can log in with the device flow: on
 // github.com, in a build with an OAuth App.
 func DeviceLogin(f forge.Table) bool {
-	return f.Kind == "github" && f.Host == "github.com" && github.ClientID != ""
+	return f.Kind == "github" && f.Host == "github.com" && GitHubClientID != ""
 }
 
 // Device is a device flow started for a forge: the code to type at URL.
@@ -41,7 +45,7 @@ func (b *Board) StartDevice(ctx context.Context, name string) (*Device, error) {
 	if !DeviceLogin(f) {
 		return nil, &Error{Class: Usage, Code: "invalid", Err: fmt.Errorf("forge %s (%s): no login in the browser here; paste a token", name, f.Host)}
 	}
-	d, err := github.StartDevice(ctx, cmp.Or(GitHubLogin, "https://github.com"), github.ClientID)
+	d, err := github.StartDevice(ctx, cmp.Or(GitHubLogin, "https://github.com"), GitHubClientID)
 	if err != nil {
 		return nil, err
 	}
