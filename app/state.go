@@ -72,6 +72,7 @@ type ForgeState struct {
 	Way        string `json:"way"` // push, pull or both
 	State      string `json:"state"`
 	Discovered bool   `json:"discovered,omitempty"` // found in the git remotes, not in the file
+	Device     bool   `json:"device,omitempty"`     // logs in in the browser (the device flow)
 	Token      string `json:"token,omitempty"`      // where the token is: an environment variable, or git's credential helper
 	LastRun    string `json:"last_run,omitempty"`   // RFC 3339
 }
@@ -130,7 +131,7 @@ func (b *Board) State(ctx context.Context) (State, error) {
 	}
 	ran := false
 	for _, f := range statuses {
-		fs := ForgeState{Name: f.Name, Kind: f.Kind, Project: f.Project, Way: f.Way, Discovered: f.Discovered}
+		fs := ForgeState{Name: f.Name, Kind: f.Kind, Project: f.Project, Way: f.Way, Discovered: f.Discovered, Device: f.Device}
 		for _, t := range f.Tokens {
 			if t.Found {
 				fs.Token = t.Source
@@ -281,7 +282,11 @@ func next(s State) []Action {
 	for _, f := range s.Forges {
 		switch f.State {
 		case "no-token":
-			add("login:"+f.Name, fmt.Sprintf("Log in to %s (%s): no token is found for it.", f.Name, f.Project), "git board forge login "+f.Name, "POST /api/forges/auth")
+			api := "POST /api/forges/auth"
+			if f.Device {
+				api = "POST /api/forges/auth/device"
+			}
+			add("login:"+f.Name, fmt.Sprintf("Log in to %s (%s): no token is found for it.", f.Name, f.Project), "git board forge login "+f.Name, api)
 		case "first":
 			say := fmt.Sprintf("Run the first sync with %s (%s).", f.Name, f.Project)
 			if f.Way != "pull" {

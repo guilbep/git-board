@@ -42,6 +42,7 @@ type ForgeStatus struct {
 	Sync       bool          `json:"sync"`
 	Way        string        `json:"way"`                  // push, pull, or both
 	Discovered bool          `json:"discovered,omitempty"` // found in the git remotes, not in .git-board.toml
+	Device     bool          `json:"device,omitempty"`     // can log in in the browser (the device flow, DeviceLogin)
 	Tokens     []TokenStatus `json:"tokens"`
 }
 
@@ -86,7 +87,7 @@ func (b *Board) ForgeStatuses(ctx context.Context, check bool) ([]ForgeStatus, e
 	}
 	out := []ForgeStatus{}
 	for _, f := range forges {
-		st := ForgeStatus{Name: f.Name, Kind: f.Kind, Host: f.Host, Project: cmp.Or(f.Path, f.Project), Sync: f.Sync, Way: f.Direction(), Discovered: f.Discovered}
+		st := ForgeStatus{Name: f.Name, Kind: f.Kind, Host: f.Host, Project: cmp.Or(f.Path, f.Project), Sync: f.Sync, Way: f.Direction(), Discovered: f.Discovered, Device: DeviceLogin(f)}
 		logins := [][2]string{{f.Login, "posting"}}
 		if mine := b.myLogin(ctx, f.Host); mine != "" && mine != f.Login {
 			logins = append(logins, [2]string{mine, "you"})
@@ -113,9 +114,22 @@ func (b *Board) ForgeStatuses(ctx context.Context, check bool) ([]ForgeStatus, e
 // LoginFor is whose token forge name takes by default: login when given,
 // else yours on its host, else its posting account. It answers the forge.
 func (b *Board) LoginFor(ctx context.Context, name, login string) (forge.Table, string, error) {
+	f, err := b.forgeNamed(ctx, name)
+	if err != nil {
+		return f, "", err
+	}
+	who := cmp.Or(login, b.myLogin(ctx, f.Host), f.Login)
+	if who == "" {
+		return f, "", &Error{Class: Usage, Code: "invalid", Err: fmt.Errorf("whose token? --login <your login on %s>", f.Host)}
+	}
+	return f, who, nil
+}
+
+// forgeNamed is forge name, as FoundForges names it.
+func (b *Board) forgeNamed(ctx context.Context, name string) (forge.Table, error) {
 	forges, err := b.FoundForges(ctx, func(string) {})
 	if err != nil {
-		return forge.Table{}, "", err
+		return forge.Table{}, err
 	}
 	i := slices.IndexFunc(forges, func(f forge.Table) bool { return f.Name == name })
 	if i < 0 {
@@ -123,14 +137,9 @@ func (b *Board) LoginFor(ctx context.Context, name, login string) (forge.Table, 
 		for _, f := range forges {
 			names = append(names, f.Name)
 		}
-		return forge.Table{}, "", fmt.Errorf("%w: forge %q (the forges: %s)", kernel.ErrNotFound, name, cmp.Or(strings.Join(names, ", "), "none"))
+		return forge.Table{}, fmt.Errorf("%w: forge %q (the forges: %s)", kernel.ErrNotFound, name, cmp.Or(strings.Join(names, ", "), "none"))
 	}
-	f := forges[i]
-	who := cmp.Or(login, b.myLogin(ctx, f.Host), f.Login)
-	if who == "" {
-		return f, "", &Error{Class: Usage, Code: "invalid", Err: fmt.Errorf("whose token? --login <your login on %s>", f.Host)}
-	}
-	return f, who, nil
+	return forges[i], nil
 }
 
 // StoreToken keeps login's token for f's host in git's credential helper

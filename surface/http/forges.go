@@ -1,11 +1,14 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/guilbep/git-board/app"
 	"github.com/guilbep/git-board/kernel"
@@ -135,3 +138,66 @@ func (s *Server) storeToken(ctx context.Context, r newToken) (Reply, error) {
 }
 
 var errNoSync = errors.New("sync: true or false")
+
+// deviceLogin is the server's device flow (routes 62, 63): one at a
+// time, a new one ending the last. Its device code and its token stay in
+// the server; the page sees the code to type, and the outcome.
+type deviceLogin struct {
+	mu     sync.Mutex
+	cur    deviceRes
+	cancel context.CancelFunc
+}
+
+// deviceRes is a device flow as the page sees it.
+type deviceRes struct {
+	Forge    string    `json:"forge,omitempty"`
+	State    string    `json:"state"` // none, waiting, done, failed
+	UserCode string    `json:"user_code,omitempty"`
+	URL      string    `json:"verification_uri,omitempty"`
+	Expires  time.Time `json:"expires_at,omitzero"`
+	Login    string    `json:"login,omitempty"` // done: whose token was stored
+	Error    string    `json:"error,omitempty"` // failed: why
+}
+
+// startDevice (62) starts a device flow for a forge: the person types
+// user_code at verification_uri, and the server waits for the approval,
+// beyond the request, then stores the token (63 says when).
+func (s *Server) startDevice(ctx context.Context, r newToken) (Reply, error) {
+	d, err := board(ctx).StartDevice(ctx, r.Forge)
+	if err != nil {
+		return Reply{}, on("forge", err)
+	}
+	wctx, cancel := context.WithCancel(s.base)
+	s.device.mu.Lock()
+	if s.device.cancel != nil {
+		s.device.cancel()
+	}
+	s.device.cancel = cancel
+	s.device.cur = deviceRes{Forge: r.Forge, State: "waiting", UserCode: d.UserCode, URL: d.URL, Expires: d.Expires}
+	res := s.device.cur
+	s.device.mu.Unlock()
+	go func() {
+		defer cancel()
+		login, err := d.Wait(wctx)
+		s.device.mu.Lock()
+		defer s.device.mu.Unlock()
+		if s.device.cur.UserCode != d.UserCode || wctx.Err() == context.Canceled && err != nil {
+			return // a newer flow, or the server's end
+		}
+		if err != nil {
+			s.device.cur.State, s.device.cur.Error = "failed", err.Error()
+			return
+		}
+		s.device.cur.State, s.device.cur.Login = "done", login
+		s.log.Info("a token was stored from the device flow", "forge", r.Forge, "login", login)
+	}()
+	return Reply{Status: http.StatusAccepted, Body: res}, nil
+}
+
+// deviceStatus (63) is the last device flow: state none when there was
+// none.
+func (s *Server) deviceStatus(context.Context, none) (deviceRes, error) {
+	s.device.mu.Lock()
+	defer s.device.mu.Unlock()
+	return cmp.Or(s.device.cur, deviceRes{State: "none"}), nil
+}

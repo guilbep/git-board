@@ -159,6 +159,8 @@ var localRoutes = []string{
 	"POST /api/datastore/copy",
 	"POST /api/forges",
 	"POST /api/forges/auth",
+	"POST /api/forges/auth/device",
+	"GET /api/forges/auth/device",
 	"POST /api/remotes/{name}",
 }
 

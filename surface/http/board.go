@@ -66,6 +66,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(local, "POST /api/datastore/copy", copyDatastore)
 	Route(local, "POST /api/forges", s.addForge)
 	Route(local, "POST /api/forges/auth", s.storeToken)
+	Route(local, "POST /api/forges/auth/device", s.startDevice)
+	Route(local, "GET /api/forges/auth/device", s.deviceStatus)
 	Route(local, "POST /api/remotes/{name}", s.addRemote)
 	for _, p := range localRoutes {
 		mux.Handle(p, loopbackOnly(local))
