@@ -303,7 +303,7 @@ func (b *Board) switched(ctx context.Context) error {
 	if err != nil || !bugs {
 		return err
 	}
-	mark, err := first("refs/board/switched")
+	mark, err := first(switchedRef)
 	if err != nil || mark {
 		return err
 	}

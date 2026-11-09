@@ -1,6 +1,8 @@
 # Named states, a first run, and fewer ADRs
 
-- Status: proposed (2026-11-09). Nothing here is built.
+- Status: accepted (2026-11-09, Pierre). Built on 2026-11-09: `app.State`,
+  `git board state`, `GET /api/state`, the Start page, and the ADR merge.
+  The named states replace the old checks only where this page says so.
 - Scope: the implicit state machines, the first run in the CLI and the
   web app, what is missing, and a merge of the ADRs.
 
@@ -16,17 +18,17 @@ The board gets one function, `app.State`, that computes every machine
 once and names each state. Three views read it, and nothing else
 derives a state:
 
-- `git board status`, with `--json` and `--jq` as the other commands
-  have them.
-- `GET /api/status`.
-- The Start page of the web app, and a status chip in its header.
+- `git board state`, with `--json` and `--jq` as the other commands
+  have them. `git board status` is the inbox, as in `gh status`.
+- `GET /api/state`.
+- The Start page of the web app.
 
 Each machine also lists its next actions. A next action names the CLI
 command and the API route that does it. A person reads the sentence.
 An agent reads the command. The web app shows a button, never a
 command.
 
-The old call sites change to read `app.State`. The status must not be
+The old call sites change to read `app.State`. The state must not be
 a sixth copy of the same tests. This is what makes it a fix, not a
 feature.
 
@@ -95,10 +97,11 @@ the CLI can choose a template.
 
 ## The first-run flow
 
-The web app opens on the Start page when the status says the board is
-new. A board is new if no identity is chosen, or no forge has run and
-the board holds no issue. When you finish or skip the flow, the app
-opens on the board.
+The Start page is at `#/start`. A board is new if no identity is
+chosen, or no forge has run and the board holds no issue. A new board
+with no issue offers the Start page in its empty state. The page does
+not open by itself, because a redirect at start breaks every e2e test
+that opens an empty board.
 
 1. Who you are. Choose or create your identity. If you skip this
    step, the board is read-only.
@@ -119,7 +122,7 @@ opens on the board.
 | Plan in a GitHub Project | `[github-project]` with `fields`, and `write` if you select it | no |
 
 Each step writes one decision, and the page shows the line that it
-writes. The CLI gets the same flow without a prompt: `git board status`
+writes. The CLI gets the same flow without a prompt: `git board state`
 prints the next actions in order, and `git board` with no argument
 stays as it is.
 
@@ -196,3 +199,41 @@ Content that is not a decision moves out of the ADRs:
 
 The merged ADRs keep the format of ADR 0022: Status, Date, Context,
 Decision, Consequences. Each says which ADRs it absorbs.
+
+## What was built on 2026-11-09, and what was not
+
+Built, each with its test:
+
+- `app.State` and its views, `git board state` and `GET /api/state`
+  (`TestStateOfANewBoard`, `TestStateOfAForge`, `TestState`).
+- A run held by another process shows as `running`, and the web app
+  refuses a second run with 409. The server reads the OS lock through
+  `Board.Syncing`.
+- The API takes `both` for a two-way run.
+- `git board config set board.view` says that v2 reads it nowhere.
+- The Start page, with the e2e test `web/e2e/start.spec.ts`.
+- The Fetch, Pull and Push buttons say what they do. The Add a forge
+  dialog no longer names an environment variable. The Project page
+  turns `write` on and off (`web/e2e/project.spec.ts`).
+
+Changed after a closer look at the code:
+
+- A broken `[github-project]` table stops the board from opening, so
+  the TUI never sees one. The `broken` state stays for completeness.
+- A pull or a push alone records no run, so the state reads "first"
+  from the sync entity existing, as the consent to create does.
+- An older file is no setup step. The only migration comments out two
+  keys that git-board does not read, and every upgrade adds a line.
+- A GitLab project that the remotes name by its path is keyed by its
+  numeric id, which only the forge says. Its state is `on` until the
+  first sync.
+
+Not built yet:
+
+- A state chip in the header.
+- The datastore's display name in one function. (`refs/board/switched`
+  is now one constant, `switchedRef`.)
+- A template choice on the Start page.
+- Markdown export from the web app, and a reload of a file edited by
+  hand.
+
