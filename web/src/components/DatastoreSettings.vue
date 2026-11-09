@@ -34,9 +34,9 @@
             <p id="ds-url-hint" class="gb-hint">{{ urlErr && url ? urlErr : 'Kept in this clone’s git config, never in .git-board.toml: it may hold a password.' }}</p>
           </div>
           <div v-if="kind === 'markdown'" class="ds-url">
-            <label class="ds-label" for="ds-dir">Folder, from the checkout's top</label>
+            <label class="ds-label" for="ds-dir">Folder, from the checkout's top, or a full path</label>
             <input id="ds-dir" v-model="dir" class="epfl-input" placeholder="issues" autocomplete="off" spellcheck="false" :disabled="busy !== ''" :aria-invalid="!!dirErr && dir !== ''" aria-describedby="ds-dir-hint" />
-            <p id="ds-dir-hint" class="gb-hint">{{ dirErr && dir ? dirErr : 'One NNN-slug.md per issue, rendered after each write. Commit the folder with the code.' }}</p>
+            <p id="ds-dir-hint" class="gb-hint">{{ dirErr && dir ? dirErr : 'One NNN-slug.md per issue, rendered after each write. Commit the folder with the code, or give the full path of another repository to keep the issues there.' }}</p>
           </div>
           <p v-if="kind === 'forge'" class="gb-hint">Needs a forge with its sync on (<router-link to="/settings/sync">Sync</router-link>).</p>
 

@@ -30,7 +30,7 @@ test('a Markdown folder is markdown:<dir>, inside the checkout', () => {
   assert.equal(folderOf('git'), '');
   assert.equal(folderProblem('issues'), '');
   assert.notEqual(folderProblem(''), '');
-  assert.notEqual(folderProblem('/tmp/x'), '');
+  assert.equal(folderProblem('/tmp/x'), ''); // another repository's checkout
   assert.notEqual(folderProblem('../x'), '');
 });
 

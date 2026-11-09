@@ -95,9 +95,13 @@ git board datastore copy     # the board in git, into issues/
 The folder, from the checkout's top, holds one file per issue,
 `NNN-slug.md`, as `git board export --md` writes it, and the board itself
 in `issues/.board/`: each issue's, person's and record's operations, one
-line per write, in `<kind>/<id>.jsonl`. Commit both with the code. A
-folder outside the checkout (an absolute path, or one up with `..`) is
-refused.
+line per write, in `<kind>/<id>.jsonl`. Commit both with the code.
+
+To keep the issues in a repository of their own, give the full path of
+its checkout: `markdown:/home/me/project-issues`. The issues are then
+text files in that repository, which you edit, commit and push there.
+Numbers are handed out on that repository's default branch. Settings ›
+Datastore takes the same full path. A path up with `..` is refused.
 
 - **The files follow the board.** After each write here, a forge sync's
   too, every file whose issue changed is written again.
