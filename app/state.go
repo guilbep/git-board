@@ -40,7 +40,7 @@ type State struct {
 }
 
 // FileState is .git-board.toml: "none" (the defaults hold), "current",
-// "older" (a schema migration is pending), or "newer" (read-only to this
+// "older" (git board config upgrade moves it), or "newer" (read-only to this
 // git-board).
 type FileState struct {
 	State   string `json:"state"`
@@ -186,7 +186,7 @@ func fileState(dir string) FileState {
 	fs.Version = v
 	switch {
 	case v < conf.Current:
-		fs.State = "older"
+		fs.State = "older" // it reads as it is: an upgrade comments out keys git-board ignores, no step to take
 	case v > conf.Current:
 		fs.State = "newer"
 	default:
@@ -273,9 +273,6 @@ func next(s State) []Action {
 	add := func(id, say, cli, api string) { out = append(out, Action{ID: id, Say: say, CLI: cli, API: api}) }
 	if s.Me.State == "none" {
 		add("me", "Choose who you are: until then the board is read-only.", "git board me --new", "PUT /api/me")
-	}
-	if s.File.State == "older" {
-		add("schema", fmt.Sprintf("Move %s to schema %d.", conf.FileName, conf.Current), "git board config upgrade", "PUT /api/config")
 	}
 	if s.Run.State == "stopped" {
 		add("resume", "A sync stopped before it went through: sync again, and it resumes where it stopped.", "git board sync", "POST /api/sync")

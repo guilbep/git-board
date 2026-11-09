@@ -122,7 +122,9 @@
         </div>
         <p v-else-if="!buckets" class="state">Loading issues…</p>
         <div v-else-if="total === 0" class="state state-empty">
-          <p class="state-title">No issues match this filter.</p>
+          <p v-if="isNew" class="state-title">This board is new.</p>
+          <p v-if="isNew"><router-link to="/start" class="epfl-btn epfl-btn-primary epfl-btn-sm">Set up this board</router-link></p>
+          <p v-else class="state-title">No issues match this filter.</p>
           <p v-if="modified"><button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" @click="resetAll">Back to {{ activeView || 'the open issues' }}</button></p>
           <p v-else-if="broader">Try a broader one: <button type="button" class="gb-linkbtn" @click="setFilter(broader)"><code>{{ broader }}</code></button></p>
         </div>
@@ -222,7 +224,7 @@ import { numberName } from '@/palette';
 import { changedSince, loadVisit, saveVisit, visit } from '@/lastvisit';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { clientId, getFields, isStale, message, patchIssue, type FieldConfig, type Issue } from '@/api';
+import { clientId, getFields, getState, isStale, message, patchIssue, type FieldConfig, type Issue } from '@/api';
 import type { Bucket } from '@/bucket';
 import { apiSort, useBoardLists } from '@/boardlists';
 import { configModel, loadConfigModel } from '@/configmodel';
@@ -662,6 +664,12 @@ function onKey(e: KeyboardEvent) {
   newOpen.value = true;
 }
 onMounted(() => window.addEventListener('keydown', onKey));
+// a new board, with no issue at all: its empty state offers the Start page
+const isNew = ref(false);
+onMounted(async () => {
+  const st = await getState().catch(() => null);
+  isNew.value = st?.phase === 'new' && st.issues === 0;
+});
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 // live updates (live.ts): another page or a sync changed the issues or the

@@ -80,12 +80,13 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
-import { addForge, message, type SyncForge } from '@/api';
+import { addForge, message, type ForgeWay, type SyncForge } from '@/api';
 import { canGoOn, forgeWays, forges, forgeSteps, guessForge, type ForgeDraft } from '@/addforge';
 import GbIcon from '@/components/GbIcon.vue';
 
 const open = defineModel<boolean>({ required: true });
-defineProps<{ found: SyncForge[] }>();
+// way: the way it opens with, both by default (the Start page's backup: push)
+const props = defineProps<{ found: SyncForge[]; way?: ForgeWay }>();
 const emit = defineEmits<{ added: [name: string]; guide: [] }>();
 
 const step = ref(0);
@@ -99,7 +100,7 @@ const forge = computed(() => forges.find((f) => f.target === draft.target) ?? fo
 // a fresh dialog each time it opens
 watch(open, (o) => {
   if (!o) return;
-  Object.assign(draft, { target: 'github', url: '', name: '', token: '', way: 'both' });
+  Object.assign(draft, { target: 'github', url: '', name: '', token: '', way: props.way ?? 'both' });
   Object.assign(step, { value: 0 });
   sync.value = true;
   error.value = '';
