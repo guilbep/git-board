@@ -25,21 +25,34 @@ import (
 // a copy carries them all.
 var Kinds = []string{"issue", "person", "release", "sync"}
 
+// datastoreKind is the one place a datastore is named: its kind, as the
+// state says it, and its name in a sentence, as v1 says it.
+func datastoreKind(ds store.Datastore) (kind, name string) {
+	switch ds.(type) {
+	case *forgecopy.Store:
+		return "forges", "the forges alone"
+	case *git.Store:
+		return "git", "git"
+	case *md.Store:
+		return "markdown", "Markdown files"
+	case *pg.Store:
+		return "postgres", "PostgreSQL"
+	}
+	return "other", "another datastore"
+}
+
 // Where says where a datastore keeps the board, for a user to read, as
-// v1 says it: git, PostgreSQL and its server without the password, or
-// Markdown files and the folder.
+// v1 says it: its name, then PostgreSQL's server without the password,
+// or the Markdown folder.
 func Where(ds store.Datastore) string {
+	_, name := datastoreKind(ds)
 	switch d := ds.(type) {
 	case *pg.Store:
-		return "PostgreSQL " + d.Where()
+		return name + " " + d.Where()
 	case *md.Store:
-		return "Markdown files " + d.Dir()
-	case *forgecopy.Store:
-		return "the forges alone"
-	case *git.Store:
-		return "git"
+		return name + " " + d.Dir()
 	}
-	return "another datastore"
+	return name
 }
 
 // Kept is where the clone keeps its board, and what that datastore can

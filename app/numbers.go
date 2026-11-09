@@ -9,36 +9,17 @@ import (
 
 	"github.com/guilbep/git-board/domain/issues"
 	"github.com/guilbep/git-board/store"
-	"github.com/guilbep/git-board/store/forgecopy"
 	"github.com/guilbep/git-board/store/git"
-	"github.com/guilbep/git-board/store/md"
-	"github.com/guilbep/git-board/store/pg"
 )
 
 // NumbersRemote is the one remote that hands numbers out on git.
 const NumbersRemote = "origin"
 
 // DatastoreName is the board's datastore as a sentence names it: git,
-// Markdown files, PostgreSQL.
-// keptIn is where the board is kept, for a sentence: DatastoreName, but
-// "the forges alone" for a forge-only board, as v1 says it.
-func (b *Board) keptIn() string {
-	if _, ok := b.Kernel.Store().(*forgecopy.Store); ok {
-		return "the forges alone"
-	}
-	return b.DatastoreName()
-}
-
+// Markdown files, PostgreSQL, the forges alone (datastoreKind).
 func (b *Board) DatastoreName() string {
-	switch b.Kernel.Store().(type) {
-	case *git.Store, *forgecopy.Store:
-		return "git"
-	case *md.Store:
-		return "Markdown files"
-	case *pg.Store:
-		return "PostgreSQL"
-	}
-	return "another datastore"
+	_, name := datastoreKind(b.Kernel.Store())
+	return name
 }
 
 // inGit says the board is kept in the repository: its numbers are

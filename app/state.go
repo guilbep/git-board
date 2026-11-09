@@ -198,16 +198,8 @@ func fileState(dir string) FileState {
 
 func datastoreState(b *Board) DatastoreState {
 	ds := b.Kernel.Store()
-	d := DatastoreState{Where: Where(ds), FromEnv: os.Getenv(DatastoreEnv) != ""}
-	switch Where(ds) {
-	case "git":
-		d.State = "git"
-	case "the forges alone":
-		d.State = "forges"
-	default:
-		d.State = map[bool]string{true: "markdown", false: "postgres"}[b.Files != nil]
-	}
-	return d
+	kind, _ := datastoreKind(ds)
+	return DatastoreState{State: kind, Where: Where(ds), FromEnv: os.Getenv(DatastoreEnv) != ""}
 }
 
 // forgeLastRun says whether a forge has its sync entity, keyed as the

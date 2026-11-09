@@ -89,7 +89,7 @@ const error = ref('');
 const copied = ref('');
 
 // the kind the board is kept in now, from its name
-const openKind = computed<StoreKind>(() => ({ PostgreSQL: 'postgres', 'Markdown files': 'markdown', forge: 'forge' })[d.value?.name ?? ''] as StoreKind ?? 'git');
+const openKind = computed<StoreKind>(() => ({ PostgreSQL: 'postgres', 'Markdown files': 'markdown', 'the forges alone': 'forge' })[d.value?.name ?? ''] as StoreKind ?? 'git');
 const urlErr = computed(() => urlProblem(url.value));
 const dirErr = computed(() => folderProblem(dir.value));
 const valid = computed(() => (kind.value === 'postgres' ? !urlErr.value : kind.value === 'markdown' ? !dirErr.value : true));
