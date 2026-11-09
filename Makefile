@@ -123,7 +123,7 @@ golden: ## Record the golden outputs again from git-board built now (review the 
 
 # The web app first: the binary embeds whatever web/dist holds.
 install: web-build ## Build the web app, then install git-board in GOBIN
-	go install ./cmd/git-board
+	go install -ldflags "$(CLIENT_ID_FLAG)" ./cmd/git-board
 
 # The latest GitHub release's git-board for this machine, web app inside,
 # checked against its checksums.txt and put where go install puts it.
@@ -163,6 +163,11 @@ web-e2e: web/node_modules ## Run the browser tests (Playwright, web/e2e)
 web-build: web/node_modules ## Build the web app into web/dist
 	cd web && npm run build
 
+# git-board's OAuth App on github.com (#101, ADR 0010): its client id,
+# public, turns on the login in the browser. Empty: a pasted token alone.
+GITHUB_CLIENT_ID ?=
+CLIENT_ID_FLAG := -X github.com/guilbep/git-board/forge/github.ClientID=$(GITHUB_CLIENT_ID)
+
 # A release's archives, the web app inside, in dist/ with checksums.txt:
 # run on a clean checkout of the tag, so the commands report that version.
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
@@ -170,7 +175,7 @@ dist: web-build ## Build the release archives and checksums.txt into dist/
 	rm -rf dist && mkdir dist
 	@set -e; v=$$(git describe --tags --always --dirty); for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; d=git-board_$${v}_$${os}_$${arch}; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w" -o dist/$$d/ ./cmd/git-board; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w $(CLIENT_ID_FLAG)" -o dist/$$d/ ./cmd/git-board; \
 		cp LICENSE README.md dist/$$d/; \
 		if [ $$os = windows ]; then (cd dist && zip -qr $$d.zip $$d); else tar -C dist -czf dist/$$d.tar.gz $$d; fi; \
 		rm -rf dist/$$d; echo "dist/$$d"; \

@@ -1,8 +1,9 @@
 # ADR 0010: No secret is stored, and the server answers on localhost
 
 - Status: accepted; merged 2026-11-09 from ADR 0010 (decided 2026-10-24)
-  and ADR 0013 (decided 2026-09-02, amended 2026-11-05)
-- Date: 2026-09-02, 2026-10-24, 2026-11-05
+  and ADR 0013 (decided 2026-09-02, amended 2026-11-05); amended
+  2026-11-09 with the login in the browser (section 5, #101)
+- Date: 2026-09-02, 2026-10-24, 2026-11-05, 2026-11-09
 - Absorbs [ADR 0013](0013-local-server-without-auth.md) (a local server
   with no login, and its code gate).
 - Spec: [Forges › Accounts and tokens](../spec/forges.md). Guide:
@@ -84,8 +85,43 @@ Some routes answer on a loopback address alone (`localRoutes`,
 `loopbackOnly`):
 
 - a datastore's value, which can hold a password, and a copy into one
-- a token stored in git's credential helper
+- a token stored in git's credential helper, pasted or from the login in
+  the browser (section 5)
 - a git remote added
+- a configuration file started from a template's path or URL, which
+  reads this machine's files or the network. A built-in template's name
+  answers anywhere.
+
+### 5. On github.com, a person logs in in the browser
+
+A pasted token makes a person create a token on the forge, choose its
+scopes, and copy it. On `github.com`, git-board also uses the OAuth device
+flow (RFC 8628) of its own OAuth App (`forge/github/device.go`,
+`app/device.go`).
+
+1. git-board asks GitHub for a code, and shows the code and GitHub's
+   address.
+2. The person types the code on GitHub and approves the scopes `repo`
+   and `project`.
+3. git-board asks GitHub whose the token is, and stores it for that login
+   with `git credential approve`, as in section 1.
+
+The rules of sections 1 and 4 stay:
+
+- The token goes to git's credential helper only. The device code and the
+  token never reach the page, a log or a file.
+- The web routes answer on loopback alone (routes 62 and 63).
+- The flow uses an OAuth App, not a GitHub App. An OAuth App's token does
+  not expire, so git-board keeps no refresh token.
+- The app's client id is public, and a build sets it
+  (`make dist GITHUB_CLIENT_ID=…`). A build without it shows no button
+  and keeps the pasted token.
+- A GitHub Enterprise host and GitLab keep the pasted token. An
+  Enterprise host needs its own OAuth App. A GitLab token from the flow
+  expires within hours, and needs a refresh token, which is a secret to
+  keep.
+- `git board forge login <forge>` uses the flow on a terminal. `--paste`
+  and a token on stdin keep the pasted way.
 
 ## Consequences
 
@@ -111,3 +147,5 @@ Bad, and accepted:
 - Writes carry a claim (`board.me`), not an identity.
 - A hosted git-board needs authentication, which this ADR does not give.
   A reverse proxy that authenticates is the path.
+- The login in the browser needs an OAuth App that the project owns. Its
+  owner can see how many people use it, and can revoke it for all.

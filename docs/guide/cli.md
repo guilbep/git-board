@@ -400,7 +400,8 @@ versions of its format: [The file's schema version](config-schema.md).
 ```bash
 git board forge status                 # each forge, and whether a token is found
 git board forge status --check         # and whose each token is, asking the forge
-git board forge login github           # a hidden prompt
+git board forge login github           # in the browser on github.com, else a hidden prompt
+git board forge login github --paste   # a hidden prompt
 gh auth token | git board forge login github --login guilbep
 ```
 
@@ -416,6 +417,12 @@ of its own ([ADR 0010](../adr/0010-tokens-from-env-or-git-credential-helper.md))
 The token is read at a hidden prompt on a terminal, else from the first
 line of stdin; never from the command line. It is for `--login`, by
 default your own account on that host, else the forge's posting account.
+
+On `github.com`, in a build with git-board's OAuth App, a terminal logs
+in in the browser instead. The command prints an address and a code.
+Type the code at that address and approve. The token GitHub gives is
+stored for the login GitHub says it is. `--paste`, `--login` or a token
+on stdin keep the prompt.
 
 `forge backup <url>` is the one command to a backup: it adds the forge
 with `way = "push"` — the issues go there, and nothing comes back — and

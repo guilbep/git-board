@@ -13,7 +13,7 @@
 
 v1's API grew one route per button: 117 routes, 18,000 lines with their
 tests. v2's is designed from what the web app reads and writes, in
-nouns the CLI already prints. It has 61 routes.
+nouns the CLI already prints. It has 63 routes.
 
 The server is `surface/http`. Each route decodes a request, calls
 one method of `app`, and encodes the answer. No rule lives in the
@@ -339,6 +339,8 @@ page and the Start page download it.
 | 38 | `POST /api/numbers` | `{prefix, start}` or `{}` | `{where, numbered}` |
 | 59 | `GET /api/forges/auth?check=` | | `{"items": [forge status]}` |
 | 55 | `POST /api/forges/auth` | `{forge, login, token}`; loopback only | 201, `{forge, host, login}` |
+| 62 | `POST /api/forges/auth/device` | `{forge}`; loopback only | 202, `{forge, state, user_code, verification_uri, expires_at}` |
+| 63 | `GET /api/forges/auth/device` | loopback only | the last flow: `{state, login, error, …}` |
 
 **Status (30).** `forges` are the forges the board syncs with: its
 `[forges]` tables, or those found in origin's URLs (`discovered`), each
@@ -414,6 +416,15 @@ account), the token on the body alone; it goes to git's credential
 helper (`git credential approve`, ADR 0010), and is never answered,
 kept nor logged. 201 with the forge, its host and the login it was
 stored for.
+
+**The login in the browser (62, 63)** is the OAuth device flow on
+`github.com` (ADR 0010, section 5), when 59 says `device: true` for the
+forge: a build with git-board's OAuth App. 62 starts it and answers the
+code the person types at `verification_uri`. The server then waits for
+GitHub's answer beyond the request, asks GitHub whose the token is, and
+stores it as 55 does. 63 answers the last flow: `waiting`, `done` with
+the `login`, or `failed` with the `error`; `none` before any. A new flow
+ends the last. The device code and the token stay in the server.
 
 **Numbers (38)** are the project's numbers (ADR 0016). `{prefix, start}`
 starts numbering, and answers where the counter is (`on origin`, `in

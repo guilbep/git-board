@@ -32,8 +32,10 @@ three values per field, and moves only the side that changed.
 
 [ADR 0010: No secret is stored, and the server answers on localhost](0010-tokens-from-env-or-git-credential-helper.md).
 Tokens come from the environment or from git's credential helper, never
-from a file. The local server has no login, so it answers only this
-machine's pages, and runs code only for them.
+from a file. On github.com, a person logs in in the browser, and the
+token still goes to git's credential helper. The local server has no
+login, so it answers only this machine's pages, and runs code only for
+them.
 
 [ADR 0006: One binary, built in layers](0006-go-git-reads-git-binary-moves-refs.md).
 One static binary is the CLI, the terminal UI, the server and the web
