@@ -1,534 +1,162 @@
-# ADR 0002: The board is kept in a datastore, cut at the pack
+# ADR 0002: Where the board is kept
 
-- Status: accepted (2026-11-03); steps 3 to 5 built (2026-11-04), see
-  [As built](#as-built)
-- Date: 2026-11-03
-- Issue #76. The PRD is `docs/prd/datastores.md`.
-- Builds on the core's spec: [Data model](../spec/data-model.md),
-  [Storage](../spec/storage.md) and [Sync](../spec/sync.md). It changes
-  neither the storage format nor the refs.
+- Status: accepted; merged 2026-11-09 from ADR 0002 (decided 2026-11-03),
+  ADR 0009 (2026-10-24), ADR 0015 (before 2026-10-20) and ADR 0016
+  (before 2026-10-20)
+- Date: 2026-10-24, 2026-11-03
+- Absorbs [ADR 0009](0009-queries-read-a-disposable-index.md) (a
+  disposable index), [ADR 0015](0015-attachments-on-s3-not-in-git.md)
+  (attachments on S3) and
+  [ADR 0016](0016-project-numbers-are-a-counter-on-origin.md) (numbers
+  from a counter on origin).
+- Formats: [Storage](../spec/storage.md) and
+  [Other datastores and the counter](../spec/datastores.md).
 
 ## Context
 
-git-board keeps the board as entities, each a chain of commits under
-`refs/board/<kind>/<id>`, with a local sqlite index (`core/index`).
-`internal/store` is what the server, the TUI and the commands read and
-write through. Some users won't have that:
-
-- people who never clone;
-- a hosted git-board;
-- a team that wants its issues in a private PostgreSQL, local or not;
-- a forge as the only store.
-
-One user already asked to "export all issues and comments as a folder of
-Markdown files". The user should be able to choose where the board is kept:
-git, PostgreSQL, Markdown files, or a forge.
-
-Reading the code (see [Evidence](#evidence), where git is assumed today)
-shows that "git" means four different things here:
-
-1. **The entity log**: packs in commits, refs, fetch, push, the merge after
-   a fetch. Only this is the datastore.
-2. **git-board's own refs, which aren't entities**: the counter of project
-   numbers (`refs/board/seq`), the reset and switched marks, the copies under
-   `refs/board-remotes/`.
-3. **The code repository**: branches, diffs, worktrees, tags, and the proof
-   notes of ADR 0001. git-board is a tool for projects kept in git. These
-   stay git whatever holds the board.
-4. **The machine's own state**: the index, the sync lock and its journal,
-   the inbox and media caches, all under `<common dir>/board`, and
-   `board.me` and `board.view` in git config.
-
-Every id in the system is derived from git:
-
-- an issue's or a person's id is the git blob hash of its first pack;
-- an operation's id is `<pack hash>:<index>`;
-- `edit-text` and `set-meta` name their target by that id, and so does a
-  sync entity's `posted`;
-- so do the markers sync leaves on forges (`<!-- git-board comment <id> -->`).
-
-A datastore that hands out its own ids breaks every one of these.
+A team chooses where its board is kept: in the git repository, in a
+PostgreSQL database, in a folder of Markdown files, or on its forges
+alone. Every id in the board comes from the bytes of its operations
+([ADR 0004](0004-entities-are-operation-logs.md)). A datastore that hands
+out its own ids breaks every link, every sync record and every marker on
+a forge. Lists and searches need to be fast on thousands of issues.
+Comments carry files. People say an issue's number aloud.
 
 ## Decision
 
-### 1. The datastore keeps packs, and only packs
+### 1. A datastore keeps packs, and only packs
 
-The core writes through one interface. Its unit is the **pack**: the JSON
-blob a commit holds today (`{"clock": N, "nonce": …, "ops": [...]}`), byte
-for byte. An issue's history is its operations, and the packs are its
-operations.
+A pack is the JSON blob of one or more operations, byte for byte. Every
+datastore implements one interface, `store.Datastore` (`store/store.go`):
+`Heads`, `Load`, `Add`, `Caps`, `Folder` and `Close`.
 
-```go
-// in core/oplog
-
-// A Datastore keeps entities as packs. It never reads them: oplog encodes,
-// hashes and orders them.
-type Datastore interface {
-	// Heads are a kind's entities, by id, each with its version: an
-	// opaque string that changes whenever the entity does. List, the
-	// index's refresh and the server's change events read it.
-	Heads(ctx context.Context, kind string) (map[string]string, error)
-	// Packs are every pack of an entity, in any order, and its version:
-	// ErrNotFound when there is none.
-	Packs(ctx context.Context, kind, id string) (packs [][]byte, version string, err error)
-	// Add stores one pack on an entity if its version is still prev ("" for
-	// an entity that must not exist yet), and gives the new version:
-	// ErrMoved otherwise.
-	Add(ctx context.Context, kind, id string, pack []byte, prev string) (version string, err error)
-}
-```
-
-- **The pack's hash is computed by oplog**, not by the datastore: the git
-  blob id of its bytes, `sha1("blob <len>\0" + bytes)`, which needs no git.
-  So an entity's id, its operations' ids and every reference to them are
-  the same in every datastore. A board moves out of git by copying its
-  packs, and stays the same board. Into git, its packs must be chained into
-  commits again (see [Left open](#left-open)).
-- **The order stays oplog's**: every pack, sorted by (clock, hash), as
-  [Order](../spec/storage.md#order) says. Two packs with the same bytes are
-  one.
-- **A write is a compare-and-swap** on the version, as `git update-ref
-  <ref> <new> <old>` is today. On `ErrMoved`, oplog loads again and writes a
-  new pack with the new highest clock + 1, at most 5 tries, as
-  [Updating a ref](../spec/storage.md#updating-a-ref) says.
-- **The DAG is git's.** In git, a version is a commit, a pack's parents
-  are commits, and a merge commit carries an empty pack. A datastore with
-  one writer at a time (PostgreSQL) has no merges: its clocks just count.
-  Two of the reader's checks are the git datastore's, which alone has
-  parents: the clock is 1 + the parents' highest, and a pack with no
-  operation is a merge. Another datastore keeps git's merge packs as they
-  came, and they add no operation.
-
-Which package sits where:
-
-| Side | Packages |
-|---|---|
-| Above the interface: reads operations, never storage | `core/issue`, `core/people` (their `Apply` and state rules), `core/syncer` (plan, state, pull, push), `core/forge` and its adapters, `core/index` (it reads `Heads` instead of refs), `internal/*` except the parts below |
-| The interface | `core/oplog`: `Op`, `Entry`, `Log`, hashing, order, `Create`/`Load`/`Append`/`List`, which take a `Datastore` instead of a `*gitstore.Store` |
-| The git datastore | `core/gitstore`, and oplog's git half (`writePack`, `readNode`, `walk`, `Merge`, `MergeFetched`) in one file, the only one in oplog that imports gitstore |
-| Not a datastore at all | the code repository: `internal/store`'s `code.go` and `diff.go`, `core/proof`, `internal/ship`, `core/cycle` (through `internal/evidence`), `internal/branches` |
-
-`core` imports nothing of `internal` (`core/importguard_test.go`), so the
-interface lives in core, and a PostgreSQL datastore would be a core
-package too (`core/pgstore`).
+- The kernel computes a pack's hash, the git blob id of its bytes, with
+  no git. So a board keeps its ids in every datastore, and moves between
+  datastores by a copy of its packs.
+- The kernel orders the packs by (clock, hash). A datastore hands them
+  back in any order.
+- A write is a compare-and-swap on the entity's version. On
+  `store.ErrMoved`, the writer reads again.
 
 ### 2. What every datastore gives
 
-| It must give | Why |
-|---|---|
-| **Packs, unchanged**, under the four kinds (`issue`, `person`, `sync`, `release`) | the history as operations; the ids and every reference to them |
-| **Compare-and-swap** on an entity's version | two writers never lose a write |
-| **Sync entities**, like any other kind | the sync bookkeeping is operations in them: links, last seen (`seen`), `posted`, `refused`, `run`. Echoes are settled by `seen`, by origins and by markers, which are all operations or forge text. A datastore that keeps packs keeps all of it, with no code of its own |
-| **Persons**, like any other kind | identities: who wrote each operation, and their forge accounts |
+- the packs, unchanged, of the four kinds: `issue`, `person`, `sync` and
+  `release`
+- a compare-and-swap on each entity's version
+- a local folder (`Folder`), this machine's own, for the view, the sync
+  lock, its journal and the caches. For a git board, it is
+  `<common dir>/board`.
 
-Besides the datastore, git-board needs two things of the machine it runs on:
+The sync bookkeeping and the people are entities like the issues, so a
+datastore that keeps packs keeps all of them with no code of its own.
 
-- **A local folder**, for the index, the sync lock and its journal, and the
-  caches (inbox, assignable people, media). For a git board it stays
-  `<common dir>/board`. For another datastore it is a folder its
-  configuration names.
-- **Who I am** (`board.me`) and the view (`board.view`). For a git board,
-  git config as today. Elsewhere, a file in that local folder.
+### 3. What a datastore can give up, and how a feature says so
 
-Neither is shared, and neither is the board.
+Each capability beyond section 2 is a field of `store.Caps`: a
+datastore without it leaves the field nil. A feature reads the field,
+never the datastore's name. The table of capabilities is in
+[Other datastores](../spec/datastores.md#capabilities).
 
-### 3. What a datastore may give up, and how a feature says so
+A missing capability is one error, `store.ErrMissing`, wrapped in the
+sentence the user reads. The CLI prints it, and the server answers it as
+a refusal.
 
-Each capability beyond section 2 is a Go interface that a datastore may
-also implement. git-board checks for it with a type assertion, never by the
-datastore's name.
+The code repository is not the datastore. Branches, diffs, tags and the
+proof notes stay in git, whatever keeps the board.
 
-| Capability | What needs it | git | PostgreSQL | Markdown folder | Forge only |
-|---|---|---|---|---|---|
-| **Replica**: fetch, push, merge with remotes; the reset and switched marks guard it | offline work with several writers; Sync's git part; Start over; `git board remote` | yes | no: one shared server. Offline only when the server is local | no | no |
-| **Counter**: a shared counter with compare-and-swap | project numbers (`CO2-3075`) | `refs/board/seq` | a row | `.board/numbers`, written on the default branch alone (issue #84, ADR 0016) | the forge's numbers only |
-| **git log of the board** | debugging, nothing in the product | yes | no | no | no |
-| **A code clone** (not the datastore's: the deployment's) | signed check notes and proof refs (ADR 0001), branches, diffs, the cycle, releases' tags, `verify` | with a clone | with a clone | with a clone | with a clone |
+### 4. The forges alone keep no board of their own
 
-- **Proof is not the datastore's to give.** Check notes and proof refs
-  live in the code repository. A PostgreSQL board in a clone keeps them. Only
-  a git-board with no clone (a hosted one) goes without them, and so without
-  the cycle's gates.
-- **A missing capability is one error**, `store.ErrMissing`, wrapped with
-  the sentence the user reads: "project numbers need a datastore that
-  counts; this board is kept in PostgreSQL without one". The CLI prints it.
-  The server answers it as it answers a refusal.
-- **The UI doesn't offer what can't work.** The server's API lists the
-  datastore's capabilities, beside what `GET /api/config` gives. A control that needs a missing one is shown
-  disabled, with the same sentence as its title. It isn't hidden: the user
-  learns why.
+`board.datastore forge` keeps the board on the forges. The board is the
+only truth ([ADR 0008](0008-sync-state-in-the-data-model.md)), so this
+datastore keeps no board of its own. It keeps a disposable copy of what
+this machine read of the forges, in `<folder>/forge-copy.git`
+(`store/forgecopy`). The sync fills it, and a write goes to the forge at
+once.
 
-### 4. A forge as the only store: a disposable local copy
+- Everything in the copy came from a forge, so a copy that is lost costs
+  one full pull, and makes no duplicate.
+- A marker from sync's accounts that names an unknown id is pulled as
+  new. That id has nowhere to arrive from.
+- It has no counter: the forges number the issues.
+- A board that also syncs to a second forge needs a store of its own:
+  git or PostgreSQL.
 
-A forge doesn't keep git-board's packs. So it can't give section 2 by
-itself: its history is its own timeline, not operations, and its ids are
-its own. This is the tension with the PRD, and this decision settles it by
-keeping a copy.
+### 5. Markdown is a datastore, and the files are a view
 
-**A forge-only board is a disposable local copy: a git datastore in the
-local folder, with no remote, that pull fills from the forge.** Its sync
-bookkeeping is that copy's own sync entity. Each write goes to the forge at
-once (the per-issue sync, `SyncIssue`), and the copy can be thrown away and
-pulled again. That is what tells it from the datastore beside a forge:
-throwing it away loses only the writes the forge hadn't got yet.
+`board.datastore markdown:<dir>` keeps the packs as JSON lines in
+`<dir>/.board/`, committed with the code and merged by git's union
+driver. After each write, git-board renders one Markdown file per
+issue, and reads hand edits back in before the next write. The files are
+a view, never the record. `git board export --md` writes the same files
+from any datastore, and `git board import --md` reads them back.
 
-The three homes for its sync bookkeeping:
+### 6. Queries read a disposable view
 
-| Home | For | Against |
-|---|---|---|
-| **A local file**: the disposable copy's own sync entity (recommended) | nothing new: sync works as today. A lost copy costs one full listing, and no duplicate (below) | a write that the forge never got dies with the machine |
-| The datastore beside it (git or PostgreSQL) | everything works as today | it isn't "forge only" any more: it is today's board with a forge sync |
-| Markers on the forge | they travel with the forge | titles, statuses, labels and assignees carry no marker (sync.md, [The forge's form](../spec/sync.md#the-forges-form)), so `seen` has nowhere to go. Writing it in the text would edit every issue and comment, and notify everyone |
+Lists, filters and search read a local view built from the entities
+(`view/`). It holds nothing that the entities do not hold, and can be
+deleted at any time.
 
-Why a copy that is lost costs nothing:
+- It is a sqlite file, `<folder>/v2/view.db`, with `modernc.org/sqlite`
+  in pure Go, so `CGO_ENABLED=0` builds keep working.
+- A board in PostgreSQL keeps the view in its own database, in a schema
+  per view version (`view.PGSchema`).
+- A file of an older version is deleted and built again, never migrated.
+- Each query first catches up with the heads that moved.
 
-- **Everything in a pulled copy came from the forge.** Each field's last
-  operation has the forge as its `origin`, so sync compares with that value
-  and not with `seen` ([What git-board took from a forge](../spec/sync.md#what-git-board-took-from-a-forge)).
-  Nothing goes back, and `seen` isn't needed.
-- **Links come back from origins**: a forge issue unlinked, with an issue
-  whose `create` has it as origin, is linked to it ([Crash recovery](../spec/sync.md#crash-recovery)).
-- **The copy's own writes are pushed at once.** Until the push lands, the
-  issue shows "not on the forge yet", as a write that waits.
+### 7. Attachments go to S3, not into the board
 
-What it gives up, besides section 3: its history is what its pulls saw,
-not every change (the forge's timeline holds those, one link away); and it
-needs the network for every write.
+A file in a comment goes to an S3 bucket that a CDN serves. The comment
+gets a plain Markdown link (`tools/uploads`).
 
-**One rule changes**, and only in this mode. Today a marker from sync's
-accounts naming an id that isn't here is skipped until that id arrives
-([Echoes](../spec/sync.md#echoes)). A forge-only copy has nowhere for it to
-arrive from: a second machine, or a copy pulled again, would skip its own
-comments forever. In this mode a marker naming an unknown id is pulled as
-new, as anyone's text is.
+- The keys and the S3 service are the server's environment:
+  `ACCESS_KEY_ID`, `ACCESS_KEY_SECRET`, `BUCKET_NAME` and
+  `UPLOADS_ENDPOINT`. Without the keys, attaching is off.
+- A request signs with AWS Signature V4 in the standard library, with no
+  SDK.
+- The bucket is public but not browsable. A random part in each file's
+  key is the only protection.
 
-A forge-only board that also syncs to a second forge has a store of its own
-to keep: choose git or PostgreSQL then.
+A file stays out of the datastore. A large file in the board goes into
+every clone, every backup or the working tree, and no forge shows it.
+The team owns its files through the S3 service it chooses.
 
-### 5. Markdown is a bridge first
+### 8. Project numbers come from one counter on origin
 
-A folder of Markdown holds a state, not operations, so it fails section 2
-as a datastore. It is first a bridge: an export, then an import.
+A project numbers its issues itself, `<PREFIX>-<n>` (`CO2-3075`).
 
-**Export** (`git board export --md <dir>`, this issue's milestone 2):
-
-- One file per issue, `NNN-slug.md`:
-  - `NNN` is the issue's project number when the project numbers its issues,
-    else its first forge number, else its id's first 7 digits (`BareNumber`,
-    then the id);
-  - `slug` is the title in lower case, with every run of characters other
-    than `a-z` and `0-9` turned into one `-`, at most 50 characters.
-- The name is for people. **The id in the front matter is what names the
-  issue.** When two issues give the same name, the one whose id sorts later
-  takes `-<7 digits of its id>`. When a title changes, the file of that id
-  under its old name is removed.
-- The front matter is YAML (`go.yaml.in/yaml/v3`, already a dependency):
-  - `id`, `number`, `title`, `state`;
-  - `fields`: the issue's fields as `.git-board.toml` names them, value by
-    field;
-  - `labels`: the plain labels;
-  - `people`: the author and the assignees;
-  - `created`, `updated`, in RFC 3339, UTC.
-- Then the description. Then each comment, in order:
-  - a heading with its author and its date;
-  - its text;
-  - the marker sync already writes, `<!-- git-board comment <id> -->`, so an
-    import finds which comment it is.
-- **A second run with no change writes nothing**: a file is written only
-  when its bytes differ. A test reads the folder back and compares the
-  issues, the comments and the fields.
-
-**Import** (next issue): the folder is a forge. A `core/forge` adapter over a
-folder gives sync its issues and takes its writes. Import is then a pull,
-and export with sync is a push:
-
-- the folder's last seen values live in a sync entity keyed by the folder,
-  as a forge project's do;
-- an edit made by hand is a forge change, and conflicts follow
-  [The four cases](../spec/sync.md#the-four-cases);
-- the comment markers say which comment is which;
-- a new file with no `id` is a new issue.
-
-So import needs no rule of its own, and the "every issue and comment as a
-folder of Markdown files" layout is a second shape of the same adapter.
-
-**As a datastore** (not planned): a folder that keeps each entity's packs,
-as one JSON line per pack, beside the Markdown it renders. It would give
-section 2 and a `git diff`-able board without git-board's refs. It waits
-for someone to ask.
-
-### 6. The order
-
-1. **Markdown export.** Milestone 2 of this issue. It reads through
-   `internal/store` and needs none of section 1.
-2. **Markdown import.** The folder as a forge (section 5). The next issue.
-3. **The cut.** `oplog`, `issue`, `people`, `syncer` and `index` take a
-   `Datastore`, and `internal/store` holds one. The git datastore behaves
-   exactly as today: same refs, same commits, same packs, every test
-   unchanged. It lands alone, before any second datastore.
-4. **PostgreSQL**:
-   - two tables, `packs (kind, id, hash, data)` and
-     `entities (kind, id, version)`;
-   - `Add` is one transaction that moves the version only from `prev`;
-   - Counter is a row;
-   - it needs `pgx`, a new dependency: the standard library has no
-     PostgreSQL driver.
-5. **Forge only**, after PostgreSQL, if someone asks.
-
-## Alternatives considered
-
-Scored on: keeps the ids and the history as operations (30), git unchanged
-(25), cost to add a datastore (25), a small interface (20).
-
-| Option | Score | Why not |
-| --- | --- | --- |
-| **Packs (this decision)** | 88 | |
-| Operations: the datastore stores an entity's ops and hands out their ids | 55 | Every id, target, `posted` and marker names a pack hash. A datastore's own ids would make the same board different ids in two datastores, so nothing moves or syncs between them |
-| State: the datastore stores each issue as it is now (CRUD) | 30 | Loses the history, the order every clone agrees on, `changes` (which sync's conflicts and "what git-board took from a forge" read), and the echoes |
-| `internal/store`'s `Backend` as the interface | 40 | Over 150 methods. Each datastore would build numbering, sync, releases and resets again |
-| Git only, with exports and imports as bridges | 60 | Cheapest, but a team that wants PostgreSQL gets a copy, not a store |
+- On git, the counter is `refs/board/seq`, a chain of commits that is
+  not an entity. Only `origin` hands numbers out (`app/numbers.go`).
+- A number is taken by a fetch, a new commit and an unforced push. A
+  refused push means that someone else took a number: fetch and try
+  again.
+- Only issues that `origin` already has get a number. `git board sync`,
+  `git board numbers` and Settings › Numbers number them.
+- Below `start`, an issue keeps its GitHub number: `#2518` is
+  `CO2-2518`.
+- PostgreSQL keeps the counter in a row. A Markdown folder keeps it in
+  `.board/numbers`, and writes it on the default branch only.
 
 ## Consequences
 
 Good:
 
-- A board keeps its ids in every datastore, so it leaves git by copying
-  its packs, and markers already on forges stay true.
-- Sync, its bookkeeping and its echoes work unchanged on any datastore that
-  keeps packs: they are operations.
-- The interface is three methods. The git datastore is today's code behind
-  them.
-- A feature that can't work says why, in the UI and in the CLI.
+- A board keeps its ids in every datastore, and the markers on forges
+  stay true after a copy.
+- Sync works unchanged on every datastore, because its records are
+  operations.
+- Deleting the view loses nothing. A schema change costs one rebuild.
+- Numbers are short, ordered, independent of the forges, and need no
+  server.
 
 Bad, and accepted:
 
-- A datastore stores bytes it can't query: PostgreSQL holds packs, not
-  rows of issues. Queries keep going through the local sqlite index. A
-  hosted git-board that can't keep a local folder would need the index in
-  PostgreSQL: a later decision.
-- The cut (step 3) touches every caller of `*gitstore.Store` in core and in
-  `internal/store`, as listed under Evidence, for no visible change.
-- A forge-only board loses what its machine hadn't pushed yet, and its
-  history is what its pulls saw.
-- PostgreSQL adds a dependency.
-
-Unchanged:
-
-- The storage format, the refs, and, for now, the spec's pages. When
-  forge-only is built, [Echoes](../spec/sync.md#echoes) gains its one rule
-  (section 4), for that mode only.
-- `.git-board.toml` stays in the code checkout. Its defaults (#75) aren't
-  touched here.
-
-## As built
-
-Steps 2 (Markdown import), 3 (the cut), 4 (PostgreSQL) and 5 (forge
-only) landed on 2026-11-04, and the Markdown folder as a datastore with
-them. Where the
-build differs from the decision above, and why:
-
-- **The interface is `core/datastore`, not `core/oplog`.** `*gitstore.Store`
-  implements it itself, so every caller and test that held a git store
-  keeps working; gitstore can't import oplog, which imports it for
-  `Merge`. `oplog.Datastore` names the same interface.
-- **The interface has a fourth method, `Folder`**: the machine's own
-  folder (section 2), which the index, the sync lock and the caches need.
-  For git it stays `<common dir>/board`.
-- **The git datastore's checks live in `gitstore`** (`Walk`, `ReadNode`):
-  a pack's clock and the merge rule read parents, which only git has.
-  `Merge` and `MergeFetched` stay oplog's git half (`merge.go`).
-- **A malformed operation is named by its pack's id**, not by its commit:
-  the same message in every datastore.
-- **`ErrRefMoved` is `datastore.ErrMoved`**, so a caller of either checks
-  one error.
-
-What this ADR left open is settled:
-
-- **Where a datastore is configured:** `board.datastore` in the clone's
-  git config (`git`, `forge`, or a `postgres://` URL), over which
-  `GIT_BOARD_DATASTORE` wins. Never `.git-board.toml`: a URL may hold a
-  password. Settings › Datastore edits it, tests a URL and copies a git
-  board in; a change takes effect when the server starts again.
-- **The PostgreSQL index replaces sqlite**: the same tables, in the schema
-  `git_board_index`, shared by every machine; its search tokenizes as
-  unicode61 does, and every index test runs on it (`make test-pg`).
-- **Who I am** stays `board.me` in the clone's git config, whatever keeps
-  the board: it is the clone's, not the board's. `<folder>/me` is only for
-  a datastore with no clone.
-- **`core/watch`** reads `Heads`; the server's change events compare the
-  datastore's heads.
-- **Copying a board out of git** is `git board datastore copy` (and the
-  tab's button): packs as they are, the counter with them. Into git stays
-  open.
-- **Forge only** sends each write from `git board serve` at once; a
-  write from the command line goes with the next sync. Its re-pulled texts
-  keep the header sync posted them with, as anyone's text does.
-
-Markdown, as built, differs from section 5:
-
-- **Import is not a forge adapter.** `git board import --md` reads the
-  files straight into operations: a file's `updated` against the issue's
-  is the last seen (a field changed on both sides is a conflict, the
-  board's kept), names find the people, and a new file's id is written
-  back. A folder adapter for sync would have taken every author as sync's
-  account and every pulled text with sync's header; this keeps them.
-- **The Markdown folder is a datastore** (`core/mdstore`,
-  `board.datastore markdown:<dir>`): packs as JSON lines in
-  `<dir>/.board/<kind>/<id>.jsonl`, merged by git's union driver; a
-  version is the file's hash (two branches' files of as many packs are two
-  versions), a write takes the file's lock. Before
-  each write the backend reads the folder's hand edits in, and after it
-  renders the files, holding `.board/board.lock` (an OS lock) from the
-  read-in to the render: a server and a command never read one hand edit
-  in twice, nor render over each other (issue #85). A forge sync takes it
-  to read in and to render, not across the run.
-- **One forge sync at a time per board** on a datastore every machine
-  shares: `datastore.Locker`, which PostgreSQL holds as a session
-  advisory lock (`pg_try_advisory_lock`) on one connection for the run;
-  the server lets it go when the session ends (issue #83). git, Markdown
-  files and the forges alone keep the machine's lock, `sync.lock`; the
-  journal stays the machine's everywhere.
-
-## Left open
-
-- The local folder's default path for a board with no clone (a hosted
-  git-board).
-- Whether `Heads` should return the versions of every kind in one call: the
-  index reads two kinds and the change events three.
-- Copying a board into git: `datastore.Copy` chains an entity's packs into
-  commits clock by clock, and `gitstore.Add` refuses a pack whose clock
-  isn't 1 + its parent's (since 2026-11-04). An entity with two packs of
-  one clock (a merge in git, or two writers on PostgreSQL) needs a merge
-  commit, which Copy doesn't write: such a copy fails loudly, it never
-  writes a broken entity.
-- The pages don't yet disable a control a datastore can't run (pull, push,
-  start over): the server refuses it, 409 `missing`, with the sentence
-  (issue #82).
-- **No stat cache in the Markdown folder's `Heads`** (issue #92, decided
-  2026-11-04). `Heads` reads and hashes every pack file on every call, so
-  each poll of the change events and each index refresh costs them all:
-  measured, 1,000 files of 8 KB take 52 ms on a 2-CPU machine. A cache of
-  (size, mtime, inode) → version would skip unchanged files, but a version
-  must change whenever the file does, and these can stay equal through a
-  rewrite: `git checkout` and `git merge` write files at the time of the
-  checkout, and Linux usually stamps them with a coarse clock that ticks every few
-  milliseconds (FAT every 2 s), so two branches' files of one size,
-  written in one tick, maybe on a just-freed inode, look the same; and the
-  folder may be on a shared disk, whose server's clock isn't this
-  machine's. Git's own answer, "racy git" (an entry stamped within a tick
-  of the index's own write is hashed again), needs a file written on the
-  same disk as the reference, which a read-only poll doesn't write, and
-  Windows gives no inode or change time to add. An issue missed this way
-  is a page showing an old state and an index answering with it until the
-  file changes again, with nothing to tell; the cost saved is tens of
-  milliseconds a poll. So it hashes every file: correct before cheap. If
-  a board ever makes it slow, a cache that only trusts a file whose mtime
-  and ctime are both older than a few seconds, by a clock read from that
-  disk, is the way, and a missed change must stay impossible on a local
-  disk.
-
-## Evidence
-
-Where git is assumed today, read on 2026-11-03 at fd9df99. Tests are left
-out.
-
-### The entity log: behind the interface
-
-- `core/gitstore/store.go`:
-  - `:64` `Open`: go-git, plus the git binary;
-  - `:99`–`:181` blobs, trees, commits;
-  - `:204` `Ref`, `:220` `Refs`;
-  - `:289` `UpdateRef`, the compare-and-swap through `git update-ref`.
-- `core/gitstore/remote.go`: `:11` `Kinds`; `:25` `Fetch` and `:45` `Push`,
-  the refspecs.
-- `core/oplog/oplog.go`:
-  - `:77` `RefName`, `refs/board/<kind>/<id>`;
-  - `:80` `IsID`: 40 hex digits, SHA-1's;
-  - `:116` `Create`, `:146` `Load`, `:169` `Append`, `:207` `List`;
-  - `:229` `writePack`, `:251` `readNode`, `:293` `walk`: commits and
-    parents;
-  - `:322` `order`: (clock, blob hash).
-- `core/oplog/merge.go`: `:18` `Merge`, merge commits; `:72` `MergeFetched`,
-  `refs/board-remotes/`.
-- Callers that take a `*gitstore.Store`:
-  - `core/issue/ops.go`: `:60`, `:75`, `:84`, `:87`;
-  - `core/people/ops.go`: `:40`, `:56`, `:65`, `:68`;
-  - `core/people/directory.go:10`;
-  - `core/syncer/sync.go`: `:97`, `:102`, `:108`, `:150`;
-  - `core/syncer/state.go`: `:78` `loadState`, `:239` `writeOps`;
-  - `core/syncer/links.go`: `:31`, `:48`;
-  - `core/syncer/pull.go:28`;
-  - `core/forge/conformance/conformance.go`: `:90`, `:148`.
-- `core/index/index.go`:
-  - `:33` `entities.head`, a commit hash;
-  - `:150` `Refresh`: lists refs, and compares heads.
-- `core/watch/watch.go:33`: polls the refs.
-- `internal/store/store.go`:
-  - `:144` the `Backend` holds a `*gitstore.Store`, and `:218` `Store()`
-    hands it out;
-  - `:289` `loadIssue` caches by head;
-  - `:310` `all` lists refs;
-  - `:648` `Pull`, `:663` `Push`, `:677` `Fetch`.
-- `internal/store/history.go`:
-  - `:72` `RefsFingerprint`;
-  - `:80` `ReleasesFingerprint`, which also reads `refs/tags/`;
-  - `:84` `fingerprint`, read by `internal/server/events.go:170` and `:196`.
-- `internal/store/releases.go:111` `pushKinds`: a refspec per kind (`:125`).
-- `internal/store/body.go:190` `meanings`: takes a `*gitstore.Store`.
-- `internal/store/whole.go`: `:46` `SyncWhole`, `:111` `PullStep`, `:147`
-  `PushStep`: the git part of Sync.
-
-### git-board's own refs: capabilities
-
-- **The counter**, `internal/store/numbers.go`:
-  - `:39` `refs/board/seq`;
-  - `:130` `readCounter`, `:454` `pushCounter`, `:477` `commitCounter`;
-  - `internal/server/numbers.go:209`.
-- **The reset mark**, `internal/store/reset.go`:
-  - `:28` `refs/board/reset`;
-  - `:157` `ResetHard`, with a git bundle as its backup (`:233`);
-  - `:267` `PushPrune`, `refs/board-pruned/`;
-  - `cmd/git-board/reset.go:87`.
-- **The switched mark**, `internal/store/forges.go`: `:262`
-  `refs/board/switched`, `:299` `fetchMark`, `:317` `pushMark`.
-- **The dry runs' scratch copy**, `internal/store/forges.go:348`, `:355`: a
-  throwaway git repository.
-- **What a push or a pull would move**, `internal/store/remotes.go`: `:88`
-  `ahead`, `:130` `compare` (`refs/board-remotes/`).
-- **The switch from git-bug**:
-  - `internal/store/switch.go`: `:160`, `:212` (`refs/bugs/`), `:358`,
-    `:757` (`refs/releases/`);
-  - `internal/store/prune.go`: `:20`, `:33`;
-  - `internal/server/startover.go:43`.
-
-### The code repository: not the datastore
-
-- `internal/store/code.go`: branches (`:36`, `refs/heads/` and
-  `refs/remotes/`), `:105` go-git on the common dir, worktrees (`:160`).
-- `internal/store/diff.go:22`: `git` for rev-parse, merge-base, diff, log.
-- `core/proof/notes.go`: `:15` `refs/notes/ci/<writer>`, `:47` `Append`,
-  `:94` `Lines` (ADR 0001).
-- `internal/ship/git.go`: `:47` tags, `:75` `PushTag`, `:129` the config
-  repository.
-- `internal/evidence/evidence.go:64`, `internal/branches/branches.go:331`,
-  `internal/server/work.go:144`: commits read.
-- `cmd/git-board/verify.go:80`: `refs/remotes/origin/HEAD`.
-
-### The machine's own state: a local folder
-
-- `core/index/index.go:62`: `<common dir>/board/index.db`.
-- `core/syncer/lock.go`: `:23` `<common dir>/board/sync.lock`, `:71`
-  `Running`.
-- `core/syncer/journal.go`: `:213` `Cut`, `:260` `Forget`.
-- `internal/store/store.go:228`: `Storage()`, `<common dir>/board`, read
-  by:
-  - the inbox (`internal/server/inbox.go:68`);
-  - the assignable people (`internal/server/assignable.go:91`);
-  - the media (`internal/server/issues.go:100`).
-- `core/people/ops.go`: `:92` `Me` and `:95` `SetMe`, in git config
-  `board.me`.
-- `internal/store/store.go:635` `SetView`, git config `board.view`.
-- `internal/store/tokens.go`: tokens from git's credential helper. Not the
-  board's, and kept as it is.
-
-Already outside git: attachments go to S3 (`internal/uploads`).
+- A datastore stores bytes that it cannot query. Queries go through the
+  view.
+- Two SQL dialects for the view: `make test-pg` runs its tests on
+  PostgreSQL, outside `make ci`.
+- Files are public to anyone with the link, even for a private
+  repository, and stay on the CDN for up to a year after a delete.
+- An issue has no number until `origin` has it. Offline, nothing gets a
+  number.
+- `#N` is a forge's number and `PREFIX-N` the project's: two notations to
+  learn.

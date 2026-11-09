@@ -1,126 +1,126 @@
-# ADR 0004: An entity is a log of operations, ordered by (clock, pack hash)
+# ADR 0004: Issues are operation logs, fields are labels
 
-- Status: accepted (recorded 2026-11-04, decided earlier)
-- Date: 2026-10-24 (`docs/prd/core.md` › The data model, in brief; M1 and
-  M2 built and measured it the same day).
-- Spec: `docs/spec/data-model.md` › Entities, Operations, Ids;
-  `docs/spec/storage.md` › Packs, Clock, Order, Merging two heads, Updating
-  a ref. ADR 0002 keeps this model and moves only where packs are kept.
-- Alternatives below are reconstructed: the PRD records the choice, not
-  what it was weighed against.
+- Status: accepted; merged 2026-11-09 from ADR 0004 (decided 2026-10-24),
+  ADR 0007 (before 2026-09-02, confirmed 2026-10-24) and ADR 0019
+  (decided 2026-11-04)
+- Date: 2026-10-24, 2026-11-04
+- Absorbs [ADR 0007](0007-every-field-is-a-label.md) (every field is a
+  label, without its forge mapping, which is in
+  [ADR 0008](0008-sync-state-in-the-data-model.md)) and
+  [ADR 0019](0019-deleting-is-a-tombstone.md) (deleting is a tombstone).
+- Spec: [Data model](../spec/data-model.md) and
+  [Storage](../spec/storage.md).
 
 ## Context
 
-The board must be written offline, on several clones and several
-machines, and merged with `git fetch`, with no server to settle who wrote
-first. Wall clocks differ between machines. The same board must give the
-same state on every clone once they have exchanged their data.
+The board is written offline, on several clones and machines, and merged
+with `git fetch`, with no server to say who wrote first. Clocks differ
+between machines. Every clone gives the same state once the clones
+exchange their data. Each project needs its own fields, and the fields
+travel with the issues through git and through every forge. People also
+expect to delete an issue or a comment.
 
 ## Decision
 
-### 1. One kind of record, the entity
+### 1. An entity is a log of operations
 
-An entity is a log of operations. Its state is what its operations add up
-to, applied in one order. Nothing else is stored: no snapshot, no cache
-(`docs/spec/data-model.md` › Entities).
+An entity's state is what its operations add up to, applied in one
+order. Nothing else is stored: no snapshot and no cache.
 
-- Four kinds, one list: `issue`, `person`, `sync`, `release`
-  (`core/datastore/datastore.go:18`).
-- An operation is `{kind, author, time, origin?, data}`
-  (`core/oplog/oplog.go:30-36`). `time` is for people; it never orders.
-- A reader ignores fields it doesn't know, and refuses an operation kind
-  it doesn't know rather than drop it (`docs/spec/data-model.md` ›
-  Operations).
+- There are four kinds: `issue`, `person`, `sync` and `release`.
+- An operation is `{kind, author, time, origin?, data}`. Its `time` is for
+  people, and never orders.
+- A reader ignores a field that it does not know. It refuses an operation
+  kind that it does not know, and never drops it.
 
 ### 2. Operations are written in packs, and ids come from packs
 
-- A pack is one JSON blob, `{"clock": N, "nonce": …, "ops": [...]}`
-  (`core/oplog/oplog.go:69-73`). In git, one commit holds one pack.
-- A pack's hash is the git blob id of its bytes, computed without git
-  (`core/oplog/oplog.go:84` `Hash`).
-- An issue's or a person's id is its first pack's hash; the first pack
-  carries a random nonce so two equal creates differ
-  (`core/oplog/oplog.go:145-147`). A sync entity's id is the SHA-1 of its
-  forge key (`core/syncer/state.go:20`).
+- A pack is one JSON blob, `{"clock": N, "nonce": …, "ops": [...]}`. In
+  git, one commit holds one pack.
+- A pack's hash is the git blob id of its bytes, computed with no git
+  (`kernel/pack`).
+- An issue's or a person's id is the hash of its first pack. That pack
+  carries a random nonce, so two equal creates differ.
 - An operation's id is `<pack hash>:<index>`. `edit-text`, `set-meta`,
-  `posted` and the markers on forges name operations this way.
-- Ids are 40 lowercase hex digits (`core/oplog/oplog.go:94-97`), so no id
-  is a ref name git refuses.
+  `delete`, the sync records and the markers on forges name operations
+  this way.
+- An id is 40 lowercase hex digits.
 
-### 3. The order every clone agrees on
+### 3. One order on every clone
 
-- A commit's clock is 1 + the highest of its parents' clocks: a Lamport
-  clock (`docs/spec/storage.md` › Clock).
-- An entity's operations are every reachable pack, sorted by (clock, pack
-  hash), each pack's ops in stored order. Two identical packs count once
-  (`core/oplog/oplog.go:286` `order`).
-- Two heads that don't contain each other are joined by a merge commit
-  with an empty pack (`core/oplog/merge.go:47` `Merge`). A merge writes no
-  operation.
-- So conflicting edits between clones resolve by this order, the same
-  everywhere, and the other operation stays in the history
-  (`docs/spec/sync.md` › Conflicts).
+- A pack's clock is 1 + the highest clock of its parents: a Lamport
+  clock.
+- An entity's operations are its packs sorted by (clock, pack hash), each
+  pack's operations in their stored order. Two identical packs count
+  once.
+- A merge joins two heads with an empty pack, and writes no operation.
+- So two clones resolve conflicting edits by the same order, and the
+  other edit stays in the history.
 
-### 4. A write is a compare-and-swap; no lock files
+### 4. A write is a compare-and-swap, with no lock file
 
-- A write moves the entity's version only if it is still the one read: in
-  git, `git update-ref <ref> <new> <old>`
-  (`core/gitstore/store.go:292` `UpdateRef`).
-- When it moved, the writer loads again and writes a new pack at the new
-  clock + 1, at most 5 tries (`core/oplog/oplog.go:66`, `:197` `Append`).
-  A retried pack gets new operation ids.
-- Two processes writing at once both land. Only a sync run takes a lock
-  (ADR 0008).
-- An issue validates before it writes: a rejected operation once stayed in
-  the log and made the issue unloadable on every clone
-  (`docs/spec/decisions.md` › Trial results).
+- A write moves the entity's version only if it is still the one read.
+  In git, this is `git update-ref <ref> <new> <old>`.
+- When the version moved, the writer reads again and writes a new pack,
+  5 tries at most (`kernel/board.go`).
+- The issue domain refuses a bad operation before it writes it, so a rejected
+  operation never enters the log.
+- Only a sync run takes a lock ([ADR 0008](0008-sync-state-in-the-data-model.md)).
 
-## Alternatives considered
+### 5. A field value is a label
 
-Reconstructed. Scored on: every clone converges with no server (35),
-offline writes (25), history kept (20), simplicity (20).
+- Every field besides the title, the body, the open or closed status and
+  the comments is a label `ns:value`: `status:ready`, `prio:p1`,
+  `due:2026-10-30`, `parent:#12`. A label without a colon is a plain
+  label.
+- One operation, `change-labels`, writes all of them. Labels merge one
+  by one, so they never conflict.
+- `.git-board.toml` gives them meaning
+  ([ADR 0011](0011-shared-settings-in-git-board-toml.md)): `[fields.<ns>]`
+  adds options, a type, cardinality, colors and units. A namespace found
+  on issues is already a field.
+- A single-value field swaps: a new value removes the other labels of its
+  namespace.
+- The workflow status (`status:in-progress`) is a field like the others.
+  `git board close` sets its last option and closes the issue.
+- On a forge, a field is a label unless its mapping says otherwise
+  ([ADR 0008](0008-sync-state-in-the-data-model.md), section 5).
 
-| Option | Score | Why not |
-| --- | --- | --- |
-| **Operation log, Lamport clock, (clock, hash) order (this decision)** | 85 | |
-| Order by wall-clock time | 50 | Machines' clocks disagree; two clones could apply edits in different orders and diverge |
-| Store each issue's current state (a file or row per issue), merge with git's text merge | 35 | Merge conflicts in data files, no history as operations, no echo rule for sync (ADR 0008) |
-| A state-based CRDT library (Automerge, Yjs) | 45 | A large dependency and its own binary format, unreadable with git alone; not Go-native at the time |
-| A central server that serializes writes | 30 | Not offline; against the project's "store data git already knows how to sync" (`docs/implementation-plan.md` › Why this exists) |
+### 6. Deleting is a tombstone
+
+- A `delete` operation names a target: the `create` operation's id hides
+  the issue, a comment's id hides the comment. It merges and syncs like
+  any operation.
+- A deleted comment leaves the issue's state, with its text. A later
+  `edit-text` or `set-meta` of it changes nothing.
+- No list, query, search, page or export shows a deleted issue.
+  `git board show <id>` answers not found.
+- A delete hides, and does not erase. The text stays in the packs of
+  every clone. `git board delete` and `comment --delete` say so. A secret
+  pasted into an issue is leaked: revoke it.
+- The sync never brings a deleted issue or comment back, and never sends
+  a delete to a forge.
+- Anyone who writes to the board can delete, as for any other operation.
 
 ## Consequences
 
 Good:
 
-- Clones converge once they have exchanged heads
-  (`core/issue/merge_test.go:31` `TestMergeConverges`).
-- Ids are the same in every datastore, so a board moves out of git by
-  copying its packs (ADR 0002).
-- The whole history is kept; sync's "what git-board took from a forge"
-  reads it.
+- Clones converge once they exchange heads, offline included.
+- Ids are the same in every datastore
+  ([ADR 0002](0002-datastores.md)).
+- The whole history is kept. The sync reads it to find what came from a
+  forge.
+- A new field needs no code and no migration: write a label.
+- A delete keeps every id, link and sync record valid.
 
 Bad, and accepted:
 
-- The winner of a conflict between clones is arbitrary (clock, then hash),
-  not "the latest".
-- Every load replays every operation; there is no snapshot. Measured: a
-  sync entity of 21,000 operations loads in 0.25 s
-  (`docs/spec/decisions.md` › M6 results).
-- Nothing is ever deleted from a log. `git board reset --hard` starts a
-  board over instead.
-
-## Left open
-
-- **The merge storm.** Two clones that exchange directly and merge at the
-  same moment can keep writing merge commits for each other; through one
-  origin they converge (`docs/spec/storage.md` › Merging two heads; "not
-  planned yet" in `docs/prd/core.md`).
-- **JSON strictness.** The spec says keys are case-sensitive and unique;
-  Go's decoder accepts any case and keeps the last duplicate
-  (`core/oplog/oplog.go:272-274`, a `ponytail:` note).
-- **Drift: entity commits' identity.** `docs/spec/storage.md` › Commits
-  says author and committer are `git-board <git-board@localhost>` and the
-  message is `git-board`. The code writes an empty identity and no message
-  (`core/gitstore/store.go:171-175`, since 2026-10-28, "entity commits
-  carry no identity and no message"). Readers ignore both, so nothing
-  breaks, but the spec is wrong.
+- The winner of a conflict between clones is arbitrary (clock, then
+  hash), not the latest edit.
+- Every load replays every operation of the entity.
+- A single-value field can hold two values after a merge between clones.
+  `git board lint` reports it, and a value outside `options`.
+- A deleted text stays readable in the history of every clone.
+- Nothing leaves a log. `git board reset --hard` starts a board over
+  instead.
