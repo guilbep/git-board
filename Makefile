@@ -163,10 +163,11 @@ web-e2e: web/node_modules ## Run the browser tests (Playwright, web/e2e)
 web-build: web/node_modules ## Build the web app into web/dist
 	cd web && npm run build
 
-# git-board's OAuth App on github.com (#101, ADR 0010): its client id,
-# public, turns on the login in the browser. Empty: a pasted token alone.
+# git-board's OAuth App on github.com (#101, ADR 0010) is the default in
+# forge/github/device.go. GITHUB_CLIENT_ID replaces it, for a fork's own
+# app; unset, the source's stays.
 GITHUB_CLIENT_ID ?=
-CLIENT_ID_FLAG := -X github.com/guilbep/git-board/forge/github.ClientID=$(GITHUB_CLIENT_ID)
+CLIENT_ID_FLAG := $(if $(GITHUB_CLIENT_ID),-X github.com/guilbep/git-board/forge/github.ClientID=$(GITHUB_CLIENT_ID))
 
 # A release's archives, the web app inside, in dist/ with checksums.txt:
 # run on a clean checkout of the tag, so the commands report that version.

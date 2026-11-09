@@ -3,6 +3,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -136,12 +137,13 @@ func forgeTable(f forge.Table) map[string]any {
 }
 
 // foundToWrite are the forges found in the git remotes, to be written as
-// tables: a table turns the found ones off. A GitHub project is written
-// as the URL names it, with no token needed: GitHub answers a renamed
-// one at its old name too. A GitLab table names the project by its id,
-// which only the forge says: one that cannot be read refuses the write,
-// since it would be turned off unsaid. Two URLs of one project are one
-// table.
+// tables: a table turns the found ones off. Each is named as the forge
+// names it, as a sync keys its records (a GitHub project's spelling, a
+// GitLab project's id), so the records of a sync already run still match.
+// A GitHub project with no token yet is written as the URL names it:
+// nothing has synced with it. One that cannot be read otherwise refuses
+// the write, since it would be turned off unsaid. Two URLs of one project
+// are one table.
 func (b *Board) foundToWrite(ctx context.Context) ([]forge.Table, error) {
 	found, err := b.FoundForges(ctx, func(string) {})
 	if err != nil {
@@ -151,13 +153,18 @@ func (b *Board) foundToWrite(ctx context.Context) ([]forge.Table, error) {
 	var left []string
 	seen := map[string]bool{}
 	for _, f := range found {
-		if f.Kind == "gitlab" {
-			id, err := resolveProject(ctx, f)
-			if err != nil {
-				left = append(left, fmt.Sprintf("forge %s, %s %s: %v", f.Name, f.Host, f.Project, err))
-				continue
+		project, err := resolveProject(ctx, f)
+		switch {
+		case err == nil:
+			if f.Kind == "gitlab" {
+				f.Path = f.Project
 			}
-			f.Path, f.Project = f.Project, id
+			f.Project = project
+		case f.Kind == "github" && errors.Is(err, forge.ErrNoToken):
+			// written as the URL names it
+		default:
+			left = append(left, fmt.Sprintf("forge %s, %s %s: %v", f.Name, f.Host, f.Project, err))
+			continue
 		}
 		if key := strings.ToLower(f.Host + "/" + f.Project); !seen[key] {
 			seen[key] = true

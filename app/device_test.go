@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -80,5 +83,43 @@ func TestDeviceLogin(t *testing.T) {
 	who, err := d.Wait(t.Context())
 	if err != nil || who != "ada" || stored != "https://github.com ada gho_secret" {
 		t.Fatalf("logged in as %q (%v), stored %q", who, err, stored)
+	}
+}
+
+// A forge found in origin gets its table under the name GitHub gives it,
+// as a sync keys its records, not as origin spells it; with no token, as
+// origin spells it. Serial: it sets the environment and GitHubAPI.
+func TestFoundForgeWrittenAsGitHubNamesIt(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /repos/o/r", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"full_name": "O/R"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	api := GitHubAPI
+	t.Cleanup(func() { GitHubAPI = api })
+	GitHubAPI = srv.URL
+
+	for _, tc := range []struct{ token, want string }{{"", `project = "o/r"`}, {"t", `project = "O/R"`}} {
+		t.Setenv("GITHUB_TOKEN", tc.token)
+		dir := t.TempDir()
+		for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "https://github.com/o/r.git"}} {
+			if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+		b, err := Open(t.Context(), dir, Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = b.SetForgeWay(t.Context(), "github", "pull")
+		b.Close()
+		if err != nil {
+			t.Fatalf("token %q: %v", tc.token, err)
+		}
+		data, _ := os.ReadFile(filepath.Join(dir, ".git-board.toml"))
+		if !strings.Contains(string(data), tc.want) || !strings.Contains(string(data), `way = "pull"`) {
+			t.Errorf("token %q: want %s:\n%s", tc.token, tc.want, data)
+		}
 	}
 }

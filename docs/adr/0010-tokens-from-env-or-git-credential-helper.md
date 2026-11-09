@@ -113,8 +113,9 @@ The rules of sections 1 and 4 stay:
 - The web routes answer on loopback alone (routes 62 and 63).
 - The flow uses an OAuth App, not a GitHub App. An OAuth App's token does
   not expire, so git-board keeps no refresh token.
-- The app's client id is public, and a build sets it
-  (`make dist GITHUB_CLIENT_ID=…`). A build without it shows no button
+- The app's client id is public, as `gh`'s is, and lives in the source
+  (`forge/github/device.go`). A fork sets its own
+  (`make dist GITHUB_CLIENT_ID=…`). A build without one shows no button
   and keeps the pasted token.
 - A GitHub Enterprise host and GitLab keep the pasted token. An
   Enterprise host needs its own OAuth App. A GitLab token from the flow

@@ -175,7 +175,8 @@ git board export --html site --title "Our issues"
 
 To publish it on GitHub Pages, run the command in a workflow, then
 upload the folder. The workflow needs the board's refs, so fetch them
-first:
+first. The recipe installs git-board from `main`, because no release has
+`export --html` yet. Pin a release tag once one has it.
 
 ```yaml
 on: { push: { branches: [main] }, schedule: [{ cron: "0 * * * *" }] }
@@ -187,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: git fetch origin "+refs/board/*:refs/board/*"
-      - run: go install github.com/guilbep/git-board/cmd/git-board@latest
+      - run: go install github.com/guilbep/git-board/cmd/git-board@main
       - run: git board export --html site
       - uses: actions/upload-pages-artifact@v3
         with: { path: site }
