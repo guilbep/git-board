@@ -34,13 +34,14 @@ Every test package's `TestMain` calls `hermetic.Run`
   credential helper answers.
 - `GIT_ALLOW_PROTOCOL=file` and `GIT_SSH_COMMAND=false` keep git on local
   repositories.
+- `XDG_CONFIG_HOME` is an empty folder, so no global git-board file
+  gives a template.
 - `BOARD_LIVE` skips the seal for the live tests, which choose their own
   scratch projects.
 
-The code does not hold this rule yet. On 2026-11-09, 15 packages of the
-module call `hermetic.Run`, and `app` and `surface/cli` are among those
-that do not. No test of the module fails a package without the seal.
-`contrib/board-agents` has one, `TestEveryPackageIsSealed`.
+`TestEveryPackageIsSealed` (`hermetic/hermetic_test.go`) fails a test
+package of the module that does not call `hermetic.Run`.
+`contrib/board-agents` has its own guard.
 
 ### 2. Real repositories and fakes, not mocks
 

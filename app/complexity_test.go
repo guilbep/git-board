@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/domain/issues"
+	"github.com/guilbep/git-board/hermetic"
 	"github.com/guilbep/git-board/store"
 	"github.com/guilbep/git-board/tools/boardgen"
 	"github.com/guilbep/git-board/tools/code"
@@ -35,11 +36,11 @@ var guard struct {
 }
 
 func TestMain(m *testing.M) {
-	code := m.Run()
-	if guard.dir != "" {
-		os.RemoveAll(filepath.Dir(guard.dir))
-	}
-	os.Exit(code)
+	hermetic.Run(m, func() {
+		if guard.dir != "" {
+			os.RemoveAll(filepath.Dir(guard.dir))
+		}
+	})
 }
 
 // guardBoard is a copy of the guards' board, made once for the package's
