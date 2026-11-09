@@ -94,6 +94,16 @@ func (s *Server) syncStatus(ctx context.Context, _ none) (syncRes, error) {
 	return res, err
 }
 
+// state is route 60: the board's state, named (app.State), with this
+// server's own run, which it knows first.
+func (s *Server) state(ctx context.Context, _ none) (app.State, error) {
+	st, err := board(ctx).State(ctx)
+	if r := s.lastRun(); r != nil && r.State == "running" {
+		st.Run = app.RunState{State: "running"}
+	}
+	return st, err
+}
+
 // lastRun is a copy of the run running, or the last one.
 func (s *Server) lastRun() *Run {
 	s.runMu.Lock()
@@ -121,22 +131,26 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	if r.Scope == "" {
 		r.Scope = "forges"
 	}
-	if r.Way == "" {
+	if r.Way == "" || r.Way == "both" { // the forge table's word for it
 		r.Way = string(app.WaySync)
 	}
 	switch {
 	case r.Scope != "forges" && r.Scope != "all":
 		return Reply{}, invalid("scope", fmt.Errorf("scope %q: forges or all", r.Scope))
 	case r.Way != "sync" && r.Way != "pull" && r.Way != "push":
-		return Reply{}, invalid("way", fmt.Errorf("way %q: sync, pull or push", r.Way))
+		return Reply{}, invalid("way", fmt.Errorf("way %q: both (or sync), pull or push", r.Way))
 	case r.Scope == "all" && (r.Way != "sync" || r.DryRun):
 		return Reply{}, invalid("way", errors.New("a whole sync goes both ways, and has no dry run: scope forges has"))
+	}
+	if board(ctx).Syncing() { // this server's run, the CLI's, or another server's
+		return Reply{}, &app.Error{Class: app.Busy, Err: errors.New("a sync runs: try again once it ends")}
 	}
 	s.runMu.Lock()
 	if s.run != nil && s.run.State == "running" {
 		s.runMu.Unlock()
 		return Reply{}, &app.Error{Class: app.Busy, Err: errors.New("a sync runs: try again once it ends")}
 	}
+
 	s.runs++
 	run := &Run{ID: strconv.Itoa(s.runs), Scope: r.Scope, Way: r.Way, DryRun: r.DryRun, StartedAt: time.Now(), State: "running", Steps: []Step{}}
 	s.run = run

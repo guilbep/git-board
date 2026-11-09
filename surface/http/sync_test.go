@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/guilbep/git-board/app"
 )
 
 // The git remotes at once, a whole sync in the background, its steps as
@@ -170,6 +172,31 @@ func TestAddRemote(t *testing.T) {
 	for _, bad := range []struct{ name, url string }{{"backup", "https://example.org/o/s.git"}, {"other", "https://example.org/o r.git"}, {"other", ""}} {
 		if e := want[apiError](t, a.do("POST", "/api/remotes/"+bad.name, map[string]any{"url": bad.url}), 400); e.Field != "url" {
 			t.Errorf("%s %q = %+v", bad.name, bad.url, e)
+		}
+	}
+}
+
+// Route 60: the board's state, named, with its next actions; a way of
+// "both", the forge table's word, starts a run as "sync" does.
+func TestState(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	a := newAPI(t, dir)
+	got := want[app.State](t, a.do("GET", "/api/state", nil), 200)
+	if got.Phase != "ready" || got.Me.State != "chosen" || got.Issues == 0 || got.Datastore.State != "git" || got.Run.State != "idle" || got.Next == nil {
+		t.Fatalf("state = %+v", got)
+	}
+	for _, x := range got.Next {
+		if x.ID == "" || x.Say == "" {
+			t.Errorf("action %+v", x)
+		}
+	}
+	if r := want[Run](t, a.do("POST", "/api/sync", map[string]any{"way": "both", "dry_run": true}), 202); r.Way != "sync" {
+		t.Fatalf("run = %+v", r)
+	}
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if st := want[syncRes](t, a.do("GET", "/api/sync", nil), 200); st.Run != nil && st.Run.State != "running" {
+			break
 		}
 	}
 }

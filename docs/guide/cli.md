@@ -326,6 +326,43 @@ else git's credential helper ([ADR
 0010](../adr/0010-tokens-from-env-or-git-credential-helper.md)). No
 token, or nothing read: the template, and a line saying what wasn't read.
 
+## `state`: the board's state, and what to do next
+
+```bash
+git board state                      # each part's state in a word, then the next actions
+git board state --json               # the same, with each action's command and route
+git board state --jq '.next[0].cli'  # the command to run first
+```
+
+`state` says the state of each part of the board, and nothing goes to
+the network:
+
+```
+board      new
+file       none (/home/me/src/x/.git-board.toml)
+me         none
+datastore  git
+forge      github: first (github o/r, both, found in the git remotes)
+project    none
+run        idle
+issues     0
+
+next:
+  Choose who you are: until then the board is read-only.
+    git board me --new
+  Run the first sync with github (o/r). It creates issues there only with your consent.
+    git board sync --check
+```
+
+The words are these. `board` is `new` (no identity, or no issue and no
+forge synced yet) or `ready`. `file` is `none` (the defaults hold),
+`current`, `older` (`config upgrade` moves it) or `newer`. `forge` is
+`off`, `no-token`, `first`, `on` (a GitLab project the remotes name by
+its path: the first sync says) or `synced`. `run` is `idle`, `running`
+(in this process or another) or `stopped`: a run stopped before it went
+through, and the next sync resumes it. The web app's `GET /api/state`
+answers the same.
+
 ## `config`: settings
 
 ```bash
@@ -334,7 +371,7 @@ git board config get views.backlog.filter
 git board config set views.backlog.filter "is:open prio:p1"
 git board config set sprints.length_days 14
 git board config unset github-project.write
-git board config set board.view classic             # this clone's git config
+git board config set board.avatars gravatar         # this clone's git config
 git board config schema                             # the file's schema version, and git-board's
 git board config upgrade --dry-run                  # the diff an upgrade writes
 git board config downgrade --to 1                   # for an older git-board
@@ -348,7 +385,7 @@ file broken. A value is TOML when it is one (`true`, `14`, `["a", "b"]`),
 else a string: quote `'"14"'` for a string of digits. A key inside an
 array of tables (`[[sprints.list]]`) is edited in the file.
 
-A key `board.<name>` is this clone's own, in git config: `board.view`,
+A key `board.<name>` is this clone's own, in git config:
 `board.avatars`, `board.datastore`, `board.experimental`, and `board.me`,
 which `git board me` sets. `set` writes it with `--local`; `get` reads it
 at every level git does. A datastore URL is printed without its password.

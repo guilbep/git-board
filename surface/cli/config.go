@@ -24,11 +24,13 @@ import (
 type gitKey struct {
 	check   func(string) error // nil: any value
 	instead string             // set elsewhere: the command that does
+	note    string             // said on stderr once it is set
 }
 
 var gitKeys = map[string]gitKey{
-	"board.me":   {instead: "git board me <id> chooses who you write as"},
-	"board.view": {check: func(v string) error { return oneOf(v, "classic", "cycle") }},
+	"board.me": {instead: "git board me <id> chooses who you write as"},
+	"board.view": {check: func(v string) error { return oneOf(v, "classic", "cycle") },
+		note: "board.view is v1's: v2 reads it nowhere. A [cycle] table in .git-board.toml turns the cycle on (Settings › Cycle)"},
 	"board.avatars": {check: func(v string) error {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "forge", "gravatar", "none":
@@ -89,7 +91,8 @@ broken. A value is taken as TOML when it is one (true, 14, ["a", "b"]),
 else as a string: quote "14" for a string of digits.
 
 A key board.<name> is this clone's own, in git config: board.me,
-board.view, board.avatars, board.datastore, board.experimental. set
+board.avatars, board.datastore, board.experimental (board.view is v1's,
+and v2 reads it nowhere). set
 writes it in this repository's config (--local), get reads it at every
 level git does. A datastore URL is printed without its password.
 
@@ -102,7 +105,7 @@ unset, which say so.`,
   git board config set views.backlog.filter "is:open prio:p1"
   git board config set sprints.length_days 14
   git board config unset github-project.write
-  git board config set board.view classic
+  git board config set board.avatars gravatar
   git board config schema
   git board config upgrade --dry-run`,
 		Args: cobra.NoArgs,
@@ -223,6 +226,9 @@ func configSet(stderr io.Writer, key, value string, unset bool) error {
 		}
 		if err != nil {
 			return fmt.Errorf("git config: %v: %s", err, strings.TrimSpace(string(out)))
+		}
+		if k.note != "" && !unset {
+			fmt.Fprintln(stderr, "note: "+k.note)
 		}
 		return nil
 	}

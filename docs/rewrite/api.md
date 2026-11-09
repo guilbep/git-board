@@ -13,7 +13,7 @@
 
 v1's API grew one route per button: 117 routes, 18,000 lines with their
 tests. v2's is designed from what the web app reads and writes, in
-nouns the CLI already prints. It has 59 routes.
+nouns the CLI already prints. It has 60 routes.
 
 The server is `surface/http`. Each route decodes a request, calls
 one method of `app`, and encodes the answer. No rule lives in the
@@ -324,6 +324,7 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 | | Route | Request | Response |
 |---|---|---|---|
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
+| 60 | `GET /api/state` | | the board's state, as `git board state --json` |
 | 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
 | 57 | `POST /api/remotes/{name}` | `{url}`; loopback only | 204 |
@@ -342,10 +343,19 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 remotes' names; `run` the run in progress or the last one (`null` before
 any).
 
+**The state (60)** names the state of each part of the board, and the
+next actions, each with its command and route: `{phase, file, me,
+datastore, forges, project, run, issues, cycle, next}`. It is
+`app.State`, which `git board state` prints too
+([the proposal](../design/first-run/proposal.md)). Its `run` is
+`running` while this server's run, the CLI's or another server's holds
+the lock, and `stopped` when a run stopped before it went through. A
+run (31) started while another process holds the lock answers 409.
+
 **A run (31)** is one sync, in the background; its steps come as
 `progress` events, and `GET /api/sync` answers it at any time. `scope`
 is `forges` (`forge sync`), or `all` (fetch, the forges, push: `sync`).
-`way` is `sync`, `pull` or `push` (`forge pull|push|sync`); `forges`
+`way` is `sync` (or `both`, the forge table's word), `pull` or `push` (`forge pull|push|sync`); `forges`
 limits it to those named; `remote` is the whole sync's git remote
 (`origin`); `dry_run` says what a forge run would do (`--check`); a
 whole sync goes both ways and has none. One issue's run (v1's
@@ -625,7 +635,7 @@ M5, 7 *later* and 14 with their domain in M6 (the GitHub Project's two
 built), and the forge-mapping migration (54), ported for v0.12. Five
 more came with the web app's settings forms (2026-11-07 and 08): the
 tokens (55, 59), init (56), a git remote (57), and the Project named
-(58).
+(58). The board's state (60) came on 2026-11-09.
 
 | v1 | v2 |
 |---|---|
