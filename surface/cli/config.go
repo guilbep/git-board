@@ -30,7 +30,7 @@ type gitKey struct {
 var gitKeys = map[string]gitKey{
 	"board.me": {instead: "git board me <id> chooses who you write as"},
 	"board.view": {check: func(v string) error { return oneOf(v, "classic", "cycle") },
-		note: "board.view is v1's: v2 reads it nowhere. A [cycle] table in .git-board.toml turns the cycle on (Settings › Cycle)"},
+		note: "board.view is v1's: v2 reads it nowhere. board.experimental = cycle, or the file's [experimental], turns the cycle on"},
 	"board.avatars": {check: func(v string) error {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "forge", "gravatar", "none":

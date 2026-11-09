@@ -59,7 +59,7 @@ Each fix keeps the v1 output, which the golden recordings
   `bsync.Both` and in the API. The API accepts both names and answers
   `both`. The table keeps refusing `sync`.
 - `git board config set` accepts `board.view`, but no code reads it.
-  `[cycle]` turns the cycle on. The key stays accepted, and the command
+  `board.experimental` or `[experimental]` turns the cycle on. The key stays accepted, and the command
   says that it has no effect.
 - A broken `[github-project]` table looks like no table in the TUI,
   because `tui.go:58` drops the error. The status names it broken.
