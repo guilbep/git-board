@@ -16,7 +16,7 @@ test('a Markdown board: pull, push, fetch and ahead/behind are disabled, each sa
   expect((await (await request.get(`${md}/api/datastore`)).json()).replica).toBe(false);
   await page.goto(`${md}/#/settings/sync`);
   const origin = page.getByRole('row').filter({ has: page.getByText('origin', { exact: true }) });
-  for (const [label, what] of [['Fetch', 'fetching the board from a remote'], ['Pull', 'git board pull'], ['Push', 'git board push']] as const) {
+  for (const [label, what] of [['Fetch', 'fetching the board from a remote'], ['Pull', 'pulling the board from a remote'], ['Push', 'pushing the board to a remote']] as const) {
     const b = origin.getByRole('button', { name: label, exact: true });
     await expect(b).toBeDisabled();
     await expect(b).toHaveAttribute('title', why(what));

@@ -46,7 +46,7 @@
             <td v-if="kept" class="sy-off" aria-disabled="true" :title="noGit('comparing the board with a remote')">Not compared: {{ kept }}</td>
             <td v-else>{{ remoteLine[r] ?? 'Not checked from here yet' }}</td>
             <td class="sy-acts">
-              <button v-for="a in remoteActs" :key="a.action" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :title="noGit(a.needs) || a.command" :disabled="!!rowBusy || running || !!noGit(a.needs)" @click="remoteDo(r, a.action)">
+              <button v-for="a in remoteActs" :key="a.action" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :title="noGit(a.needs) || a.hint" :disabled="!!rowBusy || running || !!noGit(a.needs)" @click="remoteDo(r, a.action)">
                 {{ rowBusy === `${r} ${a.action}` ? `${a.label}…` : a.label }}
               </button>
             </td>
@@ -222,9 +222,9 @@ const forgeOf = (r: string) => {
 };
 
 const remoteActs = [
-  { action: 'fetch', label: 'Fetch', command: 'git board fetch', needs: 'fetching the board from a remote' },
-  { action: 'pull', label: 'Pull', command: 'git board pull', needs: 'git board pull' },
-  { action: 'push', label: 'Push', command: 'git board push', needs: 'git board push' },
+  { action: 'fetch', label: 'Fetch', hint: 'Compare the board with this remote: nothing changes here', needs: 'fetching the board from a remote' },
+  { action: 'pull', label: 'Pull', hint: 'Take this remote’s changes into the board', needs: 'pulling the board from a remote' },
+  { action: 'push', label: 'Push', hint: 'Send the board’s changes to this remote', needs: 'pushing the board to a remote' },
 ] as const;
 
 const reportTitle = computed(() => {

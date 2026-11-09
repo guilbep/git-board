@@ -145,8 +145,6 @@ These gaps are in the product itself:
   test in `web/e2e`.
 - `docs/guide/configuration.md:9` names "Start from the default in
   Settings › Fields". The button is "Write the default file".
-- `docs/manual/first-steps.md` says that the server takes the next
-  free port after 8080. No code does this.
 
 ## The ADRs, merged
 

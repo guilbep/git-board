@@ -39,8 +39,12 @@
       </p>
       <p v-if="cfgError && status.project" class="epfl-alert epfl-alert-danger" role="alert"><b>Not saved.</b> {{ cfgError }}</p>
       <p v-if="!status.write" class="epfl-alert epfl-alert-info" role="note">
-        This board doesn't write to the Project (no <code>write = true</code> under <code>[github-project]</code>): a pull only updates the
-        labels here, and keeping git-board's value isn't available.
+        This board doesn't write to the Project: a pull only updates the labels here, and keeping git-board's value isn't available.
+        <button type="button" class="gb-linkbtn" :disabled="saving" @click="setWrite(true)">{{ saving ? 'Saving…' : 'Let the board write to the Project' }}</button>
+      </p>
+      <p v-else class="pj-muted">
+        The board writes its values to the Project.
+        <button type="button" class="gb-linkbtn" :disabled="saving" @click="setWrite(false)">Stop writing to it</button>
       </p>
       <div class="pj-actions">
         <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="run(checkProject, 'Reading the Project…')">Check the Project</button>
@@ -91,7 +95,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { applyProject, checkProject, configureProject, getProject, message, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
+import { applyProject, checkProject, configureProject, getConfig, getProject, message, patchConfig, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
 import { safeHref } from '@/links';
 import { issueRef, plural, runWords, shown } from '@/projectview';
 
@@ -141,6 +145,21 @@ const configure = () => save(owner.value.trim(), number.value ?? 0);
 function writeFields() {
   const [o, n] = (status.value?.project ?? '').split('/');
   void save(o ?? '', Number(n));
+}
+
+// write = true under [github-project], written from the file's version
+async function setWrite(on: boolean) {
+  saving.value = true;
+  cfgError.value = '';
+  try {
+    const f = await getConfig();
+    await patchConfig({ 'github-project.write': on }, f.version);
+    status.value = await getProject();
+  } catch (e) {
+    cfgError.value = message(e);
+  } finally {
+    saving.value = false;
+  }
 }
 
 function resolve(c: ProjectConflict, keep: 'git-board' | 'project') {
