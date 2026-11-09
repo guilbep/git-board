@@ -20,8 +20,10 @@ test('a new board offers the Start page, and its steps move the board on', async
 
   await page.goto(`${board}/#/`);
   await expect(page.getByText('This board is new.')).toBeVisible();
+  await expect(page.getByTestId('setup-chip')).toContainText('2 steps left');
   await page.getByRole('link', { name: 'Set up this board' }).click();
   await expect(page.getByRole('heading', { name: 'Set up this board' })).toBeVisible();
+  await expect(page.getByTestId('setup-chip')).toHaveCount(0); // not on the Start page itself
 
   // 1. who you are: created here, then named
   await page.getByLabel('Name').fill('Ada');
