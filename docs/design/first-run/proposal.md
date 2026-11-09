@@ -227,15 +227,26 @@ Changed after a closer look at the code:
   numeric id, which only the forge says. Its state is `on` until the
   first sync.
 
+Built later on 2026-11-09, each with its test:
+
+- Every test package is sealed (`hermetic.Run`), and
+  `TestEveryPackageIsSealed` fails one that is not.
+- A file edited by hand already opened again within a second. A file
+  that does not open is now told (`config-error`), and the web app shows
+  why (`TestEventsConfigOnce`).
+- Markdown export from the web app, route 61 (`TestExportMarkdown`).
+- One click makes a forge found in `origin` read-only: a way change
+  writes the found forges' tables first (`TestForgeFoundMadeReadOnly`).
+- The Start page chooses the template. A template's path or URL answers
+  on loopback only (`TestInitTemplateFromElsewhere`).
+- The login in the browser on github.com, #101: ADR 0010, section 5
+  (`TestDeviceFlow`, `TestDeviceLogin`, `TestDeviceRoutes`). It stays off
+  until a build names git-board's OAuth App (`GITHUB_CLIENT_ID`).
+- #102: `git board export --html`, a read-only site (`TestWriteSite`), and
+  a Markdown folder in another repository's checkout.
+- The datastore's name in one function, `datastoreKind`.
+- A chip in the header while the board is new.
+
 Not built yet:
 
-- A state chip in the header.
-- The datastore's display name in one function. (`refs/board/switched`
-  is now one constant, `switchedRef`.)
-- A template choice on the Start page.
 - The line that each step writes, shown on the page.
-- Making a forge found in `origin` read-only in one click: today the
-  page tells you to add it as a forge with the way Read only.
-- Markdown export from the web app, and a reload of a file edited by
-  hand.
-
