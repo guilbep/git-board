@@ -161,6 +161,42 @@ git board import --md issues
 In the web app, select **Download the issues as Markdown** in Settings ›
 Datastore. You get the same files in a zip.
 
+## A read-only site
+
+`git board export --html <dir>` writes the issues as a static web site:
+`index.html` lists them, open first, and `NNN.html` shows each issue with
+its comments. The text is cleaned as the web app cleans it, and no page
+runs a script, so any web server can serve the folder. Nothing on the
+site writes to the board.
+
+```sh
+git board export --html site --title "Our issues"
+```
+
+To publish it on GitHub Pages, run the command in a workflow, then
+upload the folder. The workflow needs the board's refs, so fetch them
+first:
+
+```yaml
+on: { push: { branches: [main] }, schedule: [{ cron: "0 * * * *" }] }
+permissions: { contents: read, pages: write, id-token: write }
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - run: git fetch origin "+refs/board/*:refs/board/*"
+      - run: go install github.com/guilbep/git-board/cmd/git-board@latest
+      - run: git board export --html site
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - uses: actions/deploy-pages@v4
+```
+
+A public site shows every issue, a private project's too. Publish a
+private project's site only where its readers already see the issues.
+
 ## The forges alone
 
 ```sh
