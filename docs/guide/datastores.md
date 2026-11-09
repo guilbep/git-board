@@ -101,7 +101,7 @@ To keep the issues in a repository of their own, give the full path of
 its checkout: `markdown:/home/me/project-issues`. The issues are then
 text files in that repository, which you edit, commit and push there.
 Numbers are handed out on that repository's default branch. Settings ›
-Datastore takes the same full path. A path up with `..` is refused.
+Datastore takes the same full path, and refuses a path up with `..`.
 
 - **The files follow the board.** After each write here, a forge sync's
   too, every file whose issue changed is written again.
