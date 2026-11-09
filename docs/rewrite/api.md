@@ -583,6 +583,7 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 | `issue` | an issue was written (a delete too: a tombstone is a version), here or by anyone else (a command, a fetch, a sync) | the issue, with its `version`; none when its ref is gone |
 | `person` | a person was written | the person |
 | `config` | `.git-board.toml` changed | |
+| `config-error` | `.git-board.toml` was edited by hand and does not open: the board keeps the last file that opened, and `error` says why | |
 | `me` | who writes, or `board.avatars`, changed | |
 | `inbox` | what you read or follow | |
 | `sync` | a run started or ended; a remote moved | the run |
@@ -596,7 +597,7 @@ the datastore's heads every second for the others, which it tells a
 second later (an API write lands in the datastore just before its
 observer runs: the wait lets the observer tell it, with its `by`).
 `.git-board.toml` written by hand is seen the same way: the board opens
-again on it, and `config` is told. A write of it through the API (24,
+again on it, and `config` is told. If it does not open, `config-error` is told, and the board keeps the last file that opened. A write of it through the API (24,
 25, 33 to 35) opens the board once and is told once, with its `by`: the
 watcher knows the server's own write. A page that falls 64 events behind is dropped: its stream closes,
 it reconnects (`retry`) and reloads. A comment line every 25 seconds

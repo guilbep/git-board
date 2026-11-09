@@ -279,8 +279,9 @@ export interface UploadStatus {
 
 // a change event: GET /api/events
 export interface ChangeEvent {
-  kind: 'issue' | 'person' | 'config' | 'me' | 'inbox' | 'sync' | 'progress' | 'release';
+  kind: 'issue' | 'person' | 'config' | 'config-error' | 'me' | 'inbox' | 'sync' | 'progress' | 'release';
   id?: string;
+  error?: string; // config-error: why .git-board.toml, edited by hand, does not open
   version?: string;
   by?: string;
   step?: SyncStep;
