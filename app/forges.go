@@ -6,8 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/guilbep/git-board/domain/issues/issuesync"
@@ -67,7 +71,7 @@ func (b *Board) Forges(ctx context.Context, say func(string)) ([]forge.Table, er
 	var out []forge.Table
 	seen := map[string]string{} // key -> forge name
 	for _, f := range found {
-		project, err := resolveProject(ctx, f)
+		project, err := b.resolveProject(ctx, f)
 		if err != nil {
 			say(fmt.Sprintf("forge %s, found in the remotes, is left out: %s %s: %v", f.Name, f.Host, cmp.Or(f.Path, f.Project), err))
 			continue
@@ -96,6 +100,31 @@ func (b *Board) FoundForges(ctx context.Context, say func(string)) ([]forge.Tabl
 	if !b.Config.Forges.Discover {
 		return b.Config.Forges.List, nil
 	}
+	c := &b.forges
+	stamp := c.stamp(ctx, b.Dir)
+	c.mu.Lock()
+	if c.foundAt == stamp && stamp != "" {
+		found, skips := slices.Clone(c.found), c.skips
+		c.mu.Unlock()
+		for _, s := range skips {
+			say("skipped " + s)
+		}
+		return found, nil
+	}
+	c.mu.Unlock()
+	var skips []string
+	found, err := b.foundForges(ctx, func(s string) { skips = append(skips, s); say("skipped " + s) })
+	if err == nil {
+		c.mu.Lock()
+		c.foundAt, c.found, c.skips = stamp, slices.Clone(found), skips
+		c.mu.Unlock()
+	}
+	return found, err
+}
+
+// foundForges is FoundForges, read from git: skipped hears each URL
+// that names no forge.
+func (b *Board) foundForges(ctx context.Context, skipped func(string)) ([]forge.Table, error) {
 	if has, err := b.hasRemote(ctx, NumbersRemote); err != nil || !has {
 		return nil, err
 	}
@@ -114,14 +143,86 @@ func (b *Board) FoundForges(ctx context.Context, say func(string)) ([]forge.Tabl
 	_, skips := forge.Discover(resolved) // an alias as written isn't told: its resolved URL is
 	found, _ := forge.Discover(append(resolved, written...))
 	for _, s := range skips {
-		say("skipped " + s)
+		skipped(s)
 	}
 	return found, nil
+}
+
+// forgeCache keeps, for a board's life, what finding the forges asked
+// git and the forges: a server asks it on each GET /api/sync and
+// /api/state. The remotes and the forges found in them are kept while
+// git's config files are unchanged (stamp); a project as its forge names
+// it (resolveProject: a call to the forge) once found.
+// ponytail: a file a config includes (include.path) isn't watched; a
+// project renamed on its forge shows on the board opened next (a config
+// change, a restart).
+type forgeCache struct {
+	mu        sync.Mutex
+	gitConfig string // the repository's config file
+	remotesAt string
+	remotes   []string
+	foundAt   string
+	found     []forge.Table
+	skips     []string
+	projects  map[string]string // kind host path -> project
+}
+
+// stamp names the state of git's config files, the repository's and
+// yours: each one's size and time; "" when it can't be told.
+func (c *forgeCache) stamp(ctx context.Context, dir string) string {
+	c.mu.Lock()
+	cfg := c.gitConfig
+	c.mu.Unlock()
+	if cfg == "" {
+		common, err := gitRun(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+		if err != nil {
+			return ""
+		}
+		cfg = filepath.Join(strings.TrimSpace(common), "config")
+		c.mu.Lock()
+		c.gitConfig = cfg
+		c.mu.Unlock()
+	}
+	files := []string{cfg}
+	if home, err := os.UserHomeDir(); err == nil {
+		files = append(files, filepath.Join(home, ".gitconfig"))
+	}
+	files = append(files, filepath.Join(cmp.Or(os.Getenv("XDG_CONFIG_HOME"), filepath.Join(os.Getenv("HOME"), ".config")), "git", "config"))
+	var b strings.Builder
+	for _, f := range files {
+		if st, err := os.Stat(f); err == nil {
+			fmt.Fprintf(&b, "%s %d %d\n", f, st.Size(), st.ModTime().UnixNano())
+		} else {
+			fmt.Fprintf(&b, "%s -\n", f)
+		}
+	}
+	return b.String()
 }
 
 // resolveProject is a found forge's project as a table names it, read
 // through the adapter: GitLab's numeric id, as links are keyed on it;
 // GitHub's owner/repo as GitHub spells it, as a URL's case is the user's.
+func (b *Board) resolveProject(ctx context.Context, f forge.Table) (string, error) {
+	c := &b.forges
+	key := f.Kind + " " + f.Host + " " + f.Project
+	c.mu.Lock()
+	p, ok := c.projects[key]
+	c.mu.Unlock()
+	if ok {
+		return p, nil
+	}
+	p, err := resolveProject(ctx, f)
+	if err == nil {
+		c.mu.Lock()
+		if c.projects == nil {
+			c.projects = map[string]string{}
+		}
+		c.projects[key] = p
+		c.mu.Unlock()
+	}
+	return p, err
+}
+
 func resolveProject(ctx context.Context, f forge.Table) (string, error) {
 	switch f.Kind {
 	case "gitlab":

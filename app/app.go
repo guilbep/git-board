@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/guilbep/git-board/conf"
@@ -44,6 +45,8 @@ type Board struct {
 	PRs   *PullCache
 	clone *clone
 	work  workKept // what the Work page computed (work.go)
+	// forges keeps the remotes and the forges found in them (forges.go)
+	forges forgeCache
 }
 
 // Options say how to open a board.
@@ -344,13 +347,26 @@ func (b *Board) SetDatastore(ctx context.Context, value string) error {
 	return err
 }
 
-// Remotes are the repository's git remotes, by name.
+// Remotes are the repository's git remotes, by name; kept while git's
+// config is unchanged (forgeCache).
 func (b *Board) Remotes(ctx context.Context) ([]string, error) {
+	c := &b.forges
+	stamp := c.stamp(ctx, b.Dir)
+	c.mu.Lock()
+	if c.remotesAt == stamp && stamp != "" {
+		defer c.mu.Unlock()
+		return slices.Clone(c.remotes), nil
+	}
+	c.mu.Unlock()
 	out, err := gitRun(ctx, b.Dir, "remote")
 	if err != nil {
 		return nil, err
 	}
-	return strings.Fields(out), nil
+	rs := strings.Fields(out)
+	c.mu.Lock()
+	c.remotesAt, c.remotes = stamp, rs
+	c.mu.Unlock()
+	return slices.Clone(rs), nil
 }
 
 // IndexTexts builds the issues' free-text index now: a server does it in

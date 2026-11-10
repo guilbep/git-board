@@ -282,3 +282,47 @@ func TestSyncForgesPublishesReleases(t *testing.T) {
 		t.Errorf("releases %+v", rs)
 	}
 }
+
+// A server asks the forges on every GET /api/sync and /api/state: what
+// git says is kept while its config files are unchanged. Serial: it
+// empties PATH, so that git can't answer what is kept.
+func TestFoundForgesKept(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("remote", "add", "origin", "https://github.com/o/r.git")
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	project := func() string {
+		t.Helper()
+		fs, err := b.FoundForges(t.Context(), func(string) {})
+		if err != nil || len(fs) != 1 {
+			t.Fatalf("forges %+v, %v", fs, err)
+		}
+		return fs[0].Project
+	}
+	if p := project(); p != "o/r" {
+		t.Fatalf("project %q, want o/r", p)
+	}
+	path, _ := exec.LookPath("git")
+	t.Setenv("PATH", "")
+	if p := project(); p != "o/r" {
+		t.Errorf("kept: project %q, want o/r", p)
+	}
+	if rs, err := b.Remotes(t.Context()); err != nil || !slices.Equal(rs, []string{"origin"}) {
+		t.Errorf("kept: remotes %v, %v", rs, err)
+	}
+	t.Setenv("PATH", filepath.Dir(path))
+	git("remote", "set-url", "origin", "https://github.com/o/moved.git")
+	if p := project(); p != "o/moved" {
+		t.Errorf("after the remote moved: project %q, want o/moved", p)
+	}
+}

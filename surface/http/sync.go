@@ -154,6 +154,7 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	s.runs++
 	run := &Run{ID: strconv.Itoa(s.runs), Scope: r.Scope, Way: r.Way, DryRun: r.DryRun, StartedAt: time.Now(), State: "running", Steps: []Step{}}
 	s.run = run
+	started := *run // the reply's: the run's own goes on changing as it runs
 	s.runMu.Unlock()
 
 	h := s.boards.get()
@@ -182,7 +183,7 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 		s.publish(ctx, Event{Kind: "sync", ID: run.ID, By: by})
 	}()
 	s.publish(ctx, Event{Kind: "sync", ID: run.ID, By: by})
-	return Reply{Status: http.StatusAccepted, Body: run}, nil
+	return Reply{Status: http.StatusAccepted, Body: &started}, nil
 }
 
 // progressEvery is how often a run's counts are told: a page falls
