@@ -72,3 +72,23 @@ test('a hidden tab lets its event stream go, and takes it again when shown', asy
   await expect.poll(streams).toBe(2);
   expect(errs).toEqual([]);
 });
+
+test("a phone's table asks its first page, not every page", async ({ page, request }) => {
+  const errs = errors(page);
+  await identity(request);
+  for (let i = 0; i < 120; i++) {
+    const r = await request.post('/api/issues', { data: { title: `E2E phone page ${i}`, body: '', labels: ['e2ephone'], set: [] } });
+    expect(r.ok(), await r.text()).toBeTruthy();
+  }
+  await page.setViewportSize({ width: 412, height: 823 });
+  let pages = 0;
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (u.pathname === '/api/issues' && u.searchParams.get('cursor')) pages++;
+  });
+  await page.goto('/#/?layout=table&filter=' + encodeURIComponent('label:e2ephone'));
+  await expect(page.locator('.row-more')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  expect(pages).toBe(0); // the next page waits for the reader to come near it
+  expect(errs).toEqual([]);
+});
