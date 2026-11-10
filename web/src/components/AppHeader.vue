@@ -206,7 +206,10 @@ onMounted(() => {
     const own = e.by === clientId;
     if (!own && (e.kind === 'issue' || e.kind === 'inbox' || e.kind === 'resync')) reloadInbox();
     if (e.kind === 'sync') reloadSync();
-    if (e.kind === 'config' || e.kind === 'me' || e.kind === 'sync' || e.kind === 'resync' || (e.kind === 'issue' && setupLeft.value)) reloadState();
+    // a state reads every forge's tokens: after setup, only a file changed
+    // can make the board new again
+    const setup = !state.value || setupLeft.value > 0;
+    if (e.kind === 'config' || (setup && (e.kind === 'me' || e.kind === 'sync' || e.kind === 'resync' || e.kind === 'issue'))) reloadState();
     onStep(e);
   }, { own: true });
 });

@@ -91,7 +91,7 @@ func TestDeviceLogin(t *testing.T) {
 // origin spells it. Serial: it sets the environment and GitHubAPI.
 func TestFoundForgeWrittenAsGitHubNamesIt(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /repos/o/r", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /repos/o/{repo}", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"full_name": "O/R"})
 	})
 	srv := httptest.NewServer(mux)
@@ -103,7 +103,7 @@ func TestFoundForgeWrittenAsGitHubNamesIt(t *testing.T) {
 	for _, tc := range []struct{ token, want string }{{"", `project = "o/r"`}, {"t", `project = "O/R"`}} {
 		t.Setenv("GITHUB_TOKEN", tc.token)
 		dir := t.TempDir()
-		for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "https://github.com/o/r.git"}} {
+		for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "https://github.com/o/r.git"}, {"remote", "set-url", "--add", "--push", "origin", "https://github.com/o/old.git"}} {
 			if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
 				t.Fatalf("git %v: %v\n%s", args, err, out)
 			}
@@ -112,13 +112,17 @@ func TestFoundForgeWrittenAsGitHubNamesIt(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = b.SetForgeWay(t.Context(), "github", "pull")
+		// a renamed repository's old path, the same project once read,
+		// and both keys in one call
+		off := false
+		err = b.SetForge(t.Context(), "github-2", &off, "pull")
 		b.Close()
 		if err != nil {
 			t.Fatalf("token %q: %v", tc.token, err)
 		}
 		data, _ := os.ReadFile(filepath.Join(dir, ".git-board.toml"))
-		if !strings.Contains(string(data), tc.want) || !strings.Contains(string(data), `way = "pull"`) {
+		if !strings.Contains(string(data), tc.want) || !strings.Contains(string(data), `way = "pull"`) ||
+			!strings.Contains(string(data), "sync = false") || !strings.Contains(string(data), "[forges.github-2]") {
 			t.Errorf("token %q: want %s:\n%s", tc.token, tc.want, data)
 		}
 	}

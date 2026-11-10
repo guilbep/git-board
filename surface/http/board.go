@@ -393,6 +393,9 @@ type initRes struct {
 // fields when it can read them. It never overwrites one: a file there
 // already is an error, 409.
 func (s *Server) initConfig(ctx context.Context, r initConfigReq) (Reply, error) {
+	// A client beyond localhost names no path or URL: it never chooses what
+	// the server reads. "" is the global file's template, which the
+	// machine's owner chose, as git board init uses it.
 	if strings.ContainsAny(r.Template, `/\.:`) && !fromLoopback(ctx) {
 		return Reply{}, on("template", forbidden(errors.New("a template's path or URL answers on localhost only: a built-in name answers anywhere")))
 	}
