@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -58,4 +59,27 @@ func TestLoad(t *testing.T) {
 	if _, err := Load(bad); err == nil {
 		t.Error("a file that isn't TOML loads")
 	}
+}
+
+// The server reads tables from every request at once: a decode shares the
+// file's MetaData, which toml mutates (a fatal "concurrent map writes").
+func TestGetConcurrently(t *testing.T) {
+	t.Parallel()
+	f, err := Parse(FileName, []byte("[fields.a]\nsingle = true\n[fields.b]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := Declare(f, Table[map[string]struct {
+		Single bool `toml:"single"`
+	}]{Name: "fields"})
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Go(func() {
+			if v, probs := fields.Get(); len(probs) != 0 || !v["a"].Single {
+				t.Errorf("[fields] = %v, %v", v, probs)
+			}
+			f.Unknown()
+		})
+	}
+	wg.Wait()
 }
