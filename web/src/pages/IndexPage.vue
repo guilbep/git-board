@@ -668,9 +668,9 @@ onMounted(() => window.addEventListener('keydown', onKey));
 // page. The state is asked only when the list is empty with no filter
 // changed, and again each time it is.
 const isNew = ref(false);
-watch([total, modified], async ([n, changed]) => {
+watch([total, modified, () => lists.buckets.value === null], async ([n, changed, unread]) => {
   isNew.value = false;
-  if (n !== 0 || changed) return;
+  if (unread || n !== 0 || changed) return; // unread: total is 0 until the list answers
   const st = await getState().catch(() => null);
   isNew.value = st?.phase === 'new' && st.issues === 0 && total.value === 0;
 }, { immediate: true });
