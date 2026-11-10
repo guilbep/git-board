@@ -54,7 +54,6 @@ func (s *Store) loadShare(ctx context.Context, refs []store.Ref, each func(store
 		return err
 	}
 	w.counts = store.CountsOf(ctx)
-	defer func() { w.counts = nil }()
 	err = w.walk(refs, func(r store.Ref, nodes []node, err error) error {
 		var packs [][]byte
 		if err == nil {
@@ -65,6 +64,7 @@ func (s *Store) loadShare(ctx context.Context, refs []store.Ref, each func(store
 		}
 		return each(r, packs, err)
 	})
+	w.counts = nil // before another load takes w (done)
 	if err != nil {
 		w.close() // its answers may be half read
 		return err

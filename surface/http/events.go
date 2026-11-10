@@ -260,9 +260,10 @@ func (s *Server) writeConfig(ctx context.Context, write func() error) error {
 	s.own.mu.Lock()
 	before := s.fileSum()
 	err := write()
-	s.own.sum = s.fileSum()
+	after := s.fileSum()
+	s.own.sum = after
 	s.own.mu.Unlock()
-	if s.own.sum == before && err != nil {
+	if after == before && err != nil {
 		return err
 	}
 	if rerr := s.boards.reopen(ctx); rerr != nil {
