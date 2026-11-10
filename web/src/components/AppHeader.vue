@@ -86,7 +86,7 @@ import TipLine from '@/components/TipLine.vue';
 import { noteUse } from '@/keys';
 import CommandPalette from '@/components/CommandPalette.vue';
 import { openShortcuts, paletteOpen } from '@/commands';
-import { board, cycleOn, loadMe, me } from '@/me';
+import { board, boardState, cycleOn, loadMe, me } from '@/me';
 import { loadSync, onStep, syncStatus } from '@/sync';
 import { runWords } from '@/ways';
 import { setFavicon } from '@/favicon';
@@ -95,7 +95,7 @@ import GbAvatar from '@/components/GbAvatar.vue';
 import AccountCard from '@/components/AccountCard.vue';
 import { inbox, loadInbox } from '@/inbox';
 import { debounced, onLive } from '@/live';
-import { clientId, getState, type BoardState } from '@/api';
+import { clientId, getState } from '@/api';
 
 // the saved views, for the palette's jumps
 defineProps<{ views: string[] }>();
@@ -134,7 +134,7 @@ watch(
 );
 
 // the board's state: while it is new, the chip says how many steps are left
-const state = ref<BoardState | null>(null);
+const state = boardState;
 const setupLeft = computed(() => (state.value?.phase === 'new' ? state.value.next.length : 0));
 const setupTitle = computed(() => state.value?.next.map((a) => a.say).join('\n') ?? '');
 const reloadState = debounced(() => void getState().then((s) => (state.value = s)).catch(() => {}), 300);
@@ -201,7 +201,7 @@ onMounted(() => {
   // the inbox's count after what the page shows first (it reads every
   // issue you follow)
   if (!inbox.value) setTimeout(() => void loadInbox(), 600);
-  reloadState();
+  if (!state.value) reloadState();
   stopLive = onLive((e) => {
     const own = e.by === clientId;
     if (!own && (e.kind === 'issue' || e.kind === 'inbox' || e.kind === 'resync')) reloadInbox();

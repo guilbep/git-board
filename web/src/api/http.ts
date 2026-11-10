@@ -39,7 +39,16 @@ export function url(path: string, query?: Call['query']): string {
 
 const unquote = (etag: string | null) => (etag ?? '').replace(/^W\//, '').replace(/^"|"$/g, '');
 
-export async function call<T>(method: string, path: string, c: Call = {}): Promise<Answer<T>> {
+// A response, read: the body as text, so each caller parses its own copy.
+interface Raw {
+  status: number;
+  ok: boolean;
+  version: string;
+  location: string;
+  text: string;
+}
+
+async function fetchRaw(method: string, path: string, c: Call): Promise<Raw> {
   const headers: Record<string, string> = {};
   if (method !== 'GET') {
     headers['Content-Type'] = 'application/json';
@@ -54,14 +63,43 @@ export async function call<T>(method: string, path: string, c: Call = {}): Promi
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     throw new ApiError('The git-board server is not reachable.', 0, 'unreachable');
   });
-  const answer = { status: res.status, version: unquote(res.headers.get('ETag')), location: res.headers.get('Location') ?? '' };
-  if (res.status === 204 || res.status === 304) return { ...answer, data: undefined as T };
-  const text = await res.text();
-  if (!res.ok) {
-    const e = errorOf(text);
-    throw new ApiError(e.message || `${method} ${path} failed (${res.status})`, res.status, e.code, e.field);
+  const text = res.status === 204 || res.status === 304 ? '' : await res.text();
+  return { status: res.status, ok: res.ok, version: unquote(res.headers.get('ETag')), location: res.headers.get('Location') ?? '', text };
+}
+
+// The GETs on their way, by URL: the parts of a page that ask the same
+// thing at once (a change event heard by five of them) share one request.
+// A write, or a change event (forgetPending), ends the sharing: what is
+// asked after it is asked again, never answered from before it. A GET
+// with a signal goes alone: another caller's abort isn't its own.
+const pending = new Map<string, Promise<Raw>>();
+
+export function forgetPending(): void {
+  pending.clear();
+}
+
+function sharedGet(path: string, c: Call): Promise<Raw> {
+  const key = url(path, c.query) + '\n' + (c.ifNoneMatch ?? '');
+  let p = pending.get(key);
+  if (!p) {
+    p = fetchRaw('GET', path, c);
+    pending.set(key, p);
+    const done = () => pending.get(key) === p && pending.delete(key);
+    p.then(done, done);
   }
-  return { ...answer, data: (text ? JSON.parse(text) : undefined) as T };
+  return p;
+}
+
+export async function call<T>(method: string, path: string, c: Call = {}): Promise<Answer<T>> {
+  if (method !== 'GET') forgetPending();
+  const r = await (method === 'GET' && !c.signal ? sharedGet(path, c) : fetchRaw(method, path, c));
+  const answer = { status: r.status, version: r.version, location: r.location };
+  if (r.status === 204 || r.status === 304) return { ...answer, data: undefined as T };
+  if (!r.ok) {
+    const e = errorOf(r.text);
+    throw new ApiError(e.message || `${method} ${path} failed (${r.status})`, r.status, e.code, e.field);
+  }
+  return { ...answer, data: (r.text ? JSON.parse(r.text) : undefined) as T };
 }
 
 export const get = async <T>(path: string, c?: Call) => (await call<T>('GET', path, c)).data;

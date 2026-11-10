@@ -2,7 +2,7 @@
 // new-issue dialog; and the board this page shows (GET /api/board): where
 // it is kept, the experimental features on.
 import { computed, ref } from 'vue';
-import { getBoard, getMe, getPeople, type BoardInfo, type MeResponse, type Person } from '@/api';
+import { getBoard, getMe, getPeople, type BoardInfo, type BoardState, type MeResponse, type Person } from '@/api';
 import { featureOn } from '@/experimental';
 
 export const me = ref<MeResponse | null>(null);
@@ -11,6 +11,10 @@ export const board = ref<BoardInfo | null>(null);
 export const people = ref<Person[]>([]);
 // meLoaded: /api/me answered, or failed
 export const meLoaded = ref(false);
+// the board's state (GET /api/state), the header's: kept across pages,
+// each of which mounts its own header, and reloaded on the events that
+// change it
+export const boardState = ref<BoardState | null>(null);
 // the work-in-progress features on (experimental.ts): off, their tabs and
 // controls stay hidden; a failed /api/board has none
 export const cycleOn = computed(() => featureOn(board.value?.experimental, 'cycle'));
