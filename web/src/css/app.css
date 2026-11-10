@@ -13,6 +13,10 @@
    4.5:1 small text needs (the canvas's rule). */
 .epfl-btn-primary { background: var(--epfl-red-dark); border-color: var(--epfl-red-dark); }
 .epfl-btn-primary:hover:not(:disabled) { background: var(--primary-active); border-color: var(--primary-active); }
+/* The header's current page, and the one hovered, read in the same dark
+   red: #FF0000 text is 4.0:1 on white too (Lighthouse); the bar under it
+   stays red. */
+.epfl-nav a.active, .epfl-nav a:hover { color: var(--primary-hover); }
 
 /* Quasar's dialog backdrop -> EPFL's modal backdrop token; the issue side
    panel (a right-hand q-dialog) runs the full height, no inset. */
