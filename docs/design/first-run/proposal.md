@@ -240,8 +240,8 @@ Built later on 2026-11-09, each with its test:
 - The Start page chooses the template. A template's path or URL answers
   on loopback only (`TestInitTemplateFromElsewhere`).
 - The login in the browser on github.com, #101: ADR 0010, section 5
-  (`TestDeviceFlow`, `TestDeviceLogin`, `TestDeviceRoutes`). It stays off
-  until a build names git-board's OAuth App (`GITHUB_CLIENT_ID`).
+  (`TestDeviceFlow`, `TestDeviceLogin`, `TestDeviceRoutes`). git-board's
+  OAuth App id is in the source; a fork sets its own (`GITHUB_CLIENT_ID`).
 - #102: `git board export --html`, a read-only site (`TestWriteSite`), and
   a Markdown folder in another repository's checkout.
 - The datastore's name in one function, `datastoreKind`.

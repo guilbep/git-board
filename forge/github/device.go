@@ -18,10 +18,10 @@ import (
 // kept.
 
 // ClientID is git-board's OAuth App on github.com, its device flow on.
-// It is public, as gh's is: its owner registers the app and writes the
-// id here. A fork sets its own at build time (make GITHUB_CLIENT_ID=…).
+// It is public, as gh's is: the app is registered on guilbep's account.
+// A fork sets its own at build time (make GITHUB_CLIENT_ID=…).
 // Empty, there is no device flow: a pasted token alone.
-var ClientID = ""
+var ClientID = "Ov23liNIr0SF9H21d2ux"
 
 // DeviceScopes are what sync asks of a token: repo for a private
 // project's issues, labels and releases; project for a GitHub Project's
