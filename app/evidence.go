@@ -2,6 +2,12 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/guilbep/git-board/domain/cycle"
 	"github.com/guilbep/git-board/domain/issues"
@@ -18,7 +24,61 @@ import (
 // PRs (nil: none). me is the viewer's login. Render, when set, is the
 // plan's Markdown as HTML.
 func (b *Board) Evidence(ctx context.Context, th issues.Thread, me string, pulls cycle.Pulls, render func(string) string) (cycle.Input, error) {
-	return b.EvidenceIn(ctx, branches.NewAncestry(b.Code()), th, me, pulls, render)
+	return b.EvidenceIn(ctx, b.keptCode(ctx), th, me, pulls, render)
+}
+
+// codeKept is the code's reads an issue's cycle makes, kept across
+// requests while the branches stay where they are (refsStamp): the
+// branches, origin's HEAD, the plan files grepped, the base's history.
+// Opening an issue started 4 gits for them, ~60 ms.
+type codeKept struct {
+	mu  sync.Mutex
+	at  string
+	anc *branches.Ancestry
+}
+
+// keptCode is the board's kept Ancestry, started over when a ref moved.
+func (b *Board) keptCode(ctx context.Context) *branches.Ancestry {
+	stamp := ""
+	if common := b.forges.commonDir(ctx, b.Dir); common != "" {
+		stamp = refsStamp(common)
+	}
+	c := &b.code
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.anc == nil || stamp == "" || stamp != c.at {
+		r := b.Code()
+		r.Kept = code.NewKept()
+		c.anc, c.at = branches.NewAncestry(r), stamp
+	}
+	return c.anc
+}
+
+// refsStamp names where the branches are, from the files git keeps them
+// in, without a git: packed-refs, the reftable folder, and each folder
+// under refs/heads and refs/remotes, whose time a ref written (a file
+// renamed into place), made or deleted moves.
+// ponytail: folders' times, not each ref file's: a filesystem that keeps
+// whole seconds (HFS+) could miss two writes in one second; stat every
+// ref file if one does.
+func refsStamp(common string) string {
+	var b strings.Builder
+	stat := func(p string) {
+		if st, err := os.Stat(p); err == nil {
+			fmt.Fprintf(&b, "%s %d %d\n", p, st.Size(), st.ModTime().UnixNano())
+		}
+	}
+	stat(filepath.Join(common, "packed-refs"))
+	stat(filepath.Join(common, "reftable"))
+	for _, d := range []string{"heads", "remotes"} {
+		filepath.WalkDir(filepath.Join(common, "refs", d), func(p string, e fs.DirEntry, err error) error {
+			if err == nil && e.IsDir() {
+				stat(p)
+			}
+			return nil
+		})
+	}
+	return b.String()
 }
 
 // EvidenceIn is Evidence, reading the branches and their histories

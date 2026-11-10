@@ -47,6 +47,7 @@ type Board struct {
 	work  workKept // what the Work page computed (work.go)
 	// forges keeps the remotes and the forges found in them (forges.go)
 	forges forgeCache
+	code   codeKept // the code's reads an issue's cycle makes (evidence.go)
 }
 
 // Options say how to open a board.

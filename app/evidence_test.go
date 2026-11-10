@@ -154,3 +154,47 @@ func TestEvidence(t *testing.T) {
 		t.Errorf("carol: PlanApproval %+v, %v", in.PlanApproval, err)
 	}
 }
+
+// An issue's cycle reads the branches once while they stay where they
+// are (keptCode): read again, it starts no git; a branch made, or moved,
+// is read at once.
+func TestEvidenceKept(t *testing.T) {
+	dir, b := co2Board(t)
+	id := forgeIssue(t, b, 7, "Kept (#7)")
+	th, err := b.Issues.Show(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence := func() cycle.Input {
+		t.Helper()
+		in, err := b.Evidence(t.Context(), th, "", nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return in
+	}
+	if in := evidence(); in.Branch != "" {
+		t.Fatalf("branch %q before any", in.Branch)
+	}
+	path, _ := exec.LookPath("git")
+	t.Setenv("PATH", "")
+	if in := evidence(); in.Branch != "" || in.Base != "dev" {
+		t.Errorf("kept: branch %q base %q", in.Branch, in.Base)
+	}
+	t.Setenv("PATH", filepath.Dir(path))
+	gitT(t, dir, "switch", "-q", "-c", "fix/7-kept")
+	head := commitFile(t, dir, "a.go", "package a\n")
+	if in := evidence(); in.Branch != "fix/7-kept" || in.Head != head {
+		t.Errorf("a branch made: branch %q head %q, want %s", in.Branch, in.Head, head)
+	}
+	head = commitFile(t, dir, "b.go", "package a\n")
+	if in := evidence(); in.Head != head {
+		t.Errorf("a branch moved: head %q, want %s", in.Head, head)
+	}
+	gitT(t, dir, "pack-refs", "--all")
+	gitT(t, dir, "switch", "-q", "dev")
+	gitT(t, dir, "branch", "-D", "fix/7-kept")
+	if in := evidence(); in.Branch != "" {
+		t.Errorf("a packed branch deleted: branch %q", in.Branch)
+	}
+}

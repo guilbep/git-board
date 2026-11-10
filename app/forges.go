@@ -158,7 +158,7 @@ func (b *Board) foundForges(ctx context.Context, skipped func(string)) ([]forge.
 // change, a restart).
 type forgeCache struct {
 	mu        sync.Mutex
-	gitConfig string // the repository's config file
+	common    string // the repository's git directory, its worktrees' common one
 	remotesAt string
 	remotes   []string
 	foundAt   string
@@ -170,20 +170,11 @@ type forgeCache struct {
 // stamp names the state of git's config files, the repository's and
 // yours: each one's size and time; "" when it can't be told.
 func (c *forgeCache) stamp(ctx context.Context, dir string) string {
-	c.mu.Lock()
-	cfg := c.gitConfig
-	c.mu.Unlock()
-	if cfg == "" {
-		common, err := gitRun(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
-		if err != nil {
-			return ""
-		}
-		cfg = filepath.Join(strings.TrimSpace(common), "config")
-		c.mu.Lock()
-		c.gitConfig = cfg
-		c.mu.Unlock()
+	common := c.commonDir(ctx, dir)
+	if common == "" {
+		return ""
 	}
-	files := []string{cfg}
+	files := []string{filepath.Join(common, "config")}
 	if home, err := os.UserHomeDir(); err == nil {
 		files = append(files, filepath.Join(home, ".gitconfig"))
 	}
@@ -197,6 +188,25 @@ func (c *forgeCache) stamp(ctx context.Context, dir string) string {
 		}
 	}
 	return b.String()
+}
+
+// commonDir is the repository's git directory, shared by its worktrees:
+// where its config and refs are; "" when git can't tell.
+func (c *forgeCache) commonDir(ctx context.Context, dir string) string {
+	c.mu.Lock()
+	common := c.common
+	c.mu.Unlock()
+	if common == "" {
+		out, err := gitRun(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+		if err != nil {
+			return ""
+		}
+		common = strings.TrimSpace(out)
+		c.mu.Lock()
+		c.common = common
+		c.mu.Unlock()
+	}
+	return common
 }
 
 // resolveProject is a found forge's project as a table names it, read
