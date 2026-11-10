@@ -120,7 +120,7 @@ func (s *Server) Handler() http.Handler {
 		writeError(w, r, s.log, &coded{code: "not-found", status: http.StatusNotFound, err: errNoRoute(r)})
 	})
 	if s.static != nil {
-		mux.Handle("/", http.FileServerFS(s.static))
+		mux.Handle("/", static(s.static))
 	}
 	return withLog(s.log, withCORS(withGuard(s.log, s.exposed, s.withBoard(mux))))
 }
