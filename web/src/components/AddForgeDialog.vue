@@ -134,7 +134,7 @@ async function next() {
 
 <style scoped>
 /* the steps, scrolling when the window is short */
-.af { display: grid; grid-template-columns: minmax(0, 1fr); width: min(44rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); background: var(--bg); }
+.af { display: grid; grid-template-columns: minmax(0, 1fr); width: min(44rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; background: var(--bg); }
 .af-main { min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 1.25rem; padding: 1.5rem 2rem; }
 .af-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .af-head h2 { margin: 0; }
