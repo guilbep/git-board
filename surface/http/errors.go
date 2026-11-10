@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -89,13 +91,27 @@ func writeError(w http.ResponseWriter, r *http.Request, log *slog.Logger, err er
 	if rec, ok := w.(*recorder); ok {
 		rec.code = code
 	}
-	writeJSON(w, status, body)
+	writeJSON(w, r, status, body)
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	enc := json.NewEncoder(w)
+// writeJSON writes v, gzipped when it is over a kilobyte and r takes
+// gzip: a page of issues, an inbox (~40 KB) are a few kilobytes so.
+func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(v)
+	h := w.Header()
+	h.Set("Content-Type", "application/json; charset=utf-8")
+	h.Add("Vary", "Accept-Encoding")
+	if b.Len() < 1024 || !acceptsGzip(r) {
+		w.WriteHeader(status)
+		w.Write(b.Bytes())
+		return
+	}
+	h.Set("Content-Encoding", "gzip")
+	w.WriteHeader(status)
+	zw, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
+	zw.Write(b.Bytes())
+	zw.Close()
 }

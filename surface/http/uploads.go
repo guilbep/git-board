@@ -45,7 +45,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, logOf(r.Context()), err)
 		return
 	}
-	writeJSON(w, http.StatusOK, up)
+	writeJSON(w, r, http.StatusOK, up)
 }
 
 // media is route 42: a forge's picture of issue text, through this

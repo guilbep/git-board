@@ -54,3 +54,38 @@ func TestStatic(t *testing.T) {
 		t.Errorf("a missing asset: %d", w.Code)
 	}
 }
+
+// An API reply over a kilobyte goes gzipped to a client that takes it; a
+// small one, or to a client that doesn't, as is.
+func TestJSONGzipped(t *testing.T) {
+	t.Parallel()
+	big := map[string]string{"text": strings.Repeat("issue ", 400)}
+	write := func(v any, enc string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/api/issues", nil)
+		if enc != "" {
+			r.Header.Set("Accept-Encoding", enc)
+		}
+		w := httptest.NewRecorder()
+		writeJSON(w, r, http.StatusOK, v)
+		return w
+	}
+	w := write(big, "gzip, br")
+	if w.Header().Get("Content-Encoding") != "gzip" || w.Body.Len() > 1024 {
+		t.Fatalf("big: encoding %q, %d bytes", w.Header().Get("Content-Encoding"), w.Body.Len())
+	}
+	zr, err := gzip.NewReader(w.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := io.ReadAll(zr); !bytes.Contains(got, []byte(`"text":"issue issue`)) {
+		t.Errorf("unzipped: %.40q", got)
+	}
+	for _, c := range []struct {
+		v   any
+		enc string
+	}{{big, ""}, {big, "gzip;q=0"}, {map[string]int{"n": 1}, "gzip"}} {
+		if w := write(c.v, c.enc); w.Header().Get("Content-Encoding") != "" || !strings.HasPrefix(w.Body.String(), "{") {
+			t.Errorf("%q: encoding %q, body %.20q", c.enc, w.Header().Get("Content-Encoding"), w.Body.String())
+		}
+	}
+}
