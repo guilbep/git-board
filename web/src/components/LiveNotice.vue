@@ -5,7 +5,7 @@
   <transition name="gb-live">
     <p v-if="shown" class="gb-live" role="status"><GbIcon name="sync" small /> Updated just now</p>
   </transition>
-  <p v-if="fileError" class="gb-live gb-live-error" role="alert" data-test="config-error">
+  <p v-if="fileError" class="gb-live gb-live-error" role="alert" data-testid="config-error">
     .git-board.toml was edited and does not open, so the board keeps the last good file: {{ fileError }}
   </p>
 </template>

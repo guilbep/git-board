@@ -16,7 +16,7 @@
       <!-- 1. who you are -->
       <li class="gb-start-step" :class="{ done: st.me.state === 'chosen' }">
         <h2 class="h5">1. Who you are</h2>
-        <p v-if="st.me.state === 'chosen'" class="gb-hint" data-test="me-done">You write as <b>{{ myName }}</b>.</p>
+        <p v-if="st.me.state === 'chosen'" class="gb-hint" data-testid="me-done">You write as <b>{{ myName }}</b>.</p>
         <IdentityChooser v-else />
       </li>
 
@@ -30,15 +30,15 @@
           </label>
         </div>
 
-        <div v-if="goal" class="gb-start-goal" data-test="goal-panel">
+        <div v-if="goal" class="gb-start-goal" data-testid="goal-panel">
           <template v-if="goal === 'see' || goal === 'both' || goal === 'backup'">
-            <p v-for="f in st.forges" :key="f.name" class="gb-start-row" data-test="goal-forge">
+            <p v-for="f in st.forges" :key="f.name" class="gb-start-row" data-testid="goal-forge">
               <span><b>{{ f.name }}</b> · {{ f.project }}: {{ wayWords(f.way) }}<template v-if="f.discovered">, found in your git remotes</template></span>
               <button v-if="goal !== 'backup' && f.way !== wantWay" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="busy" @click="setWay(f.name, wantWay)">
                 Make it {{ wayWords(wantWay) }}
               </button>
             </p>
-            <p v-if="goalDone" class="gb-hint" data-test="goal-done">Done: {{ goalDoneWords }}</p>
+            <p v-if="goalDone" class="gb-hint" data-testid="goal-done">Done: {{ goalDoneWords }}</p>
             <button v-else type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" @click="adding = true">
               {{ goal === 'backup' ? 'Add the backup forge' : 'Add the forge' }}
             </button>
@@ -47,7 +47,7 @@
           <p v-else-if="goal === 'markdown'">
             The issues become Markdown files in a folder of the repository, which you edit with any text editor.
             <router-link to="/settings/datastore">Open Settings › Datastore</router-link>: copy the board into a folder, then keep it there.
-            For a copy once, <a :href="markdownExportURL()" download data-test="md-export">download the issues as Markdown</a>.
+            For a copy once, <a :href="markdownExportURL()" download data-testid="md-export">download the issues as Markdown</a>.
           </p>
           <p v-else-if="goal === 'project'">
             The fields live in the columns of a GitHub Project.
@@ -58,7 +58,7 @@
         <p v-if="st.file.state === 'none'" class="gb-hint gb-start-file">
           This board has no project file yet, and the defaults hold. The settings you change write <code>.git-board.toml</code>: commit it to share it with your team.
         </p>
-        <div v-if="st.file.state === 'none'" class="gb-start-row" data-test="template">
+        <div v-if="st.file.state === 'none'" class="gb-start-row" data-testid="template">
           <label class="gb-hint" for="start-template">Start from</label>
           <select id="start-template" v-model="template" class="epfl-input gb-start-input" :disabled="busy">
             <option value="">the default</option>
@@ -76,7 +76,7 @@
       <li class="gb-start-step" :class="{ done: !needToken && st.forges.length > 0 }">
         <h2 class="h5">3. Log in</h2>
         <p v-if="!st.forges.length" class="gb-hint">No forge yet: step 2 adds one.</p>
-        <p v-else-if="!needToken" class="gb-hint" data-test="tokens-done">A token is found for every forge.</p>
+        <p v-else-if="!needToken" class="gb-hint" data-testid="tokens-done">A token is found for every forge.</p>
         <ForgeTokens v-else @changed="reload" />
       </li>
 
@@ -86,8 +86,8 @@
         <p v-if="!syncable.length" class="gb-hint">Nothing to run yet: a forge with a token comes first.</p>
         <template v-else>
           <p class="gb-hint">A check reads the forges and writes nothing: it says what the run will do.</p>
-          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="running" data-test="check" @click="go(true)">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
-          <p v-if="checked" class="gb-start-report" role="status" data-test="check-report">The check: {{ reportWords(checked.report) || 'nothing to change' }}.</p>
+          <button type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="running" data-testid="check" @click="go(true)">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
+          <p v-if="checked" class="gb-start-report" role="status" data-testid="check-report">The check: {{ reportWords(checked.report) || 'nothing to change' }}.</p>
         </template>
       </li>
       <li class="gb-start-step" :class="{ done: ranAll }">
@@ -97,7 +97,7 @@
             <input v-model="allowCreate" type="checkbox" />
             <span>Create the board's issues on the forges that do not have them yet</span>
           </label>
-          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="running" data-test="run" @click="go(false)">{{ running && !run?.dry_run ? 'Running…' : 'Run it' }}</button>
+          <button type="button" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="running" data-testid="run" @click="go(false)">{{ running && !run?.dry_run ? 'Running…' : 'Run it' }}</button>
           <p v-if="run && !run.dry_run && run.state !== 'running'" class="gb-start-report" role="status">
             {{ run.state === 'failed' ? `The run stopped: ${run.error ?? ''}` : `Done: ${reportWords(run.report)}.` }}
           </p>
@@ -107,7 +107,7 @@
     </ol>
 
     <div class="gb-start-end">
-      <button type="button" class="epfl-btn epfl-btn-primary" data-test="open-board" @click="finish">Open the board</button>
+      <button type="button" class="epfl-btn epfl-btn-primary" data-testid="open-board" @click="finish">Open the board</button>
     </div>
   </main>
 </template>

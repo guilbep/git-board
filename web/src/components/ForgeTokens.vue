@@ -24,7 +24,7 @@
     </div>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert">{{ error }}</p>
 
-    <div v-if="dev && dev.state !== 'none'" class="ft-device" role="status" data-test="device">
+    <div v-if="dev && dev.state !== 'none'" class="ft-device" role="status" data-testid="device">
       <template v-if="dev.state === 'waiting'">
         <p>Open <a :href="dev.verification_uri" target="_blank" rel="noopener">{{ dev.verification_uri }}</a> and type this code:</p>
         <p class="ft-code"><code>{{ dev.user_code }}</code> <button type="button" class="gb-linkbtn" @click="copyCode">{{ copied ? 'Copied' : 'Copy' }}</button></p>

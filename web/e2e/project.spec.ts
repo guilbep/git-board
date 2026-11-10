@@ -20,8 +20,8 @@ test('the GitHub Project: a check, and the fields it holds', async ({ page, requ
     await page.reload();
     await expect(page.getByText('Not checked yet')).toBeVisible();
     await page.getByRole('button', { name: 'Check the Project' }).click();
-    await expect(page.locator('.pj-meta')).toContainText('The e2e Project');
-    await expect(page.locator('.pj-meta')).toContainText('0 issues matched, 1 unmatched');
+    await expect(page.locator('.pj-meta').first()).toContainText('The e2e Project');
+    await expect(page.locator('.pj-meta').first()).toContainText('0 issues matched, 1 unmatched');
     await expect(page.getByRole('heading', { name: 'No conflicts' })).toBeVisible();
     await expect(page.getByText('1 item of the Project match no issue here')).toBeVisible();
     await expect(page.getByText("This board doesn't write to the Project")).toBeVisible();

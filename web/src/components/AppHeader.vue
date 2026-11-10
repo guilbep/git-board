@@ -29,7 +29,7 @@
     <div ref="tipSlot" class="app-tip"><TipLine v-if="tipWhere === 'header'" /></div>
     <div class="app-right">
       <!-- a new board: the steps left (GET /api/state), to the Start page -->
-      <router-link v-if="setupLeft && route.path !== '/start'" to="/start" class="app-setup" data-test="setup-chip" :title="setupTitle">
+      <router-link v-if="setupLeft && route.path !== '/start'" to="/start" class="app-setup" data-testid="setup-chip" :title="setupTitle">
         Set up · {{ setupLeft }} {{ setupLeft === 1 ? 'step' : 'steps' }} left
       </router-link>
       <!-- Sync, drawn as an issue's forge button (ForgeIcons): a badge
