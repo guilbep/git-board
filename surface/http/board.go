@@ -25,6 +25,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "GET /api/board", s.boardInfo)
 
 	Route(mux, "GET /api/issues", listIssues)
+	Route(mux, "GET /api/issues/batch", listBatch)
 	Route(mux, "POST /api/issues", createIssue)
 	Route(mux, "GET /api/issues/{id}", showIssue)
 	Route(mux, "PATCH /api/issues/{id}", patchIssue)

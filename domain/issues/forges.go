@@ -6,6 +6,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/guilbep/git-board/kernel"
 	bsync "github.com/guilbep/git-board/sync"
@@ -23,7 +24,36 @@ type reading struct {
 
 // reading is the board's counter and records. Records that don't read
 // are told to notice: the issues show without their forges.
-func (s *Service) reading(ctx context.Context, notice Notice, now bool) (rd reading) {
+func (s *Service) reading(ctx context.Context, notice Notice, now bool) reading {
+	o, _ := ctx.Value(readOnceKey{}).(*readOnce)
+	if o == nil {
+		return s.read1(ctx, notice, now)
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if rd, ok := o.kept[now]; ok {
+		return rd
+	}
+	rd := s.read1(ctx, notice, now)
+	o.kept[now] = rd
+	return rd
+}
+
+// ReadOnce marks ctx as many reads that write nothing (a batch of
+// lists): the counter and the forges' records are read once for all of
+// them, where each list read them again.
+func ReadOnce(ctx context.Context) context.Context {
+	return context.WithValue(ctx, readOnceKey{}, &readOnce{kept: map[bool]reading{}})
+}
+
+type readOnceKey struct{}
+
+type readOnce struct {
+	mu   sync.Mutex
+	kept map[bool]reading // by now
+}
+
+func (s *Service) read1(ctx context.Context, notice Notice, now bool) (rd reading) {
 	rd = reading{cnt: s.counter(ctx, notice), now: now}
 	defer func() { // the counter's GitHub repository, from the records too
 		if rd.cnt != nil {

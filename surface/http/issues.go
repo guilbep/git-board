@@ -105,6 +105,51 @@ func listIssues(ctx context.Context, r listReq) (page[issueJSON], error) {
 	return p, nil
 }
 
+// batchReq is many lists in one request (GET /api/issues/batch): a
+// board's lanes, each its filter with the lane's term, and the filters
+// panel's counts. f is a list's first page each, c a filter counted
+// alone; sort and limit are every page's.
+type batchReq struct {
+	Pages  []string `query:"f"`
+	Counts []string `query:"c"`
+	Sort   string   `query:"sort"`
+	Limit  *int     `query:"limit"`
+}
+
+type batchRes struct {
+	Pages  []page[issueJSON] `json:"pages"`
+	Totals []int             `json:"totals"`
+}
+
+// maxBatch is how many lists a batch holds: a board's lanes and its counts.
+const maxBatch = 64
+
+// listBatch answers each list as GET /api/issues would, in the order
+// asked, from one snapshot of the board: the lanes and the counts agree.
+func listBatch(ctx context.Context, r batchReq) (batchRes, error) {
+	if n := len(r.Pages) + len(r.Counts); n == 0 || n > maxBatch {
+		return batchRes{}, invalid("f", fmt.Errorf("%d lists: from 1 to %d", n, maxBatch))
+	}
+	ctx = issues.ReadOnce(ctx) // the counter and the forges' records, read once for every list
+	res := batchRes{Pages: make([]page[issueJSON], 0, len(r.Pages)), Totals: make([]int, 0, len(r.Counts))}
+	for _, f := range r.Pages {
+		p, err := listIssues(ctx, listReq{Filter: &f, Sort: r.Sort, Limit: r.Limit})
+		if err != nil {
+			return batchRes{}, err
+		}
+		res.Pages = append(res.Pages, p)
+	}
+	one := 1
+	for _, f := range r.Counts {
+		p, err := listIssues(ctx, listReq{Filter: &f, Limit: &one})
+		if err != nil {
+			return batchRes{}, err
+		}
+		res.Totals = append(res.Totals, p.Total)
+	}
+	return res, nil
+}
+
 // parseAt is a time an `at` names: RFC 3339, or a date, its end.
 func parseAt(s string) (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, s); err == nil {

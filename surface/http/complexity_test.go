@@ -112,6 +112,11 @@ func TestGuardRoutes(t *testing.T) {
 	} {
 		within(t, "GET "+path, countGet(t, h, path), warmRoute)
 	}
+	// a board grouped by status, its 7 lanes and 2 counts at once: the
+	// refs listed and the forges' records read once, a few view calls a
+	// list, none an issue
+	within(t, "GET /api/issues/batch", countGet(t, h, "/api/issues/batch?f=status:backlog&f=status:ready&f=status:in-progress&f=status:in-review&f=status:qa&f=status:validated&f=no:status&c=is:open&c=is:closed&limit=40"),
+		map[string]int64{"entities": 0, "objects": 0, "loads": 0, "processes": 0, "listings": 3, "view calls": 4 * 9, "rows put": 0})
 	// one issue: its entity alone
 	id := string(gb.Issues[5])
 	within(t, "GET /api/issues/{id}", countGet(t, h, "/api/issues/"+id),

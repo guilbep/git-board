@@ -203,3 +203,30 @@ func TestStaleEditNamesItsField(t *testing.T) {
 		t.Errorf("a moved base = %+v", e)
 	}
 }
+
+// A board's lanes and counts in one request: each list as GET /api/issues
+// answers it, in the order asked.
+func TestIssuesBatch(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	a := newAPI(t, dir)
+	type batch struct {
+		Pages  []issuePage `json:"pages"`
+		Totals []int       `json:"totals"`
+	}
+	b := want[batch](t, a.do("GET", "/api/issues/batch?f=is:open&f=is:closed&f=&c=&c=is:closed&limit=1&sort=prio+desc", nil), 200)
+	if len(b.Pages) != 3 || !slices.Equal(b.Totals, []int{2, 1}) {
+		t.Fatalf("batch = %+v", b)
+	}
+	for i, f := range []string{"is:open", "is:closed", ""} {
+		one := want[issuePage](t, a.do("GET", "/api/issues?limit=1&sort=prio+desc&filter="+f, nil), 200)
+		if got := b.Pages[i]; got.Total != one.Total || len(got.Items) != len(one.Items) || got.Items[0].ID != one.Items[0].ID || got.Next != one.Next {
+			t.Errorf("page %d (%q) = %+v, want %+v", i, f, got, one)
+		}
+	}
+	for _, q := range []string{"", "?f=is:open&limit=-1", "?f=" + strings.Repeat("&f=x", maxBatch)} {
+		if res := a.do("GET", "/api/issues/batch"+q, nil); res.StatusCode != http.StatusBadRequest {
+			t.Errorf("GET /api/issues/batch%s: %d, want 400", q[:min(len(q), 30)], res.StatusCode)
+		}
+	}
+}

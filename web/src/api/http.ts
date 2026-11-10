@@ -16,7 +16,7 @@ import { ApiError, errorOf } from './error.ts';
 export { ApiError, errorOf, isNotFound, isStale, message, type ErrorCode } from './error.ts';
 
 export interface Call {
-  query?: Record<string, string | number | boolean | undefined> | undefined;
+  query?: Record<string, string | number | boolean | string[] | undefined> | undefined; // an array: the key once a value
   body?: unknown;
   ifMatch?: string | undefined; // a version, unquoted
   ifNoneMatch?: string | undefined;
@@ -32,7 +32,10 @@ export interface Answer<T> {
 
 export function url(path: string, query?: Call['query']): string {
   const q = new URLSearchParams();
-  for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined) q.set(k, String(v));
+  for (const [k, v] of Object.entries(query ?? {})) {
+    if (Array.isArray(v)) for (const x of v) q.append(k, x);
+    else if (v !== undefined) q.set(k, String(v));
+  }
   const s = q.toString();
   return API_BASE + path + (s ? `?${s}` : '');
 }

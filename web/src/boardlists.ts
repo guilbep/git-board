@@ -2,11 +2,12 @@
 // List): never every issue at once. Ungrouped, one list; grouped, a list
 // per value of the field (the lane's term added to the filter, "no:field"
 // for the issues without one), each loading its first page and the next
-// on demand. The values come from GET /api/labels for the filter, which
+// on demand; the lanes, and the filters panel's counts, each in one
+// request (GET /api/issues/batch). The values come from GET /api/labels for the filter, which
 // also counts the filters panel (facets.ts facetsOf). A newer load aborts
 // the older one's requests.
 import { ref, shallowRef, type Ref } from 'vue';
-import { getLabels, listIssues, type Issue, type LabelCount } from '@/api';
+import { batchIssues, getLabels, listIssues, type Issue, type LabelCount, type Page } from '@/api';
 import type { Bucket } from '@/bucket';
 import { configModel } from '@/configmodel';
 import { facetsOf, type Counted, type Facet } from '@/facets';
@@ -64,19 +65,22 @@ export function useBoardLists(fields: Ref<Fields>) {
         next = [{ group: '', issues: first.items, total: first.total, next: first.next }];
         total.value = first.total;
       } else {
-        // the options' lanes and the counts at once; then a lane for each
-        // value in use that no option names
-        const lane = (v: string) => page(laneFilter(p.filter, p.group, v), signal).then((pg): Bucket => ({ group: v, issues: pg.items, total: pg.total, next: pg.next }));
+        // the options' lanes and the list's total in one request, the
+        // labels beside it; then, in one more, a lane for each value in
+        // use that no option names
+        const lanes = (vs: string[], withTotal: boolean) =>
+          batchIssues({ pages: vs.map((v) => laneFilter(p.filter, p.group, v)), counts: withTotal ? [p.filter] : [], sort: p.sort || undefined, limit: LANE_PAGE }, signal);
+        const bucket = (v: string, pg: Page<Issue> | undefined): Bucket => ({ group: v, issues: pg?.items ?? [], total: pg?.total ?? 0, next: pg?.next });
         const options = [...optionsOf(p.group), NONE];
         labels = getLabels(p.filter, signal);
-        const all = listIssues({ filter: p.filter, limit: 1 }, signal);
-        const known = Promise.all(options.map(lane));
-        // awaited below, after labels: a new load aborting them meanwhile
+        const known = lanes(options, true);
+        // awaited below, after labels: a new load aborting it meanwhile
         // is this load's to catch, not an unhandled rejection of the page's
-        for (const p of [all, known]) p.catch(() => {});
-        const extra = (await labels).filter((l) => l.field === p.group && !options.includes(l.value)).map((l) => l.value);
-        next = [...(await known), ...(await Promise.all([...new Set(extra)].map(lane)))];
-        total.value = (await all).total;
+        known.catch(() => {});
+        const extra = [...new Set((await labels).filter((l) => l.field === p.group && !options.includes(l.value)).map((l) => l.value))];
+        const [k, x] = await Promise.all([known, lanes(extra, false)]);
+        next = [...options.map((v, i) => bucket(v, k.pages[i])), ...extra.map((v, i) => bucket(v, x.pages[i]))];
+        total.value = k.totals[0] ?? 0;
       }
       if (signal.aborted) return;
       buckets.value = next;
@@ -97,25 +101,32 @@ export function useBoardLists(fields: Ref<Fields>) {
   // two counts
   async function loadFacets(filter: string, labels: Promise<LabelCount[]>, signal: AbortSignal) {
     // how many a filter matches: the list's own total when it is the
-    // list's filter (is:open, a view's default), else asked
+    // list's filter (is:open, a view's default), else counted, every
+    // count in one request
     const same = (a: string, b: string) => terms(a).map((t) => t.text).sort().join(' ') === terms(b).map((t) => t.text).sort().join(' ');
-    const count = (f: string) => (same(f, filter) ? Promise.resolve(total.value) : listIssues({ filter: f, limit: 1 }, signal).then((x) => x.total));
-    const totals = (f: string) => Promise.all([count(`${f} is:open`.trim()), count(`${f} is:closed`.trim())]);
-    const counted = async (f: string, ls: Promise<LabelCount[]> | null, states: boolean): Promise<Counted> => {
-      const [l, [open = 0, closed = 0]] = await Promise.all([ls ?? Promise.resolve([]), states ? totals(f) : Promise.resolve([0, 0])]);
-      return { labels: l, open, closed };
-    };
+    const states = (f: string) => [`${f} is:open`.trim(), `${f} is:closed`.trim()] as const;
     try {
       const ts = terms(filter);
       const keys = new Set<string>();
       for (const t of ts) for (const k of [STATE, t.key === 'no' ? t.value : t.key === 'label' ? 'label' : t.key]) if (k && owns(k, t)) keys.add(k);
+      const own = [...keys];
       // the shared counts: open and closed when the state facet is no own
       // one, else this list's total for a field's "not set"
       const sharedStates = !keys.has(STATE);
-      const shared = counted(filter, labels, sharedStates).then((c) => (sharedStates ? c : { ...c, open: total.value, closed: 0 }));
-      shared.catch(() => {}); // awaited after the own counts: an abort meanwhile is caught below
-      const own = new Map(await Promise.all([...keys].map(async (k) => [k, await counted(rest(filter, k), k === STATE ? null : getLabels(rest(filter, k), signal), true)] as const)));
-      const fs = facetsOf(filter, fields.value, await shared, own);
+      const wanted = [...(sharedStates ? states(filter) : []), ...own.flatMap((k) => states(rest(filter, k)))];
+      const ask = [...new Set(wanted.filter((f) => !same(f, filter)))];
+      const [counts, sharedLabels, ownLabels] = await Promise.all([
+        batchIssues({ counts: ask }, signal),
+        labels,
+        Promise.all(own.map((k) => (k === STATE ? Promise.resolve([]) : getLabels(rest(filter, k), signal)))),
+      ]);
+      const n = (f: string) => (same(f, filter) ? total.value : (counts.totals[ask.indexOf(f)] ?? 0));
+      const counted = (f: string, l: LabelCount[]): Counted => {
+        const [o, c] = states(f);
+        return { labels: l, open: n(o), closed: n(c) };
+      };
+      const shared = sharedStates ? counted(filter, sharedLabels) : { labels: sharedLabels, open: total.value, closed: 0 };
+      const fs = facetsOf(filter, fields.value, shared, new Map(own.map((k, i) => [k, counted(rest(filter, k), ownLabels[i] ?? [])] as const)));
       if (!signal.aborted) facets.value = fs;
     } catch {
       // the panel keeps what it showed
