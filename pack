@@ -1,1 +1,1 @@
-{"clock":86,"ops":[{"kind":"seen","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1794311878,"data":{"issue":"8786339459bcf907e70e91d797ba0d59c267ec13","field":"labels","value":"kind:bug\nstatus:ready"}}]}
+{"clock":87,"ops":[{"kind":"run","author":"ee004d31386b76440a74651c79871f156633d4ff","time":1794311878,"data":{"started":1794311873}}]}
