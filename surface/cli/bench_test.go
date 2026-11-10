@@ -67,9 +67,9 @@ func BenchmarkSet(b *testing.B) {
 	dir := benchRepo(b)
 	id := anIssue(b, dir)
 	i := 0
-	for b.Loop() { // a value that changes, each time
+	for b.Loop() { // a value that changes, each time: one of boardgen's prio options
 		i++
-		if code := Main(ctx, []string{"-C", dir, "set", id, fmt.Sprintf("est=%d", i)}, io.Discard, os.Stderr); code != 0 {
+		if code := Main(ctx, []string{"-C", dir, "set", id, fmt.Sprintf("prio=p%d", i%4)}, io.Discard, os.Stderr); code != 0 {
 			b.Fatalf("exit %d", code)
 		}
 	}
