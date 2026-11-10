@@ -45,7 +45,7 @@ func TestMigrateField(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := fake.New("example.com/o/r")
-	if _, err := b.SyncForges(t.Context(), WaySync, ForgeRun{Forges: []NamedForge{{"gh", f}}, AllowCreate: true}); err != nil {
+	if _, err := b.SyncForges(t.Context(), WaySync, ForgeRun{Forges: []NamedForge{{Name: "gh", Forge: f}}, AllowCreate: true}); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.All()) != 1 {
@@ -122,7 +122,7 @@ func TestMigrateTwoGitLabProjectsOneHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	fa, fb := fake.New("lab.example.com/11"), fake.New("lab.example.com/22")
-	if _, err := b.SyncForges(t.Context(), WaySync, ForgeRun{Forges: []NamedForge{{"a", fa}}, AllowCreate: true}); err != nil {
+	if _, err := b.SyncForges(t.Context(), WaySync, ForgeRun{Forges: []NamedForge{{Name: "a", Forge: fa}}, AllowCreate: true}); err != nil {
 		t.Fatal(err)
 	}
 	if len(fa.All()) != 1 {

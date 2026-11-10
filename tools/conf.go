@@ -4,13 +4,40 @@
 // then they are declared here, so a file v1 reads, v2 reads.
 package tools
 
-import "github.com/guilbep/git-board/conf"
+import (
+	"slices"
+
+	"github.com/guilbep/git-board/conf"
+)
 
 // GithubProject is [github-project]: the GitHub Project the bridge reads.
 type GithubProject struct {
 	Owner  string `toml:"owner"`
 	Number int    `toml:"number"`
 	Write  bool   `toml:"write"` // bridge sync writes to the Project
+	// Fields are the board's fields the Project holds as its columns:
+	// their home on GitHub is the Project, not a label (ADR 0022). project
+	// configure writes them; a table without the key holds
+	// DefaultProjectFields, and the Project page says so.
+	Fields []string `toml:"fields"`
+}
+
+// DefaultProjectFields are the columns a Project holds when its table
+// names none: the ENAC Project's own.
+var DefaultProjectFields = []string{"status", "prio", "mod", "est", "sprint", "moscow", "milestone"}
+
+// Columns are the fields the Project holds: its table's, else the default.
+func (g GithubProject) Columns() []string {
+	if g.Fields != nil {
+		return g.Fields
+	}
+	return DefaultProjectFields
+}
+
+// Holds says field's home on GitHub is the Project, by this table: a
+// Project is named, and the field is one of its columns.
+func (g GithubProject) Holds(field string) bool {
+	return g.Number != 0 && slices.Contains(g.Columns(), field)
 }
 
 // Uploads is [uploads]: where files attached to issues go. The keys stay

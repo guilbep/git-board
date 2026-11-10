@@ -77,7 +77,7 @@ func (b *Board) MigrateField(ctx context.Context, r MigrateReq) ([]MigratePlan, 
 	}
 	gp, _ := b.Config.Tools.GithubProject.Get()
 	inProject := func(name string) bool {
-		return len(s.Fields[name].Project) > 0 || gp.Number != 0 && slices.Contains(projectFields, name)
+		return len(s.Fields[name].Project) > 0 || gp.Holds(name)
 	}
 	var persons []people.Person
 	if !dry {

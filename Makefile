@@ -32,7 +32,7 @@ licences: ## Check every licence, Go modules and the web app's packages
 # Everything CI's test job runs: .github/workflows/ci.yml only sets up Go and
 # Node, then runs this (its e2e job runs web-e2e). The web checks and build come first, in prerequisite order,
 # because the binary embeds web/dist.
-ci: web-check web-build build vet test compat ## Everything CI runs
+ci: web-check web-build build vet test compat proved ## Everything CI runs
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
 
 # git-board-agents (contrib/board-agents): v1's agents and wtx, out of the
@@ -123,7 +123,7 @@ golden: ## Record the golden outputs again from git-board built now (review the 
 
 # The web app first: the binary embeds whatever web/dist holds.
 install: web-build ## Build the web app, then install git-board in GOBIN
-	go install ./cmd/git-board
+	go install -ldflags "$(CLIENT_ID_FLAG)" ./cmd/git-board
 
 # The latest GitHub release's git-board for this machine, web app inside,
 # checked against its checksums.txt and put where go install puts it.
@@ -163,6 +163,12 @@ web-e2e: web/node_modules ## Run the browser tests (Playwright, web/e2e)
 web-build: web/node_modules ## Build the web app into web/dist
 	cd web && npm run build
 
+# git-board's OAuth App on github.com (#101, ADR 0010) is the default in
+# forge/github/device.go. GITHUB_CLIENT_ID replaces it, for a fork's own
+# app; unset, the source's stays.
+GITHUB_CLIENT_ID ?=
+CLIENT_ID_FLAG := $(if $(GITHUB_CLIENT_ID),-X github.com/guilbep/git-board/forge/github.ClientID=$(GITHUB_CLIENT_ID))
+
 # A release's archives, the web app inside, in dist/ with checksums.txt:
 # run on a clean checkout of the tag, so the commands report that version.
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
@@ -170,7 +176,7 @@ dist: web-build ## Build the release archives and checksums.txt into dist/
 	rm -rf dist && mkdir dist
 	@set -e; v=$$(git describe --tags --always --dirty); for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; d=git-board_$${v}_$${os}_$${arch}; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w" -o dist/$$d/ ./cmd/git-board; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w $(CLIENT_ID_FLAG)" -o dist/$$d/ ./cmd/git-board; \
 		cp LICENSE README.md dist/$$d/; \
 		if [ $$os = windows ]; then (cd dist && zip -qr $$d.zip $$d); else tar -C dist -czf dist/$$d.tar.gz $$d; fi; \
 		rm -rf dist/$$d; echo "dist/$$d"; \
@@ -184,6 +190,13 @@ flow: ## Draw docs/spec/data-flow.html again, from the code and docs/spec/flows.
 
 docs: ## Build the docs site (guide, spec, decisions) into site/ (strict)
 	uvx --from zensical==0.0.72 zensical build --strict
+
+# Where a value lives (docs/spec/places.md) names the test proving each
+# case: each must exist, so the page can't cite one that went away.
+proved: ## Check that every test docs/spec/places.md names exists
+	@missing=; for t in $$(grep -ohE '`Test[A-Za-z0-9_]+`' docs/spec/places.md | tr -d '`' | sort -u); do \
+		grep -rqE "^func $$t\(" --include='*_test.go' . || missing="$$missing $$t"; \
+	done; test -z "$$missing" || { echo "docs/spec/places.md names tests that don't exist:$$missing"; exit 1; }
 
 docs-serve: ## Preview the docs site on localhost, rebuilt on save
 	uvx --from zensical==0.0.72 zensical serve

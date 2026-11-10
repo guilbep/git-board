@@ -28,6 +28,10 @@
     <!-- the tip, when the header has room for it (else the strip below) -->
     <div ref="tipSlot" class="app-tip"><TipLine v-if="tipWhere === 'header'" /></div>
     <div class="app-right">
+      <!-- a new board: the steps left (GET /api/state), to the Start page -->
+      <router-link v-if="setupLeft && route.path !== '/start'" to="/start" class="app-setup" data-testid="setup-chip" :title="setupTitle">
+        Set up · {{ setupLeft }} {{ setupLeft === 1 ? 'step' : 'steps' }} left
+      </router-link>
       <!-- Sync, drawn as an issue's forge button (ForgeIcons): a badge
            while a run goes on, a red one when the last one failed -->
       <router-link to="/settings/sync" class="gb-iconbtn gb-sync" active-class="active" :aria-label="`Sync: ${syncWords}`" :title="`Sync: ${syncWords}`">
@@ -91,7 +95,7 @@ import GbAvatar from '@/components/GbAvatar.vue';
 import AccountCard from '@/components/AccountCard.vue';
 import { inbox, loadInbox } from '@/inbox';
 import { debounced, onLive } from '@/live';
-import { clientId } from '@/api';
+import { clientId, getState, type BoardState } from '@/api';
 
 // the saved views, for the palette's jumps
 defineProps<{ views: string[] }>();
@@ -128,6 +132,12 @@ watch(
     if (was && id !== was) void loadInbox();
   },
 );
+
+// the board's state: while it is new, the chip says how many steps are left
+const state = ref<BoardState | null>(null);
+const setupLeft = computed(() => (state.value?.phase === 'new' ? state.value.next.length : 0));
+const setupTitle = computed(() => state.value?.next.map((a) => a.say).join('\n') ?? '');
+const reloadState = debounced(() => void getState().then((s) => (state.value = s)).catch(() => {}), 300);
 
 const menu = ref<HTMLDetailsElement | null>(null);
 
@@ -191,10 +201,15 @@ onMounted(() => {
   // the inbox's count after what the page shows first (it reads every
   // issue you follow)
   if (!inbox.value) setTimeout(() => void loadInbox(), 600);
+  reloadState();
   stopLive = onLive((e) => {
     const own = e.by === clientId;
     if (!own && (e.kind === 'issue' || e.kind === 'inbox' || e.kind === 'resync')) reloadInbox();
     if (e.kind === 'sync') reloadSync();
+    // a state reads every forge's tokens: after setup, only a file changed
+    // can make the board new again
+    const setup = !state.value || setupLeft.value > 0;
+    if (e.kind === 'config' || (setup && (e.kind === 'me' || e.kind === 'sync' || e.kind === 'resync' || e.kind === 'issue'))) reloadState();
     onStep(e);
   }, { own: true });
 });
@@ -208,6 +223,9 @@ onMounted(() => {
   background: var(--primary);
   mask: url('/git-board.svg') center / contain no-repeat;
 }
+
+.app-setup { padding: .25rem .625rem; border: 1px solid var(--primary); color: var(--primary); font-size: .8125rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.app-setup:hover { background: var(--primary); color: var(--bg); }
 
 /* the header stays on top while the page scrolls */
 .app-header { position: sticky; top: 0; z-index: 30; }

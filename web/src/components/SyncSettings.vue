@@ -14,6 +14,7 @@
         <h2 class="h4">Sync</h2>
         <p class="sy-lead">
           Where your issues go besides this clone: one Sync pulls {{ remote }}, syncs the forges, then pushes. Each row does it for its side alone.
+          The board is the one truth — each forge and the GitHub Project mirror the fields you give them, and every write either side accepts is recorded, so switching one on, off or round moves only what changed since.
           The forges are kept in <code>.git-board.toml</code>; the tokens, in git's credential helper. <button type="button" class="gb-linkbtn" @click="guideOpen = true">How forges work</button>
         </p>
       </div>
@@ -29,7 +30,14 @@
         <tbody>
           <tr v-if="!st.remotes.length">
             <td><b>{{ remote }}</b> <span class="sy-kind">git</span></td>
-            <td colspan="5" class="sy-wrap">{{ kept ? `None: not needed, ${kept}.` : `None: git remote add ${remote} <url>. The git steps are skipped.` }}</td>
+            <td v-if="kept" colspan="5" class="sy-wrap">None: not needed, {{ kept }}.</td>
+            <td v-else colspan="5" class="sy-wrap">
+              <span>None: this clone has no {{ remote }} remote, so the git steps are skipped.</span>
+              <form class="sy-addremote" @submit.prevent="addOrigin">
+                <input v-model="originUrl" class="epfl-input" type="url" placeholder="https://github.com/org/repo.git" required spellcheck="false" />
+                <button type="submit" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="addingRemote || !originUrl">{{ addingRemote ? 'Adding…' : `Add the ${remote} remote` }}</button>
+              </form>
+            </td>
           </tr>
           <tr v-for="r in st.remotes" :key="r">
             <td><b>{{ r }}</b> <span class="sy-kind">git</span></td>
@@ -38,7 +46,7 @@
             <td v-if="kept" class="sy-off" aria-disabled="true" :title="noGit('comparing the board with a remote')">Not compared: {{ kept }}</td>
             <td v-else>{{ remoteLine[r] ?? 'Not checked from here yet' }}</td>
             <td class="sy-acts">
-              <button v-for="a in remoteActs" :key="a.action" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :title="noGit(a.needs) || a.command" :disabled="!!rowBusy || running || !!noGit(a.needs)" @click="remoteDo(r, a.action)">
+              <button v-for="a in remoteActs" :key="a.action" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :title="noGit(a.needs) || a.hint" :disabled="!!rowBusy || running || !!noGit(a.needs)" @click="remoteDo(r, a.action)">
                 {{ rowBusy === `${r} ${a.action}` ? `${a.label}…` : a.label }}
               </button>
             </td>
@@ -51,15 +59,21 @@
                 <span>{{ f.project }}</span>
                 <div class="sy-note">
                   {{ f.discovered ? 'found in the remotes' : 'in .git-board.toml' }}
-                  <template v-if="placesLine(f.name)"> · fields: {{ placesLine(f.name) }} · <router-link to="/settings/fields">change it in Fields</router-link></template>
+                  <template v-if="placesLine(f.name)"> · fields live here: {{ placesLine(f.name) }} · <router-link to="/settings/fields">change it in Fields</router-link></template>
                 </div>
               </td>
               <td>
-                <span v-if="f.discovered" title="A forge found in the remotes syncs: give the forges tables in .git-board.toml to leave one out">On</span>
-                <label v-else class="sy-switch">
+                <label class="sy-switch" :title="f.discovered ? 'A change writes the forges found in the remotes into .git-board.toml' : undefined">
                   <input type="checkbox" :checked="f.sync" :disabled="busy === f.name || running" @change="toggle(f.name, ($event.target as HTMLInputElement).checked)" />
                   <span>{{ f.sync ? 'On' : 'Off' }}</span>
                 </label>
+                <div class="sy-note">
+                  <select class="sy-way" :value="f.way" :disabled="busy === f.name || running" :aria-label="`The way of ${f.name}`" @change="setWay(f.name, ($event.target as HTMLSelectElement).value as ForgeWay)">
+                    <option value="both">both ways</option>
+                    <option value="push">push only, a backup</option>
+                    <option value="pull">read only</option>
+                  </select>
+                </div>
               </td>
               <td>{{ f.login ? `as ${f.login}` : 'no token found' }}</td>
               <td />
@@ -111,7 +125,7 @@
         <div class="gb-dialog-body">
           <ul class="gb-plain-list">
             <li><span><b>git pull from {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
-            <li v-for="f in forges.filter((x) => x.sync)" :key="f.name"><span><b>{{ f.name }}</b>: both ways</span></li>
+            <li v-for="f in forges.filter((x) => x.sync)" :key="f.name"><span><b>{{ f.name }}</b>: {{ wayWords(f.way) }}</span></li>
             <li><span><b>git push to {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
           </ul>
           <label class="sy-check"><input v-model="allowCreate" type="checkbox" /> Create issues on a forge never synced with, or 50 or more at once (a forge may email everyone watching it, once per issue)</label>
@@ -124,6 +138,8 @@
         </footer>
       </section>
     </q-dialog>
+
+    <ForgeTokens :key="forges.map((f) => f.name).join(',')" @changed="reload" />
 
     <AddForgeDialog v-model="adding" :found="forges.filter((f) => f.discovered)" @added="reload" @guide="guideOpen = true" />
     <ForgesGuide v-model="guideOpen" />
@@ -139,9 +155,11 @@ import { keptIn, needsGit } from '@/datastore';
 import { placesSummary } from '@/fieldplaces';
 import { datastore, loadDatastore } from '@/kept';
 import { onLive } from '@/live';
+import { setForgeWay, addRemote, type ForgeWay } from '@/api/sync';
 import { loadSync, syncStatus } from '@/sync';
 import { reportWords, remoteWords, stepWords } from '@/ways';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
+import ForgeTokens from '@/components/ForgeTokens.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import SyncProgress from '@/components/SyncProgress.vue';
@@ -176,6 +194,24 @@ const remoteLine = ref<Record<string, string>>({});
 
 // a board kept elsewhere than git: what needs git is disabled, saying why
 const kept = computed(() => keptIn(datastore.value));
+
+// the origin remote, added from here: a URL, then the page reads the
+// sync again and the git steps are on
+const originUrl = ref('');
+const addingRemote = ref(false);
+async function addOrigin() {
+  addingRemote.value = true;
+  error.value = '';
+  try {
+    await addRemote(remote, originUrl.value.trim());
+    originUrl.value = '';
+    await loadSync();
+  } catch (e) {
+    error.value = message(e);
+  } finally {
+    addingRemote.value = false;
+  }
+}
 const noGit = (what: string) => needsGit(datastore.value, what);
 const kindName = (k: string) => ({ github: 'GitHub', gitlab: 'GitLab' })[k] ?? k;
 // the forge a remote's URL names, when one does
@@ -185,9 +221,9 @@ const forgeOf = (r: string) => {
 };
 
 const remoteActs = [
-  { action: 'fetch', label: 'Fetch', command: 'git board fetch', needs: 'fetching the board from a remote' },
-  { action: 'pull', label: 'Pull', command: 'git board pull', needs: 'git board pull' },
-  { action: 'push', label: 'Push', command: 'git board push', needs: 'git board push' },
+  { action: 'fetch', label: 'Fetch', hint: 'Compare the board with this remote: nothing changes here', needs: 'fetching the board from a remote' },
+  { action: 'pull', label: 'Pull', hint: 'Take this remote’s changes into the board', needs: 'pulling the board from a remote' },
+  { action: 'push', label: 'Push', hint: 'Send the board’s changes to this remote', needs: 'pushing the board to a remote' },
 ] as const;
 
 const reportTitle = computed(() => {
@@ -244,6 +280,22 @@ async function writeForge(name: string, value: unknown) {
 const toggle = (name: string, on: boolean) => writeForge(name, on);
 const remove = (name: string) => writeForge(name, null);
 
+// the way of a mirror, in words, and set: push only sends, read only takes
+const wayWords = (way: string) => ({ push: 'push only, a backup', pull: 'read only', both: 'both ways' })[way] ?? way;
+
+async function setWay(name: string, way: ForgeWay) {
+  busy.value = name;
+  error.value = '';
+  try {
+    await setForgeWay(name, way);
+    await loadSync();
+  } catch (e) {
+    error.value = message(e);
+  } finally {
+    busy.value = '';
+  }
+}
+
 async function start(r: SyncRequest) {
   starting.value = true;
   startError.value = '';
@@ -276,6 +328,8 @@ onMounted(reload);
 .sy-head h2 { margin-bottom: .375rem; }
 .sy-lead { max-width: 44rem; color: var(--fg-muted); }
 .sy-actions, .sy-run { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.sy-addremote { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .375rem; }
+.sy-addremote .epfl-input { max-width: 24rem; }
 .sy-note { font-size: .8125rem; color: var(--fg-muted); }
 .sy-off { color: var(--fg-muted); }
 .sy-kind { margin-left: .25rem; font-size: .8125rem; color: var(--fg-muted); }
@@ -285,6 +339,7 @@ onMounted(reload);
 .gb-table-wrap > .gb-table { min-width: 46rem; }
 .sy-switch { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-weight: 700; }
 .sy-switch input { width: 1.125rem; height: 1.125rem; accent-color: var(--primary-hover); }
+.sy-way { max-width: 11rem; padding: .125rem .25rem; font: inherit; font-size: .8125rem; color: var(--fg); }
 .sy-confirm-row td { background: var(--warning-bg); }
 .sy-confirm-row p { margin: 0 0 .5rem; }
 .sy-confirm-row .epfl-btn + .epfl-btn { margin-left: .5rem; }

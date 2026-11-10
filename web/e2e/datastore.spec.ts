@@ -16,7 +16,7 @@ test('a Markdown board: pull, push, fetch and ahead/behind are disabled, each sa
   expect((await (await request.get(`${md}/api/datastore`)).json()).replica).toBe(false);
   await page.goto(`${md}/#/settings/sync`);
   const origin = page.getByRole('row').filter({ has: page.getByText('origin', { exact: true }) });
-  for (const [label, what] of [['Fetch', 'fetching the board from a remote'], ['Pull', 'git board pull'], ['Push', 'git board push']] as const) {
+  for (const [label, what] of [['Fetch', 'fetching the board from a remote'], ['Pull', 'pulling the board from a remote'], ['Push', 'pushing the board to a remote']] as const) {
     const b = origin.getByRole('button', { name: label, exact: true });
     await expect(b).toBeDisabled();
     await expect(b).toHaveAttribute('title', why(what));
@@ -30,9 +30,14 @@ test('a Markdown board: pull, push, fetch and ahead/behind are disabled, each sa
 test('a git board: the same controls are enabled', async ({ page }) => {
   await page.goto('/#/settings/sync');
   const origin = page.getByRole('row').filter({ has: page.getByText('origin', { exact: true }) });
-  for (const label of ['Fetch', 'Pull', 'Push']) {
+  // each says what it does, never a command (the web app names no terminal)
+  for (const [label, title] of [
+    ['Fetch', 'Compare the board with this remote: nothing changes here'],
+    ['Pull', 'Take this remote’s changes into the board'],
+    ['Push', 'Send the board’s changes to this remote'],
+  ] as const) {
     const b = origin.getByRole('button', { name: label, exact: true });
     await expect(b).toBeEnabled();
-    await expect(b).toHaveAttribute('title', `git board ${label.toLowerCase()}`);
+    await expect(b).toHaveAttribute('title', title);
   }
 });

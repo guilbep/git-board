@@ -29,7 +29,9 @@ export function folderOf(setting: string): string {
 export function folderProblem(dir: string): string {
   const d = dir.trim();
   if (!d) return 'A folder in the checkout: issues';
-  if (d.startsWith('/') || d.split('/').includes('..')) return 'A folder inside the checkout, from its top: issues, docs/issues';
+  // an absolute path is another repository's checkout (#102): its issues
+  // kept and edited as text there, and numbered on its default branch
+  if (d.split('/').includes('..')) return 'A folder inside the checkout, from its top (issues), or a full path (/home/me/board-issues)';
   return '';
 }
 

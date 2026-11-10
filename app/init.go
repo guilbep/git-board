@@ -136,7 +136,7 @@ func InitConfig(ctx context.Context, dir, spec string) (string, []string, error)
 		return "", nil, errors.New("not in a git repository")
 	}
 	if _, err := os.Stat(path); err == nil {
-		return "", nil, fmt.Errorf("%s already exists", path)
+		return "", nil, errExists(path)
 	}
 	content, err := StartConfig(spec)
 	if err != nil {
@@ -157,7 +157,7 @@ func InitConfig(ctx context.Context, dir, spec string) (string, []string, error)
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if errors.Is(err, fs.ErrExist) {
-		return "", lines, fmt.Errorf("%s already exists", path)
+		return "", lines, errExists(path)
 	}
 	if err != nil {
 		return "", lines, err
@@ -179,3 +179,9 @@ func originForge(ctx context.Context, root string) (forge.Table, bool) {
 	t, _ := forge.FromRemote(NoCredentials(strings.TrimSpace(url)))
 	return t, t.Kind == "github" || t.Kind == "gitlab"
 }
+
+// ErrConfigExists is the file init never overwrites. The CLI says it as
+// v1 did (exit 1, the golden recording); the API answers it 409.
+var ErrConfigExists = errors.New("already exists")
+
+func errExists(path string) error { return fmt.Errorf("%s %w", path, ErrConfigExists) }

@@ -20,7 +20,7 @@ import (
 func (b *Board) remoteOf(ctx context.Context, what, remote string) (*git.Store, error) {
 	g, ok := b.Kernel.Store().(*git.Store)
 	if !ok {
-		return nil, missing(what + " needs a board kept in git; this board is kept in " + b.keptIn())
+		return nil, missing(what + " needs a board kept in git; this board is kept in " + b.DatastoreName())
 	}
 	out, err := gitRun(ctx, b.Dir, "remote")
 	if err != nil {
@@ -30,6 +30,27 @@ func (b *Board) remoteOf(ctx context.Context, what, remote string) (*git.Store, 
 		return nil, fmt.Errorf("no remote %q", remote)
 	}
 	return g, nil
+}
+
+// AddRemote adds a git remote to the clone, as `git remote add` does:
+// a name, origin most of the time, and its URL. A name the clone has
+// already is refused, and a URL with a space in it too.
+func (b *Board) AddRemote(ctx context.Context, name, url string) error {
+	if name == "" || url == "" {
+		return usage(fmt.Errorf("a remote is a name and its URL: %q %q", name, url))
+	}
+	if strings.ContainsAny(name+url, " \t\r\n") {
+		return usage(fmt.Errorf("a remote's name and URL hold no spaces: %q %q", name, url))
+	}
+	out, err := gitRun(ctx, b.Dir, "remote")
+	if err != nil {
+		return err
+	}
+	if slices.Contains(strings.Fields(out), name) {
+		return usage(fmt.Errorf("remote %q is there already", name))
+	}
+	_, err = gitRun(ctx, b.Dir, "remote", "add", name, url)
+	return err
 }
 
 // Ahead is what a pull would receive and a push would send, of one kind.

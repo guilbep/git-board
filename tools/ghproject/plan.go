@@ -36,17 +36,15 @@ type Config struct {
 	Number int
 	// Write lets a sync write git-board's changes to the Project. Off by
 	// default: the Project is only read.
-	Write  bool
+	Write bool
+	// Holds are the fields the Project holds, declared or not:
+	// [github-project]'s fields (tools.GithubProject.Columns).
+	Holds  []string
 	Schema *issues.Schema
 	// Forge is the GitHub forge's table, its fields' mappings: the first
 	// GitHub one, else github.com's with none.
 	Forge forge.Table
 }
-
-// ProjectFields are the fields the bridge keeps in step with its Project
-// once [github-project] names one, declared or not: the Project's own
-// columns.
-var ProjectFields = []string{"status", "prio", "mod", "est", "sprint", "moscow", "milestone"}
 
 // Configured says [github-project] names a Project.
 func (c *Config) Configured() bool { return c.Owner != "" && c.Number != 0 }
@@ -66,7 +64,7 @@ func (c *Config) field(name string) issues.Field {
 // mapping saying so: its [fields.X] project map, or [github-project]
 // configured and one of its columns.
 func (c *Config) InProject(name string) bool {
-	return len(c.field(name).Project) > 0 || c.Number != 0 && slices.Contains(ProjectFields, name)
+	return len(c.field(name).Project) > 0 || c.Number != 0 && slices.Contains(c.Holds, name)
 }
 
 // Target is where the field lives on GitHub (forge.Target).
@@ -396,7 +394,7 @@ func (c *Config) synced() []synced {
 	for _, name := range c.order() {
 		add(name)
 	}
-	for _, name := range ProjectFields {
+	for _, name := range c.Holds {
 		add(name)
 	}
 	return res

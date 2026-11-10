@@ -21,6 +21,9 @@ export function getMe(): Promise<MeResponse> {
 }
 
 // writes as an existing person, as a new one, or sets board.avatars
-export function setMe(to: { id: string } | { name: string; email: string } | { avatars: AvatarsMode }): Promise<MeResponse> {
+// (global: at git's global level, so every repository of yours reads it)
+export function setMe(
+  to: { id: string } | { name: string; email: string } | { avatars: AvatarsMode; global?: boolean },
+): Promise<MeResponse> {
   return send('PUT', '/api/me', { body: to });
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/guilbep/git-board/domain/issues"
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/forge/github"
+	"github.com/guilbep/git-board/tools"
 	"github.com/guilbep/git-board/tools/ghproject"
 )
 
@@ -113,8 +114,8 @@ func MergeForge(template string, f FromForge) (string, []string, error) {
 	set := map[string]issues.Field{}
 	fromProject := map[string]bool{}
 	if p := f.Project; p != nil {
-		text = conf.ReplaceTable(text, "github-project", fmt.Sprintf("[github-project]\nowner = %q\nnumber = %d\n", p.Owner, p.Number))
-		gp := ghproject.Config{Owner: p.Owner, Number: p.Number, Schema: s, Forge: cfg.githubForge()}
+		text = conf.ReplaceTable(text, "github-project", fmt.Sprintf("[github-project]\nowner = %q\nnumber = %d\n", p.Owner, p.Number)) // v1's bytes: no fields, the default)
+		gp := ghproject.Config{Owner: p.Owner, Number: p.Number, Holds: tools.DefaultProjectFields, Schema: s, Forge: cfg.githubForge()}
 		columns := gp.Columns()
 		for _, pf := range p.Fields {
 			name := cmp.Or(columns[pf.Name], ghproject.Slug(pf.Name))

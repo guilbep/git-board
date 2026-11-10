@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
-	"slices"
 	"strings"
 	"time"
 
@@ -30,9 +29,11 @@ import (
 // v1's still.
 
 // NamedForge is a forge project opened for a run, by its name in the
-// settings.
+// settings. Way is its table's way (forge.Table's Direction): the run
+// pulls from those that pull, and pushes to those that push.
 type NamedForge struct {
 	Name string
+	Way  string
 	forge.Forge
 }
 
@@ -174,7 +175,7 @@ func (b *Board) OpenForges(ctx context.Context, tables []forge.Table) ([]NamedFo
 		if err != nil {
 			return nil, fmt.Errorf("forge %s: %w", f.Name, err)
 		}
-		out = append(out, NamedForge{f.Name, x})
+		out = append(out, NamedForge{Name: f.Name, Way: f.Direction(), Forge: x})
 	}
 	if len(out) == 0 {
 		return nil, errors.New("no forge has its sync on")
@@ -187,7 +188,7 @@ func (b *Board) OpenForges(ctx context.Context, tables []forge.Table) ([]NamedFo
 func (c *Config) SyncsAssignees(key string) bool {
 	gp, _ := c.Tools.GithubProject.Get()
 	inProject := func(field string) bool {
-		return len(c.Schema.Fields[field].Project) > 0 || gp.Number != 0 && slices.Contains(projectFields, field)
+		return len(c.Schema.Fields[field].Project) > 0 || gp.Holds(field)
 	}
 	return forge.Target(c.Schema, inProject, c.Forges.ForgeOf(key), "assignee") == forge.TargetAssignees
 }
@@ -201,6 +202,18 @@ const (
 	WayPush Way = "push"
 	WaySync Way = "sync"
 )
+
+// forgeWayOf is a forge table's way (forge.Table's Direction) as the
+// sync engine spells it: the table's both is the engine's sync.
+func forgeWayOf(way string) bsync.Way {
+	switch way {
+	case forge.WayPush:
+		return bsync.Push
+	case forge.WayPull:
+		return bsync.Pull
+	}
+	return bsync.Both
+}
 
 // ForgeRun is one forge sync: its forges, and how it goes.
 type ForgeRun struct {
@@ -247,6 +260,8 @@ func (e SyncEvent) Text(dry bool, name string) string {
 		l = "create " + name
 	case "pushed":
 		l = "send the changes of " + name
+	case "restored":
+		l = "put back the board's values on " + name + ", changed on the backup"
 	case "warning", "waiting":
 		return e.Line
 	case "left":
@@ -288,7 +303,7 @@ func (b *Board) switched(ctx context.Context) error {
 	if err != nil || !bugs {
 		return err
 	}
-	mark, err := first("refs/board/switched")
+	mark, err := first(switchedRef)
 	if err != nil || mark {
 		return err
 	}
@@ -331,16 +346,18 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	if see == nil {
 		see = func(SyncEvent) {}
 	}
-	names := map[string]string{} // forge key -> name
+	names := map[string]string{}   // forge key -> name
+	ways := map[string]bsync.Way{} // forge key -> its table's way
 	ids := new(int)
 	var fs []forge.Forge
 	for _, f := range run.Forges {
-		names[f.Key()] = f.Name
+		names[f.Key()], ways[f.Key()] = f.Name, forgeWayOf(f.Way)
 		fs = append(fs, (&counted{f: f.Forge, name: f.Name, dry: run.DryRun, ids: ids, see: see}).wrap())
 	}
 	_, forgeOnly := b.Kernel.Store().(*forgecopy.Store)
 	cfg := b.Config
 	opt := issuesync.Options{
+		Ways:           ways,
 		ForgeOnly:      forgeOnly,
 		PublishPrivate: cfg.Forges.PublishPrivate,
 		Local: func(meta map[string]string) bool {
@@ -367,7 +384,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 		},
 		Did: func(key, what, id string, ops int) {
 			w := "pull"
-			if what == "posted" || what == "pushed" {
+			if what == "posted" || what == "pushed" || what == "restored" {
 				w = "push"
 			}
 			see(SyncEvent{Forge: names[key], Way: w, What: what, Issue: id, Ops: ops})
@@ -398,9 +415,11 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	im := &issuesync.Mapper{Options: opt}
 	ms := []bsync.Mapper{im}
 	if len(cfg.Release.Binaries) > 0 && !forgeOnly { // v1 publishes the releases of binaries alone
-		raw := make([]forge.Forge, len(run.Forges))
-		for i, f := range run.Forges {
-			raw[i] = f.Forge
+		var raw []forge.Forge
+		for _, f := range run.Forges {
+			if forgeWayOf(f.Way) != bsync.Pull { // a release is published: a read-only mirror takes none
+				raw = append(raw, f.Forge)
+			}
 		}
 		rm := b.releaseMapper(run.DryRun, func(key, what, tag string) {
 			see(SyncEvent{Forge: names[key], Way: "push", What: "release", Issue: tag, Line: what})

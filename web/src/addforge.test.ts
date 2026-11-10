@@ -10,7 +10,7 @@ test('the forge an address says', () => {
 });
 
 test('a step goes on once filled', () => {
-  const d = { target: 'github', url: '', name: '', token: '' };
+  const d = { target: 'github', url: '', name: '', token: '', way: 'both' };
   assert.equal(canGoOn(0, d), true);
   assert.equal(canGoOn(1, d), false);
   assert.equal(canGoOn(1, { ...d, url: 'https://github.com/o/r' }), true);

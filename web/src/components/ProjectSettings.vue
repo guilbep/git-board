@@ -7,22 +7,44 @@
   <div class="set-panel pj">
     <h2 class="h4">GitHub Project</h2>
     <p class="pj-lead">
-      The Project's fields kept in step with the labels: a field changed on one side since both agreed takes that side;
-      changed on both, it is a conflict, left alone until you keep one.
+      The board is the truth; the Project mirrors the fields you give it, kept in step with the labels: a field changed on one
+      side since both agreed takes that side; changed on both, it is a conflict, left alone until you keep one.
     </p>
     <p v-if="error" class="epfl-alert epfl-alert-danger" role="alert"><b>Not done.</b> {{ error }}</p>
     <p v-if="status?.problem" class="epfl-alert epfl-alert-danger" role="alert">[github-project]: {{ status.problem }}</p>
     <p v-else-if="status && !status.project" class="epfl-alert epfl-alert-info" role="note">
-      No GitHub Project is configured: <code>git board project configure --owner &lt;org&gt; --project &lt;number&gt;</code>.
+      <span class="pj-cfg-lead">No GitHub Project is configured. Give it the owner and the number (the one in the Project's URL), and the board writes it here.</span>
+      <form class="pj-cfg" @submit.prevent="configure">
+        <label class="pj-cfg-label">Owner
+          <input v-model="owner" class="epfl-input" type="text" placeholder="EPFL-ENAC" required />
+        </label>
+        <label class="pj-cfg-label">Number
+          <input v-model.number="number" class="epfl-input" type="number" min="1" placeholder="40" required />
+        </label>
+        <button type="submit" class="epfl-btn epfl-btn-primary epfl-btn-sm" :disabled="saving || !owner || !number">{{ saving ? 'Saving…' : 'Configure' }}</button>
+      </form>
+      <p v-if="cfgError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not saved.</b> {{ cfgError }}</p>
     </p>
     <template v-else-if="status">
       <p class="pj-meta">
         <b>{{ last?.title || status.project }}</b> <span class="pj-muted">({{ status.project }})</span>
         <template v-if="last"> · {{ last.applied ? 'Ran' : 'Checked' }} {{ when(last.checked_at) }} · {{ runWords(last) }}</template>
       </p>
+      <p class="pj-meta">
+        The Project holds {{ status.fields.join(', ') || 'no field' }}: on GitHub these live in its columns, not in labels.
+        <template v-if="!status.stated">
+          This is the default, and <code>.git-board.toml</code> doesn't say it yet.
+          <button type="button" class="gb-linkbtn" :disabled="saving" @click="writeFields">{{ saving ? 'Writing…' : 'Write it in the file' }}</button>
+        </template>
+      </p>
+      <p v-if="cfgError && status.project" class="epfl-alert epfl-alert-danger" role="alert"><b>Not saved.</b> {{ cfgError }}</p>
       <p v-if="!status.write" class="epfl-alert epfl-alert-info" role="note">
-        This board doesn't write to the Project (no <code>write = true</code> under <code>[github-project]</code>): a pull only updates the
-        labels here, and keeping git-board's value isn't available.
+        This board doesn't write to the Project: a pull only updates the labels here, and keeping git-board's value isn't available.
+        <button type="button" class="gb-linkbtn" :disabled="saving" @click="setWrite(true)">{{ saving ? 'Saving…' : 'Let the board write to the Project' }}</button>
+      </p>
+      <p v-else class="pj-muted">
+        The board writes its values to the Project.
+        <button type="button" class="gb-linkbtn" :disabled="saving" @click="setWrite(false)">Stop writing to it</button>
       </p>
       <div class="pj-actions">
         <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="run(checkProject, 'Reading the Project…')">Check the Project</button>
@@ -73,7 +95,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { applyProject, checkProject, getProject, message, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
+import { applyProject, checkProject, configureProject, getConfig, getProject, message, patchConfig, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
 import { safeHref } from '@/links';
 import { issueRef, plural, runWords, shown } from '@/projectview';
 
@@ -101,6 +123,45 @@ function apply(side: 'labels' | 'both') {
   if (window.confirm(`${what}. Conflicts stay held. Go on?`)) void run(() => applyProject(side), side === 'both' ? 'Syncing…' : 'Pulling…');
 }
 
+// [github-project] written as project configure writes it (route 58):
+// the owner, the number, and the fields the Project holds
+const owner = ref('');
+const number = ref<number | null>(null);
+const saving = ref(false);
+const cfgError = ref('');
+async function save(o: string, n: number) {
+  saving.value = true;
+  cfgError.value = '';
+  try {
+    status.value = await configureProject(o, n);
+  } catch (e) {
+    cfgError.value = message(e);
+  } finally {
+    saving.value = false;
+  }
+}
+const configure = () => save(owner.value.trim(), number.value ?? 0);
+// the default fields, stated in the file: the same Project configured again
+function writeFields() {
+  const [o, n] = (status.value?.project ?? '').split('/');
+  void save(o ?? '', Number(n));
+}
+
+// write = true under [github-project], written from the file's version
+async function setWrite(on: boolean) {
+  saving.value = true;
+  cfgError.value = '';
+  try {
+    const f = await getConfig();
+    await patchConfig({ 'github-project.write': on }, f.version);
+    status.value = await getProject();
+  } catch (e) {
+    cfgError.value = message(e);
+  } finally {
+    saving.value = false;
+  }
+}
+
 function resolve(c: ProjectConflict, keep: 'git-board' | 'project') {
   void run(() => resolveProject(issueRef(c), c.field, keep), `Keeping ${keep === 'project' ? 'the Project’s' : 'git-board’s'} value…`);
 }
@@ -126,4 +187,7 @@ onMounted(() => void run(getProject, ''));
 .pj-del { color: var(--danger-fg, var(--fg)); }
 .pj-write { color: var(--info-fg); }
 .pj-warn { color: var(--warning-fg, var(--fg-muted)); }
+.pj-cfg-lead { display: block; margin-bottom: .5rem; }
+.pj-cfg { display: flex; flex-wrap: wrap; align-items: end; gap: .5rem; }
+.pj-cfg-label { display: grid; gap: .25rem; font-size: .875rem; }
 </style>

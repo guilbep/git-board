@@ -1,9 +1,9 @@
 <!-- Settings › Datastore: where the board is kept (ADR 0002,
      docs/guide/datastores.md): GET /api/datastore. Another one is chosen
-     with board.datastore in this clone's git config, from a terminal (PUT
-     /api/datastore comes later: docs/rewrite/api.md, 28); the board in
-     git can be copied into it from here first (POST /api/datastore/copy),
-     every id kept. -->
+     from here (PUT /api/datastore, api.md, 28): the clone's
+     board.datastore is written, the board opens again, no terminal; the
+     board in git is copied into it from here first (POST
+     /api/datastore/copy), every id kept. -->
 <template>
   <div class="set-panel ds">
     <h2 class="h4">Datastore</h2>
@@ -16,7 +16,7 @@
 
       <div class="set-cols">
         <form class="ds-form" @submit.prevent>
-          <fieldset class="ds-kinds" :disabled="busy">
+          <fieldset class="ds-kinds" :disabled="busy !== ''">
             <legend class="ds-label">Keep the board in</legend>
             <label v-for="k in kinds" :key="k.kind" class="ds-kind" :class="{ 'ds-kind-on': kind === k.kind }">
               <input v-model="kind" type="radio" name="ds-kind" :value="k.kind" />
@@ -30,22 +30,30 @@
 
           <div v-if="kind === 'postgres'" class="ds-url">
             <label class="ds-label" for="ds-url">PostgreSQL URL</label>
-            <input id="ds-url" v-model="url" class="epfl-input" placeholder="postgres://user:password@host:5432/database" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" :disabled="busy" :aria-invalid="!!urlErr && url !== ''" aria-describedby="ds-url-hint" />
+            <input id="ds-url" v-model="url" class="epfl-input" placeholder="postgres://user:password@host:5432/database" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" :disabled="busy !== ''" :aria-invalid="!!urlErr && url !== ''" aria-describedby="ds-url-hint" />
             <p id="ds-url-hint" class="gb-hint">{{ urlErr && url ? urlErr : 'Kept in this clone’s git config, never in .git-board.toml: it may hold a password.' }}</p>
           </div>
           <div v-if="kind === 'markdown'" class="ds-url">
-            <label class="ds-label" for="ds-dir">Folder, from the checkout's top</label>
-            <input id="ds-dir" v-model="dir" class="epfl-input" placeholder="issues" autocomplete="off" spellcheck="false" :disabled="busy" :aria-invalid="!!dirErr && dir !== ''" aria-describedby="ds-dir-hint" />
-            <p id="ds-dir-hint" class="gb-hint">{{ dirErr && dir ? dirErr : 'One NNN-slug.md per issue, rendered after each write. Commit the folder with the code.' }}</p>
+            <label class="ds-label" for="ds-dir">Folder, from the checkout's top, or a full path</label>
+            <input id="ds-dir" v-model="dir" class="epfl-input" placeholder="issues" autocomplete="off" spellcheck="false" :disabled="busy !== ''" :aria-invalid="!!dirErr && dir !== ''" aria-describedby="ds-dir-hint" />
+            <p id="ds-dir-hint" class="gb-hint">{{ dirErr && dir ? dirErr : 'One NNN-slug.md per issue, rendered after each write. Commit the folder with the code, or give the full path of another repository to keep the issues there.' }}</p>
           </div>
           <p v-if="kind === 'forge'" class="gb-hint">Needs a forge with its sync on (<router-link to="/settings/sync">Sync</router-link>).</p>
 
           <template v-if="kind !== openKind && valid">
             <div class="ds-actions">
-              <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="busy || !d.replica || kind === 'forge'" :title="d.replica ? 'Copies every issue, person and record kept in git; what is there already is left alone' : 'The board isn’t kept in git here: there is nothing in git to copy'" @click="copy">{{ busy ? 'Copying…' : 'Copy the board from git' }}</button>
+              <button
+                v-if="d.replica && kind !== 'forge'"
+                type="button"
+                class="epfl-btn epfl-btn-secondary"
+                :disabled="busy !== ''"
+                title="Copies every issue, person and record kept in git; what is there already is left alone"
+                @click="copy"
+              >{{ busy === 'copy' ? 'Copying…' : 'Copy the board from git' }}</button>
+              <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy !== ''" @click="keep">{{ busy === 'keep' ? 'Switching…' : 'Keep the board here' }}</button>
             </div>
             <p v-if="copied" class="epfl-alert epfl-alert-success" role="status">{{ copied }}</p>
-            <p class="gb-hint">Then, in a terminal: <code>git config board.datastore {{ value }}</code>, and start <code>git board serve</code> again.</p>
+            <p class="gb-hint">Keeping the board here copies it from git first when it can, then this clone reads it from {{ kinds.find((k) => k.kind === kind)?.label }} at once: no restart, nothing in a terminal.</p>
           </template>
         </form>
 
@@ -56,6 +64,8 @@
             <li :class="d.counter ? 'ds-yes' : 'ds-no'"><b>{{ d.counter ? 'Yes' : 'No' }}</b> project numbers (<router-link to="/settings/numbers">Numbers</router-link>)</li>
             <li class="ds-yes"><b>Yes</b> forge sync, the same ids everywhere</li>
           </ul>
+          <p><a class="epfl-btn epfl-btn-secondary epfl-btn-sm" :href="markdownExportURL()" download data-testid="md-export">Download the issues as Markdown</a></p>
+          <p class="gb-hint">One NNN-slug.md per issue, in a zip: a copy, which the board does not read back.</p>
           <p>A board moves out of git by copying it: every id stays, so the markers sync left on the forges stay true. The git refs aren’t touched.</p>
         </aside>
       </div>
@@ -65,7 +75,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { copyDatastore, message } from '@/api';
+import { copyDatastore, markdownExportURL, message } from '@/api';
+import { setDatastore } from '@/api/sync';
 import { folderProblem, kinds, urlProblem, valueOf, type StoreKind } from '@/datastore';
 import { datastore, loadDatastore } from '@/kept';
 
@@ -73,19 +84,19 @@ const d = datastore;
 const kind = ref<StoreKind>('git');
 const url = ref('');
 const dir = ref('');
-const busy = ref(false);
+const busy = ref('');
 const error = ref('');
 const copied = ref('');
 
 // the kind the board is kept in now, from its name
-const openKind = computed<StoreKind>(() => ({ PostgreSQL: 'postgres', 'Markdown files': 'markdown', forge: 'forge' })[d.value?.name ?? ''] as StoreKind ?? 'git');
+const openKind = computed<StoreKind>(() => ({ PostgreSQL: 'postgres', 'Markdown files': 'markdown', 'the forges alone': 'forge' })[d.value?.name ?? ''] as StoreKind ?? 'git');
 const urlErr = computed(() => urlProblem(url.value));
 const dirErr = computed(() => folderProblem(dir.value));
 const valid = computed(() => (kind.value === 'postgres' ? !urlErr.value : kind.value === 'markdown' ? !dirErr.value : true));
 const value = computed(() => valueOf(kind.value, kind.value === 'markdown' ? dir.value : url.value));
 
 async function copy() {
-  busy.value = true;
+  busy.value = 'copy';
   error.value = '';
   copied.value = '';
   try {
@@ -94,7 +105,26 @@ async function copy() {
   } catch (e) {
     error.value = message(e);
   } finally {
-    busy.value = false;
+    busy.value = '';
+  }
+}
+
+// keep switches this clone's board.datastore, from here: the board in
+// git is copied in first, so nothing is left behind (what is there
+// already is left alone, so a second run copies nothing)
+async function keep() {
+  busy.value = 'keep';
+  error.value = '';
+  copied.value = '';
+  try {
+    if (d.value?.replica && kind.value !== 'forge') await copyDatastore('', value.value);
+    const k = await setDatastore(value.value);
+    copied.value = `The board is kept in ${k.name} from now on.`;
+    await loadDatastore();
+  } catch (e) {
+    error.value = message(e);
+  } finally {
+    busy.value = '';
   }
 }
 

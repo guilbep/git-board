@@ -150,6 +150,20 @@ func runsCode(ctx context.Context, what string) error {
 	return nil
 }
 
+// localRoutes answer on a loopback address alone: a datastore's value
+// (it can hold a password) and a copy into one, a token stored in git's
+// credential helper (a forge added with its token, or one alone), and a
+// git remote added (where the board is pushed).
+var localRoutes = []string{
+	"PUT /api/datastore",
+	"POST /api/datastore/copy",
+	"POST /api/forges",
+	"POST /api/forges/auth",
+	"POST /api/forges/auth/device",
+	"GET /api/forges/auth/device",
+	"POST /api/remotes/{name}",
+}
+
 // loopbackOnly answers next on a loopback address alone: what reaches
 // another datastore, or this machine's files (ADR 0013, Consequences).
 func loopbackOnly(next http.Handler) http.Handler {
@@ -161,6 +175,26 @@ func loopbackOnly(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+type loopbackKey struct{}
+
+// markLoopback tells the route behind it whether the request came over
+// loopback (fromLoopback), for a route that refuses only some requests
+// elsewhere.
+func markLoopback(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		ip := net.ParseIP(host)
+		ok := err == nil && ip != nil && ip.IsLoopback()
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), loopbackKey{}, ok)))
+	})
+}
+
+// fromLoopback says the request came over loopback (markLoopback).
+func fromLoopback(ctx context.Context) bool {
+	ok, _ := ctx.Value(loopbackKey{}).(bool)
+	return ok
 }
 
 func sameHost(origin, host string) bool {

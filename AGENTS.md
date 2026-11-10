@@ -1,17 +1,13 @@
 
-## Dev servers and worktrees
+## Worktrees
 
 Every branch has its own git worktree, tmux session and agent. The session is
 `git-board/<branch>` and its panes are `agent`, `shell`.
 
-- Ports are per worktree and live in `.env.worktree`, which every pane exports.
-  Never hardcode a port, read the port variables from the environment.
-- The dev servers are already running in their own panes. Do not start them
-  again. Read `.wt-logs/*.log` to see what they are doing, the sandbox cannot
-  reach the tmux socket.
-- `wtx curl <family> [path] [curl args]` is how you reach them. It fills in this
-  worktree's port and never prompts, whatever the method: `wtx curl backend
-  /api/health`. Plain curl to localhost works for a GET and prompts past that.
+- There are no dev server panes. The board (`refs/board/*`, and its index and
+  sync lock in `.git/board/`) is shared by every checkout of this repository:
+  a `git board serve` started from a worktree serves the same board as the main
+  checkout's. Tests are unaffected, they use throwaway repos.
 - Work on this branch only. Never push `main`. When the work is ready, say
   so and a human runs `wtx land <branch>` from the main checkout.
 - A pre-push hook enforces this. If it refuses a push, that is the design, not a

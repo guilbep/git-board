@@ -13,7 +13,7 @@
 
 v1's API grew one route per button: 117 routes, 18,000 lines with their
 tests. v2's is designed from what the web app reads and writes, in
-nouns the CLI already prints. It has 54 routes.
+nouns the CLI already prints. It has 63 routes.
 
 The server is `surface/http`. Each route decodes a request, calls
 one method of `app`, and encodes the answer. No rule lives in the
@@ -121,7 +121,11 @@ server's): a script without an `Origin` is refused too. It gates:
   without such a change, and every dry run, pass.
 
 Notes, yanks and comments on a release are records, and pass. The
-datastore's copy (29) answers on loopback alone, as before.
+datastore's copy (29) answers on loopback alone, as before, and so do
+the other routes that write a secret or say where the board goes: 28,
+33 and 55 (a token to git's credential helper), 57 (a git remote).
+`localRoutes` (`surface/http/guard.go`) lists them, and
+`TestLocalRoutes` refuses each from another address.
 
 ## Routes
 
@@ -218,7 +222,7 @@ opened it, you are assigned).
 | 16 | `GET /api/fields` | | `{name: field}` |
 | 17 | `GET /api/people` | | `{"items": [person]}`, as `me --ls --json` |
 | 18 | `GET /api/me` | | `{me, avatars}` |
-| 19 | `PUT /api/me` | `{id}`, or `{name, email}`, or `{avatars}` | the same as 18 |
+| 19 | `PUT /api/me` | `{id}`, or `{name, email}`, or `{avatars, global}` | the same as 18 |
 | 54 | `POST /api/fields/{name}/migrate` | `dry_run` | `{plans, error}`, as `sync --migrate` |
 
 **Labels (15)** are the labels in use, each with its open and closed
@@ -247,7 +251,9 @@ dates red once past: the new web app colors those itself.
 **Me (18, 19).** `me` is the person who writes, or `null`. `{id}` writes
 as that person (`me <id>`), `{name, email}` makes one and writes as
 them (`me --new`), `{avatars}` sets `board.avatars` (`forge`,
-`gravatar`, `none`).
+`gravatar`, `none`) in the clone's own config; with `global: true` at
+git's global level, so every repository of the user reads it, a local
+one read over it.
 
 ### The inbox
 
@@ -265,6 +271,7 @@ them (`me --new`), `{avatars}` sets `board.avatars` (`forge`,
 | 24 | `PUT /api/config` | `If-Match`; `dry_run`; `{text}` | the same as 23 |
 | 25 | `PATCH /api/config` | `If-Match`; `dry_run`; `{set: {key: value}}` | the same as 23 |
 | 26 | `GET /api/docs/{page}` (*later*) | | `{"items": [{title, html}]}` |
+| 56 | `POST /api/config/init` | `{template}` (none: the default); a path or a URL on loopback only | 201, `{path, lines}` |
 
 `schema_version` is the file's schema (1 for a file without one; the
 versioned schema and its upgrades are built beside this). `keys` are
@@ -285,6 +292,12 @@ doesn't read or a file left broken. With `dry_run=1` they check and
 answer the file they would write, and write nothing: v1's
 `/api/config/check`. Views are `[views]`: saving one is a `PATCH`.
 
+**Init (56)** writes the default `.git-board.toml`, as `git board init`
+does: the template `template` names (a built-in one, a file, or a URL;
+none: the default), seeded with origin's labels and its Project's fields
+when it can read them. It never overwrites one: a file there already is
+an error, 409. `lines` are what reading the forge said.
+
 **Docs (26)** are the guide's sections the settings show beside a form:
 `configuration`, `forges`.
 
@@ -293,29 +306,41 @@ answer the file they would write, and write nothing: v1's
 | | Route | Request | Response |
 |---|---|---|---|
 | 27 | `GET /api/datastore` | | `{name, where, replica, counter}` |
-| 28 | `PUT /api/datastore` (*later*) | `dry_run`; `{url}` | the same as 27 |
+| 28 | `PUT /api/datastore` | `{value}`; loopback only | the same as 27 |
 | 29 | `POST /api/datastore/copy` | `{from, to}` | `{to, entities, counter}` |
+| 61 | `GET /api/export/markdown` | | a zip of `NNN-slug.md`, one per issue, as `git board export --md` writes them |
 
 `replica` says the board can be pulled and pushed (git), `counter` that
-it hands out project numbers. `PUT` points the clone at another
-datastore (`board.datastore`); with `dry_run=1` it opens it and says
-what it holds, and changes nothing (v1's `/api/datastore/test`). A copy
+it hands out project numbers. `PUT` (28) points the clone at another
+datastore: `board.datastore` in its own git config, `""` or `git` for
+git. The value is opened first, so a name no datastore understands is
+refused and the clone's board still opens; the board then opens again
+and the pages hear a `config` event. `dry_run` (open it and say what it
+holds, v1's `/api/datastore/test`) comes later. A copy
 (`from` and `to` are `board.datastore` values: `""` is git, and the
 datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
+The export (61) is a copy that the board does not read back. The Datastore
+page and the Start page download it.
 
 ### Sync: forges and remotes
 
 | | Route | Request | Response |
 |---|---|---|---|
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
+| 60 | `GET /api/state` | | the board's state, as `git board state --json` |
 | 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
-| 33 | `POST /api/forges` | `{kind, url, name, login, token, sync}` | 201, `{name}` |
-| 34 | `PATCH /api/forges/{name}` | `{sync}` | `{name, sync}` |
+| 57 | `POST /api/remotes/{name}` | `{url}`; loopback only | 204 |
+| 33 | `POST /api/forges` | `{kind, url, name, login, token, sync, way}`; loopback only | 201, `{name}` |
+| 34 | `PATCH /api/forges/{name}` | `{sync, way}` | `{name, sync, way}` |
 | 35 | `DELETE /api/forges/{name}` | | 204 |
 | 36 | `GET /api/forges/credentials` | | `{"items": [{host, login, source}]}` |
 | 37 | `GET /api/numbers` (*later*) | | `{prefix, next, unnumbered}` |
 | 38 | `POST /api/numbers` | `{prefix, start}` or `{}` | `{where, numbered}` |
+| 59 | `GET /api/forges/auth?check=` | | `{"items": [forge status]}` |
+| 55 | `POST /api/forges/auth` | `{forge, login, token}`; loopback only | 201, `{forge, host, login}` |
+| 62 | `POST /api/forges/auth/device` | `{forge}`; loopback only | 202, `{forge, state, user_code, verification_uri, expires_at}` |
+| 63 | `GET /api/forges/auth/device` | loopback only | the last flow: `{state, login, error, …}` |
 
 **Status (30).** `forges` are the forges the board syncs with: its
 `[forges]` tables, or those found in origin's URLs (`discovered`), each
@@ -323,10 +348,19 @@ datastore the clone names) and `PUT` answer only on loopback (ADR 0013).
 remotes' names; `run` the run in progress or the last one (`null` before
 any).
 
+**The state (60)** names the state of each part of the board, and the
+next actions, each with its command and route: `{phase, file, me,
+datastore, forges, project, run, issues, cycle, next}`. It is
+`app.State`, which `git board state` prints too
+([the proposal](../design/first-run/proposal.md)). Its `run` is
+`running` while this server's run, the CLI's or another server's holds
+the lock, and `stopped` when a run stopped before it went through. A
+run (31) started while another process holds the lock answers 409.
+
 **A run (31)** is one sync, in the background; its steps come as
 `progress` events, and `GET /api/sync` answers it at any time. `scope`
 is `forges` (`forge sync`), or `all` (fetch, the forges, push: `sync`).
-`way` is `sync`, `pull` or `push` (`forge pull|push|sync`); `forges`
+`way` is `sync` (or `both`, the forge table's word), `pull` or `push` (`forge pull|push|sync`); `forges`
 limits it to those named; `remote` is the whole sync's git remote
 (`origin`); `dry_run` says what a forge run would do (`--check`); a
 whole sync goes both ways and has none. One issue's run (v1's
@@ -343,7 +377,9 @@ run did, `{created, updated, unchanged, posted, pushed}`.
 **Remotes (32)** run at once. A fetch answers what a pull would
 receive and a push would send, of `issues` and `people`
 (`{receive, send}`); a pull and a push answer their `note` (the numbers
-handed out). **Forges (33 to 36)** are `[forges]` tables, written as
+handed out). Adding one (57) is the `git remote add` the sync steps
+want, done from the web app: a name in the path and its URL in the
+body; a name the clone has already is refused. **Forges (33 to 36)** are `[forges]` tables, written as
 `PATCH /api/config` writes a key: the board opens again and the pages
 hear a `config` event. The token goes to git's credential helper (`git
 credential approve`, as `forge login`), never the file (ADR 0010), and is
@@ -351,13 +387,44 @@ never answered nor logged. Adding one (33): `kind` is `github` or
 `gitlab`, `url` the project's address (`https://github.com/o/r`, `.git`
 and GitLab's `/-/…` taken off); `name` defaults to `gh`, `gl`, then
 `gh2`… the first free; `sync` to on; the token is for `login`, else
-your own account on the host. A GitLab project is written by its id, read
+your own account on the host; `way` is the mirror's direction, `push`
+(a backup), `pull` (read-only) or `both`, the default. A GitLab project
+is written by its id, read
 from the forge with that token. With no table yet, the forges found in
 the remotes get theirs first (a table turns the finding off), read once
 through the forge as a sync reads them; one that already names the
-project refuses it, 400 `invalid`. 34 and 35 change a table the file has:
-a forge found in the remotes has none, 404. 36 lists the tokens
+project refuses it, 400 `invalid`. 35 removes a table the file
+has: a forge found in the remotes has none, 404. 34 on a forge found in
+the remotes writes the found forges' tables first, as 33 does, so one
+call makes it read-only. A GitHub project is written as the URL names
+it, with no token. A GitLab one is read through the forge for its id. 34 takes `sync`, or
+`way` (one of the three, `both` removing the key — the file says a
+non-default way alone), or both, and answers the state it left. 36 lists
+the tokens
 `forge status` finds, with nothing asked of a forge; never one's value.
+
+**The tokens (59, 55)** are `forge status`'s, for the web app's Tokens
+section: 59 answers each forge, and for each of its accounts (the
+posting login, yours on the host) whether a token is found and where,
+as `{name, kind, host, project, sync, way, discovered, tokens}` with a
+token `{login, role, found, source, owner, error}` — `role` is
+`posting` or `you`; with `check=1` the forge is asked whose each token
+is, `owner` the login it says (or `error` what it answered instead).
+55 stores a token (`forge login`): `forge` is a forge's name, `login`
+the account it is for ("" : yours on the host, else the posting
+account), the token on the body alone; it goes to git's credential
+helper (`git credential approve`, ADR 0010), and is never answered,
+kept nor logged. 201 with the forge, its host and the login it was
+stored for.
+
+**The login in the browser (62, 63)** is the OAuth device flow on
+`github.com` (ADR 0010, section 5), when 59 says `device: true` for the
+forge: a build with git-board's OAuth App. 62 starts it and answers the
+code the person types at `verification_uri`. The server then waits for
+GitHub's answer beyond the request, asks GitHub whose the token is, and
+stores it as 55 does. 63 answers the last flow: `waiting`, `done` with
+the `login`, or `failed` with the `error`; `none` before any. A new flow
+ends the last. The device code and the token stay in the server.
 
 **Numbers (38)** are the project's numbers (ADR 0016). `{prefix, start}`
 starts numbering, and answers where the counter is (`on origin`, `in
@@ -404,12 +471,15 @@ Until then they answer 404 `not-found`.
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: the risk, a status move, approve the plan, the spec's verdict, review and resolve, open, edit or merge a pull, verify, check, sign off (built; below) |
 | 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
 | 52 | `GET /api/github-project` | the GitHub Project bridge: its last check, and where each field lives (*built*) |
-| 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve`; its table is `PATCH /api/config`'s (*built*) |
+| 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve` (*built*) |
+| 58 | `PUT /api/github-project` | `{owner, number}`: `[github-project]` written as `project configure` writes it, the fields it holds stated with it; owner `""` removes it; answers as 52 (*built*) |
 
 **The GitHub Project (52, 53)**, built with the bridge
 (`tools/ghproject`). Only an action reads the Project: a read
-answers the last run, which the server keeps. Both answer `{project,
-write, last, places, problem}`: `project` is `owner/number`, `""` when
+answers the last run, which the server keeps. They answer `{project,
+write, fields, stated, last, places, problem}`: `fields` are those the
+Project holds as its columns, `stated` whether `[github-project] fields`
+names them (else they are the default seven); `project` is `owner/number`, `""` when
 `[github-project]` names none (and `problem` when the table doesn't
 read); `last` the last run, `null` before any, `{project, title,
 checked_at, side, applied, write, truncated, items, skipped, columns,
@@ -530,6 +600,7 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 | `issue` | an issue was written (a delete too: a tombstone is a version), here or by anyone else (a command, a fetch, a sync) | the issue, with its `version`; none when its ref is gone |
 | `person` | a person was written | the person |
 | `config` | `.git-board.toml` changed | |
+| `config-error` | `.git-board.toml` was edited by hand and does not open: the board keeps the last file that opened, and `error` says why | |
 | `me` | who writes, or `board.avatars`, changed | |
 | `inbox` | what you read or follow | |
 | `sync` | a run started or ended; a remote moved | the run |
@@ -543,7 +614,7 @@ the datastore's heads every second for the others, which it tells a
 second later (an API write lands in the datastore just before its
 observer runs: the wait lets the observer tell it, with its `by`).
 `.git-board.toml` written by hand is seen the same way: the board opens
-again on it, and `config` is told. A write of it through the API (24,
+again on it, and `config` is told. If it does not open, `config-error` is told, and the board keeps the last file that opened. A write of it through the API (24,
 25, 33 to 35) opens the board once and is told once, with its `by`: the
 watcher knows the server's own write. A page that falls 64 events behind is dropped: its stream closes,
 it reconnects (`retry`) and reloads. A comment line every 25 seconds
@@ -579,7 +650,10 @@ credentials of a URL.
 
 117 routes in v1 (`internal/server/server.go`); 54 in v2: 32 built in
 M5, 7 *later* and 14 with their domain in M6 (the GitHub Project's two
-built), and the forge-mapping migration (54), ported for v0.12.
+built), and the forge-mapping migration (54), ported for v0.12. Five
+more came with the web app's settings forms (2026-11-07 and 08): the
+tokens (55, 59), init (56), a git remote (57), and the Project named
+(58). The board's state (60) came on 2026-11-09.
 
 | v1 | v2 |
 |---|---|
@@ -679,7 +753,7 @@ built), and the forge-mapping migration (54), ported for v0.12.
 | `POST /api/sync/check` | `POST /api/github-project/check` |
 | `POST /api/sync/apply` | `POST /api/github-project/apply` |
 | `POST /api/sync/resolve` | `POST /api/github-project/resolve`: `keep` the same, `issue` for `number` |
-| `PUT /api/github-project` | `PATCH /api/config`: `[github-project]` |
+| `PUT /api/github-project` | the same route, 58: `{owner, number}` |
 | `DELETE /api/github-project` | `PATCH /api/config` with `null` |
 | `GET /api/start-over` | dropped: starting over is the CLI's (`git board reset`), a rare and destructive act |
 | `POST /api/start-over` | dropped: the same |

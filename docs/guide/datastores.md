@@ -23,8 +23,8 @@ Pick **PostgreSQL** when a team wants one shared board with no pull or
 push, or a board that people who never clone can reach. Pick **Markdown
 files** when the board should go with the code: branches, pull requests
 and reviews, readable without git-board. Pick **the forges
-alone** when GitHub or GitLab is the record and git-board is a way to work
-on it.
+alone** when you want no store of your own: the board is the forges' copy,
+filled by each pull, and git-board is a way to work on their issues.
 
 ## Settings › Datastore
 
@@ -34,14 +34,13 @@ and what that datastore can do.
 1. Choose **PostgreSQL** and paste a URL:
    `postgres://user:password@host:5432/database`; or **Markdown files**
    and a folder of the checkout, `issues`.
-2. **Test connection** (**Look in the folder**) writes nothing. It says
-   the server's version, and whether a board is there already.
-3. **Copy the board from git** copies every issue, person and record this
-   clone has in git into that database. Every id is kept, so the links and
-   markers sync left on the forges stay true. A second copy writes only
-   what is new; the git refs aren't touched.
-4. **Save**, then restart `git board serve`. The tab says when a saved
-   choice waits for a restart.
+2. **Copy the board from git** copies every issue, person and record this
+   clone has in git into it. Every id is kept, so the links and markers
+   sync left on the forges stay true. A second copy writes only what is
+   new; the git refs aren't touched.
+3. **Keep the board here** copies first when it can, then switches: the
+   clone reads the board from there at once, with no restart. A value no
+   datastore can open is refused, and the board stays where it was.
 
 The URL is kept in this clone's git config (`board.datastore`), never in
 `.git-board.toml`: it may hold a password. The page never shows the
@@ -96,9 +95,13 @@ git board datastore copy     # the board in git, into issues/
 The folder, from the checkout's top, holds one file per issue,
 `NNN-slug.md`, as `git board export --md` writes it, and the board itself
 in `issues/.board/`: each issue's, person's and record's operations, one
-line per write, in `<kind>/<id>.jsonl`. Commit both with the code. A
-folder outside the checkout (an absolute path, or one up with `..`) is
-refused.
+line per write, in `<kind>/<id>.jsonl`. Commit both with the code.
+
+To keep the issues in a repository of their own, give the full path of
+its checkout: `markdown:/home/me/project-issues`. The issues are then
+text files in that repository, which you edit, commit and push there.
+Numbers are handed out on that repository's default branch. Settings ›
+Datastore takes the same full path, and refuses a path up with `..`.
 
 - **The files follow the board.** After each write here, a forge sync's
   too, every file whose issue changed is written again.
@@ -154,6 +157,46 @@ git board export --md issues
 $EDITOR issues/0042-export-csv.md
 git board import --md issues
 ```
+
+In the web app, select **Download the issues as Markdown** in Settings ›
+Datastore. You get the same files in a zip.
+
+## A read-only site
+
+`git board export --html <dir>` writes the issues as a static web site:
+`index.html` lists them, open first, and `NNN.html` shows each issue with
+its comments. The text is cleaned as the web app cleans it, and no page
+runs a script, so any web server can serve the folder. Nothing on the
+site writes to the board.
+
+```sh
+git board export --html site --title "Our issues"
+```
+
+To publish it on GitHub Pages, run the command in a workflow, then
+upload the folder. The workflow needs the board's refs, so fetch them
+first. The recipe installs git-board from `main`, because no release has
+`export --html` yet. Pin a release tag once one has it.
+
+```yaml
+on: { push: { branches: [main] }, schedule: [{ cron: "0 * * * *" }] }
+permissions: { contents: read, pages: write, id-token: write }
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - run: git fetch origin "+refs/board/*:refs/board/*"
+      - run: go install github.com/guilbep/git-board/cmd/git-board@main
+      - run: git board export --html site
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - uses: actions/deploy-pages@v4
+```
+
+A public site shows every issue, a private project's too. Publish a
+private project's site only where its readers already see the issues.
 
 ## The forges alone
 

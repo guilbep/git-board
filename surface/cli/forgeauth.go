@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/guilbep/git-board/app"
+	"github.com/guilbep/git-board/forge"
 )
 
 // forge status and forge login: the forges' tokens (ADR 0010: from the
@@ -68,6 +70,12 @@ func printForgeStatus(out io.Writer, list []app.ForgeStatus) {
 		if !f.Sync {
 			sync = "sync off"
 		}
+		switch f.Way {
+		case "push":
+			sync += ", push only (a backup)"
+		case "pull":
+			sync += ", read only"
+		}
 		from := ""
 		if f.Discovered {
 			from = ", found in the git remotes"
@@ -101,6 +109,7 @@ func printForgeStatus(out io.Writer, list []app.ForgeStatus) {
 
 func newForgeLogin() *cobra.Command {
 	var login string
+	var paste bool
 	cmd := &cobra.Command{
 		Use:   "login <forge>",
 		Short: "Store a forge token in git's credential helper",
@@ -112,6 +121,11 @@ is for --login, by default your own account on that host, else the
 forge's posting account. It is read at a hidden prompt on a terminal,
 else from the first line of stdin, never from the command line, where
 the shell's history and ps would show it.
+
+On github.com, in a build with git-board's OAuth App, a terminal logs in
+in the browser instead: the command prints a code, you type it at the
+address it prints, and the token GitHub gives is stored for the login
+GitHub says it is. --paste reads a token at the prompt instead.
 
 git board forge status --check then asks the forge whose it is.`,
 		Example: `  git board forge login github
@@ -125,8 +139,11 @@ git board forge status --check then asks the forge whose it is.`,
 			}
 			defer b.Close()
 			f, who, err := b.LoginFor(cmd.Context(), args[0], login)
-			if err != nil {
+			if err != nil && (paste || login != "" || !app.DeviceLogin(f) || !isTerminal(cmd.InOrStdin())) {
 				return err
+			}
+			if !paste && login == "" && app.DeviceLogin(f) && isTerminal(cmd.InOrStdin()) {
+				return deviceLogin(cmd, b.Board, args[0])
 			}
 			token, err := readSecret(cmd, fmt.Sprintf("token for %s on %s: ", who, f.Host))
 			if err != nil {
@@ -143,7 +160,24 @@ git board forge status --check then asks the forge whose it is.`,
 		},
 	}
 	cmd.Flags().StringVar(&login, "login", "", "the account the token is for (default: yours on that host, else the forge's posting account)")
+	cmd.Flags().BoolVar(&paste, "paste", false, "read a token at the prompt, even where the browser can log in")
 	return cmd
+}
+
+// deviceLogin logs in to forge name in the browser (the device flow) and
+// stores the token GitHub gives.
+func deviceLogin(cmd *cobra.Command, b *app.Board, name string) error {
+	d, err := b.StartDevice(cmd.Context(), name)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "open %s and type the code %s (it expires at %s)\n", d.URL, d.UserCode, d.Expires.Format("15:04"))
+	who, err := d.Wait(cmd.Context())
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "stored a token for %s on github.com in git's credential helper\n", who)
+	return nil
 }
 
 // readSecret reads a secret: typed at a hidden prompt on a terminal, else
@@ -162,4 +196,74 @@ func readSecret(cmd *cobra.Command, prompt string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(line), nil
+}
+
+// newForgeBackup is the easy path to a backup (use case 1): one command
+// adds a forge whose table says way = "push", and stores its token.
+func newForgeBackup() *cobra.Command {
+	var kind, login, name string
+	cmd := &cobra.Command{
+		Use:   "backup <url>",
+		Short: "Add a forge as a backup: the issues go there, and nothing comes back",
+		Long: `Add a forge whose table says way = "push": git board sync and git board
+forge push send the issues there, and nothing is pulled from it. An edit
+made on the backup never reaches the board: the next run puts the board's
+value back there, and says so.
+
+<url> is the project's address, like https://gitlab.example.com/team/repo.
+The kind comes from the host's name: a host that names gitlab is GitLab,
+one that names github is GitHub; any other host needs --kind. The token
+is for --login, by default your own account on that host. It is read at
+a hidden prompt on a terminal, else from the first line of stdin, and
+stored in git's credential helper, never in .git-board.toml (ADR 0010).`,
+		Example: `  git board forge backup https://gitlab.example.com/team/repo
+  gh auth token | git board forge backup https://github.com/owner/mirror --kind github`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+			b, err := open(cmd, true)
+			if err != nil {
+				return err
+			}
+			defer b.Close()
+			u, err := url.Parse(strings.TrimSpace(args[0]))
+			if err != nil || u.Host == "" {
+				return usageError{fmt.Errorf("%s isn't a project's address, like https://gitlab.example.com/team/repo", args[0])}
+			}
+			if kind == "" {
+				switch {
+				case strings.Contains(u.Host, "gitlab"):
+					kind = "gitlab"
+				case strings.Contains(u.Host, "github"):
+					kind = "github"
+				default:
+					return usageError{fmt.Errorf("%s: whose forge is this? say it with --kind github or --kind gitlab", u.Host)}
+				}
+			}
+			who := login
+			if who == "" {
+				who = "your account"
+			}
+			token, err := readSecret(cmd, fmt.Sprintf("token for %s on %s, empty to store none: ", who, u.Host))
+			if err != nil {
+				return err
+			}
+			added, err := b.AddForge(cmd.Context(), app.NewForge{Kind: kind, URL: args[0], Name: name, Login: login, Token: token, Way: forge.WayPush})
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "forge %s added: the issues are sent there, and nothing is pulled from it (way push)\n", added)
+			if token != "" {
+				fmt.Fprintf(out, "its token is in git's credential helper; git board forge status --check asks %s whose it is\n", u.Host)
+			} else {
+				fmt.Fprintf(out, "no token stored: git board forge login %s stores one\n", added)
+			}
+			fmt.Fprintln(out, "git board forge sync sends the issues to it from now on")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&kind, "kind", "", "the forge's kind: github or gitlab (default: the host's name says)")
+	cmd.Flags().StringVar(&login, "login", "", "the account the token is for (default: yours on that host)")
+	cmd.Flags().StringVar(&name, "name", "backup", "the forge's name in .git-board.toml")
+	return cmd
 }

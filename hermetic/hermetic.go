@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -18,6 +19,7 @@ import (
 //     hosts alone, and no proxy;
 //   - no token in the environment, and no git config but the
 //     repository's, so no credential helper answers;
+//   - no global git-board file: XDG_CONFIG_HOME is an empty folder;
 //   - git reaches local repositories alone: no ssh, no https.
 //
 // after run once the tests ended, before the exit: a package's shared
@@ -32,21 +34,30 @@ func Run(m *testing.M, after ...func()) {
 	if os.Getenv("BOARD_LIVE") != "" {
 		done(m.Run())
 	}
-	global, err := seal()
+	home, err := seal()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "hermetic:", err)
 		os.Exit(1)
 	}
 	code := m.Run()
-	os.Remove(global)
+	os.RemoveAll(home)
 	done(code)
 }
 
-// seal cuts the way out, and answers the global git config it made: the
-// user's named who commits, and tests commit, so this one does, lowest of
-// all, below a test repository's own.
+// seal cuts the way out, and answers the folder it made: it holds the
+// global git config (the user's named who commits, and tests commit, so
+// this one does, lowest of all, below a test repository's own) and an
+// empty XDG_CONFIG_HOME.
 func seal() (string, error) {
-	f, err := os.CreateTemp("", "hermetic-gitconfig-")
+	home, err := os.MkdirTemp("", "hermetic-")
+	if err != nil {
+		return "", err
+	}
+	xdg := filepath.Join(home, "config")
+	if err := os.Mkdir(xdg, 0o700); err != nil {
+		return "", err
+	}
+	f, err := os.Create(filepath.Join(home, "gitconfig"))
 	if err != nil {
 		return "", err
 	}
@@ -68,6 +79,7 @@ func seal() (string, error) {
 	for k, v := range map[string]string{
 		"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": f.Name(), "GIT_TERMINAL_PROMPT": "0",
 		"GCM_INTERACTIVE": "never", "GIT_SSH_COMMAND": "false", "GIT_ALLOW_PROTOCOL": "file",
+		"XDG_CONFIG_HOME": xdg,
 	} {
 		os.Setenv(k, v)
 	}
@@ -84,5 +96,5 @@ func seal() (string, error) {
 		}
 		return dial(ctx, network, addr)
 	}
-	return f.Name(), nil
+	return home, nil
 }

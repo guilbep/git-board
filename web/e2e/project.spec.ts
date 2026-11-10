@@ -20,10 +20,15 @@ test('the GitHub Project: a check, and the fields it holds', async ({ page, requ
     await page.reload();
     await expect(page.getByText('Not checked yet')).toBeVisible();
     await page.getByRole('button', { name: 'Check the Project' }).click();
-    await expect(page.locator('.pj-meta')).toContainText('The e2e Project');
-    await expect(page.locator('.pj-meta')).toContainText('0 issues matched, 1 unmatched');
+    await expect(page.locator('.pj-meta').first()).toContainText('The e2e Project');
+    await expect(page.locator('.pj-meta').first()).toContainText('0 issues matched, 1 unmatched');
     await expect(page.getByRole('heading', { name: 'No conflicts' })).toBeVisible();
     await expect(page.getByText('1 item of the Project match no issue here')).toBeVisible();
+    await expect(page.getByText("This board doesn't write to the Project")).toBeVisible();
+    // write = true from the page, and off again: no hand edit of the file
+    await page.getByRole('button', { name: 'Let the board write to the Project' }).click();
+    await expect(page.getByRole('button', { name: 'Sync fields' })).toBeVisible();
+    await page.getByRole('button', { name: 'Stop writing to it' }).click();
     await expect(page.getByText("This board doesn't write to the Project")).toBeVisible();
 
     // status lives in the Project, whose last check found its column; prio

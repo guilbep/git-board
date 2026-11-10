@@ -4,9 +4,9 @@
 
 The file is optional. Without it, every `ns:value` label is a field and git-board works on any git repository. The file adds what labels can't say: the order of a field's values, single or multiple values, colors, sprint dates, saved views, the GitHub Project to sync with, and where attachments go.
 
-It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. Editing it by hand works too; restart `git board` (or `git board serve`) after.
+It lives at the root of the repository. Edit it in **Settings → Project file**: it is checked as you type and applies as soon as you save. You can also edit it by hand. The running board reads it again within a second. If the file does not open, the board keeps the last file that opened, and the web app shows the error.
 
-A repository without one starts from the default: **Start from the default** in Settings › Fields, or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, an on-hold field beside the status (`hold:blocked`, `hold:paused`), ten kinds, GitHub's plain labels (`bug`, `feat`, … `chore`, `design`) with their descriptions, each the prefix of its branches (`bug/vm-12-login-fails`), estimates in hours, MoSCoW, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
+A repository without one starts from the default: **Write the default file** in Settings › Fields or on the Start page (`#/start`), or `git board init` in a terminal (it never overwrites a file). The default declares a status workflow (`backlog`, `ready`, `in-progress`, `in-review`, `ready-for-validation`, `validated`), priorities `p0` to `p3`, an on-hold field beside the status (`hold:blocked`, `hold:paused`), ten kinds, GitHub's plain labels (`bug`, `feat`, … `chore`, `design`) with their descriptions, each the prefix of its branches (`bug/vm-12-login-fails`), estimates in hours, MoSCoW, sprints of 14 days, and four views (all, backlog, board, mine), each explained in a comment.
 
 ### A new board: its forge, then a template
 
@@ -362,6 +362,13 @@ host = "gitlab.epfl.ch"
 project = "42400"
 login = "guilbep"
 sync = true
+
+[forges.backup]
+kind = "gitlab"
+host = "gitlab.example.com"
+project = "42"
+sync = true
+way = "push"
 ```
 
 | Key | Type | Default | What it does |
@@ -373,8 +380,33 @@ sync = true
 | `host` | string | `github.com`, `gitlab.com` | The forge's host, for GitHub Enterprise or a GitLab instance. |
 | `login` | string | none | The posting account: who sync writes as, for the people without a token there. |
 | `sync` | true / false | false | Takes part in the sync. Off, the forge is kept but left out. |
+| `way` | `push`, `pull` or `both` | `both` | The mirror's direction (ADR 0008). `push`: the issues go there, and nothing is pulled from it — a backup ([The way of a mirror](forges.md#the-way-of-a-mirror)). `pull`: read-only, the sync reads its issues and writes nothing there. |
 
 No token goes in this file, which is committed. A token comes from `GITHUB_TOKEN` (github.com only), `GITHUB_ENTERPRISE_TOKEN` (the host `GITHUB_ENTERPRISE_HOST` names) or `GITLAB_TOKEN` (the host `GITLAB_HOST` names, `gitlab.com` by default), else from git's credential helper for the host and login: `git credential fill`. A helper with nothing for that login is asked once more for the host alone, as a keychain keeps a host's token without a username; a person's token counts only when the forge says it is theirs.
+
+### Where a field goes on a forge
+
+In the board, every field is a label. On a forge, a field goes where its mapping says, else to its type's default on that forge's kind ([ADR 0008](../adr/0008-sync-state-in-the-data-model.md), section 5).
+
+```toml
+[forges.epfl.fields.sprint]
+to = "label"
+```
+
+`to` is one of `label`, `scoped-label`, `project`, `assignees`, `milestone`, `iteration`, `weight`, `due-date`, `sub-issues` or `none`. A field with no mapping takes its type's default:
+
+| Type | GitHub | GitLab |
+| --- | --- | --- |
+| `person`, field `assignee` | native assignees | native assignees |
+| `issue` | sub-issues | label |
+| `iteration` | label | milestone |
+| `date` | label | due date |
+| `text` | none (git-board only) | label |
+| any other type | label | label |
+
+On GitHub with `[github-project]`, the fields that its `fields` key names go to the Project's columns.
+
+The sync writes labels and native assignees only. A label is held on a forge unless its field goes to a label or a scoped label there: the sync never sends it, never pulls it and never removes it. A `milestone:` label is always held. The assignees go to the forge's own assignees, and the Project's fields go to its columns. A field with any other home stays in git-board alone on that forge. Settings › Fields shows where each field goes on each forge.
 
 ## Attachments
 
@@ -395,6 +427,8 @@ prefix = "git-board/app"
 | `region` | `us-east-1` | The S3 region. |
 
 Files are public to anyone with the link, even for a private repository, and stay cached on the CDN for up to a year after a delete.
+
+A file is 25 MB at most, GitHub's own limit. Its key in the bucket is `<prefix>/YYYY-MM/<random>/<name>`: the bucket is not browsable, so the random part is the only protection. The defaults are EPFL ENAC's. On another install, set `[uploads]` and the server's `UPLOADS_ENDPOINT`. `git board datastore copy` and the Markdown export do not copy the files: they stay in the bucket, linked ([ADR 0002](../adr/0002-datastores.md), section 7).
 
 ## Branches
 

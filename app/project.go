@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -17,7 +18,8 @@ import (
 // The GitHub Project bridge (tools/ghproject): [github-project]'s
 // Project, its fields kept in step with the labels. The token is the
 // GitHub forge's (ADR 0010): the posting account of the first GitHub
-// [forges] table, else any account on github.com.
+// [forges] table, else yours on the host (what forge login stores by
+// default), else any account on github.com.
 
 // ErrNoProject is a bridge command on a board whose .git-board.toml
 // names no Project.
@@ -68,7 +70,7 @@ func (c *Config) Project() (*ghproject.Config, error) {
 	if len(probs) > 0 {
 		return nil, usage(probs[0].Err)
 	}
-	return &ghproject.Config{Owner: gp.Owner, Number: gp.Number, Write: gp.Write, Schema: c.Schema, Forge: c.githubForge()}, nil
+	return &ghproject.Config{Owner: gp.Owner, Number: gp.Number, Write: gp.Write, Holds: gp.Columns(), Schema: c.Schema, Forge: c.githubForge()}, nil
 }
 
 // projectSession is the bridge opened: its config, the Project, the board.
@@ -83,7 +85,13 @@ func (b *Board) projectSession(ctx context.Context) (*ghproject.Config, ghprojec
 	if err := b.switched(ctx); err != nil {
 		return nil, nil, err
 	}
-	p, err := OpenProjectV2(ctx, cmp.Or(c.Forge.Host, "github.com"), c.Forge.Login, c.Owner, c.Number)
+	host := cmp.Or(c.Forge.Host, "github.com")
+	login := c.Forge.Login
+	if login == "" { // a table with no login, or no table: yours, what
+		// forge login stores by default, else any account on the host
+		login = b.myLogin(ctx, host)
+	}
+	p, err := OpenProjectV2(ctx, host, login, c.Owner, c.Number)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -163,7 +171,8 @@ func ConfigureProject(dir string, gp tools.GithubProject, owner string, number i
 		if number <= 0 || strings.ContainsAny(owner, "/ \t\r\n") {
 			return "", usage(fmt.Errorf("a Project is an owner and its number: --owner EPFL-ENAC --project 40"))
 		}
-		t := map[string]any{"owner": owner, "number": int64(number)}
+		// the fields it holds are stated: the table's own, else the default
+		t := map[string]any{"owner": owner, "number": int64(number), "fields": slices.Clone(gp.Columns())}
 		if gp.Write && strings.EqualFold(gp.Owner, owner) && gp.Number == number {
 			t["write"] = true
 		}

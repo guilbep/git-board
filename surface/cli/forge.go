@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/guilbep/git-board/app"
+	"github.com/guilbep/git-board/forge"
 )
 
 // The forges alone: GitHub's and GitLab's issues, a translation of the
@@ -31,7 +32,7 @@ gets no issue created without --allow-create.`),
 		newForgeWay(app.WaySync, "Take the forges' changes, then send this clone's",
 			`Take the forges' changes, then send this clone's: the forge step of git
 board sync, alone. Creations wait for consent as push says.`),
-		newForgeStatus(), newForgeLogin(),
+		newForgeBackup(), newForgeStatus(), newForgeLogin(),
 	)
 	return cmd
 }
@@ -59,6 +60,14 @@ func newForgeWay(way app.Way, short, long string) *cobra.Command {
 				return err
 			}
 			say := func(format string, a ...any) { fmt.Fprintf(out, format+"\n", a...) }
+			for _, t := range tables { // a way that states the other direction is told, not silently skipped
+				switch {
+				case way == app.WayPull && t.Direction() == forge.WayPush:
+					say("%s is a backup (way push): nothing is pulled from it", t.Name)
+				case way == app.WayPush && t.Direction() == forge.WayPull:
+					say("%s is read-only (way pull): nothing is pushed to it", t.Name)
+				}
+			}
 			if err := forgeWay(cmd, b.Board, way, app.ForgeRun{Forges: fs, AllowCreate: allowCreate, DryRun: check}, say); err != nil {
 				return err
 			}

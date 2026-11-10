@@ -3,6 +3,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -20,7 +21,8 @@ import (
 
 // NewForge is a forge to add: its kind, its project's address, a name
 // ("": gh, gl, then gh2… the first free), the posting login, a token
-// ("": none stored) and whether it syncs.
+// ("": none stored), whether it syncs, and its way (forge.Table's way,
+// "": both).
 type NewForge struct {
 	Kind  string `json:"kind"`
 	URL   string `json:"url"`
@@ -28,6 +30,7 @@ type NewForge struct {
 	Login string `json:"login"`
 	Token string `json:"token"`
 	Sync  *bool  `json:"sync"` // absent: on
+	Way   string `json:"way"`  // push, pull, or both ("")
 }
 
 var forgeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
@@ -59,21 +62,18 @@ func (b *Board) AddForge(ctx context.Context, n NewForge) (string, error) {
 	if n.Name = strings.TrimSpace(n.Name); n.Name != "" && !forgeName.MatchString(n.Name) {
 		return "", invalidForge("%q: a forge's name is letters, digits, - and _", n.Name)
 	}
-	f := forge.Table{Kind: n.Kind, Host: u.Host, Project: project, Login: strings.TrimSpace(n.Login), Sync: n.Sync == nil || *n.Sync}
+	switch n.Way {
+	case "", forge.WayPush, forge.WayPull, forge.WayBoth:
+	default:
+		return "", invalidForge("way %q: push, pull or both", n.Way)
+	}
+	f := forge.Table{Kind: n.Kind, Host: u.Host, Project: project, Login: strings.TrimSpace(n.Login), Sync: n.Sync == nil || *n.Sync, Way: n.Way}
 	set := map[string]any{}
 	var taken []string
 	if b.Config.Forges.Discover {
-		var left []string // one that can't be read would be turned off unsaid
-		found, err := b.Forges(ctx, func(line string) {
-			if strings.Contains(line, " is left out: ") {
-				left = append(left, line)
-			}
-		})
+		found, err := b.foundToWrite(ctx, "")
 		if err != nil {
 			return "", err
-		}
-		if len(left) > 0 {
-			return "", invalidForge("the forges found in the remotes would be dropped, and one can't be written: %s", strings.Join(left, "; "))
 		}
 		for _, g := range found {
 			if strings.EqualFold(g.Host+"/"+g.Project, f.Host+"/"+f.Project) || strings.EqualFold(g.Host+"/"+g.Path, f.Host+"/"+f.Project) {
@@ -121,7 +121,7 @@ func (b *Board) AddForge(ctx context.Context, n NewForge) (string, error) {
 }
 
 // forgeTable is f as its table writes it: the host when not the kind's
-// own, the login when set.
+// own, the login when set, the way when not both.
 func forgeTable(f forge.Table) map[string]any {
 	t := map[string]any{"kind": f.Kind, "project": f.Project, "sync": f.Sync}
 	if f.Host != map[string]string{"github": "github.com", "gitlab": "gitlab.com"}[f.Kind] {
@@ -130,24 +130,117 @@ func forgeTable(f forge.Table) map[string]any {
 	if f.Login != "" {
 		t["login"] = f.Login
 	}
+	if f.Way != "" && f.Way != forge.WayBoth {
+		t["way"] = f.Way
+	}
 	return t
 }
 
-// tableNamed is the file's forge called name, else NotFound: a forge
-// found in the remotes has no table to change.
+// foundToWrite are the forges found in the git remotes, to be written as
+// tables: a table turns the found ones off. Each is named as the forge
+// names it, as a sync keys its records (a GitHub project's spelling, a
+// GitLab project's id), so the records of a sync already run still match.
+// A GitHub project with no token yet is written as the URL names it:
+// nothing has synced with it. One that cannot be read otherwise refuses
+// the write, since it would be turned off unsaid. Two URLs of one project
+// are one table, named as prefer when it is one of them, else as the
+// first remote.
+func (b *Board) foundToWrite(ctx context.Context, prefer string) ([]forge.Table, error) {
+	found, err := b.FoundForges(ctx, func(string) {})
+	if err != nil {
+		return nil, err
+	}
+	var out []forge.Table
+	var left []string
+	seen := map[string]int{}
+	for _, f := range found {
+		project, err := resolveProject(ctx, f)
+		switch {
+		case err == nil:
+			if f.Kind == "gitlab" {
+				f.Path = f.Project
+			}
+			f.Project = project
+		case f.Kind == "github" && errors.Is(err, forge.ErrNoToken):
+			// written as the URL names it
+		default:
+			left = append(left, fmt.Sprintf("forge %s, %s %s: %v", f.Name, f.Host, f.Project, err))
+			continue
+		}
+		key := strings.ToLower(f.Host + "/" + f.Project)
+		if i, ok := seen[key]; !ok {
+			seen[key] = len(out)
+			out = append(out, f)
+		} else if f.Name == prefer {
+			out[i] = f
+		}
+	}
+	if len(left) > 0 {
+		return nil, invalidForge("the forges found in the remotes would be dropped, and one can't be written: %s", strings.Join(left, "; "))
+	}
+	return out, nil
+}
+
+// tableNamed is the file's forge called name, else NotFound.
 func (b *Board) tableNamed(name string) error {
 	if slices.ContainsFunc(b.Config.Forges.List, func(f forge.Table) bool { return f.Name == name }) {
 		return nil
 	}
-	return fmt.Errorf("%w: forge %q has no table in %s (one found in the git remotes is added first)", kernel.ErrNotFound, name, conf.FileName)
+	return fmt.Errorf("%w: forge %q has no table in %s", kernel.ErrNotFound, name, conf.FileName)
 }
 
-// SetForgeSync turns forge name's sync on or off, in its table.
-func (b *Board) SetForgeSync(name string, on bool) error {
-	if err := b.tableNamed(name); err != nil {
+// SetForge sets forge name's sync, when not nil, and its way, when set:
+// its direction (forge.Table's way), push (a backup: writes go there,
+// nothing is pulled), pull (read-only) or both, the key's default, so the
+// file says nothing then. Both keys go in one write. A forge found in the
+// git remotes gets its table then, with the other found ones, as Add a
+// forge writes them: one click makes it read-only, with no table to
+// write first.
+func (b *Board) SetForge(ctx context.Context, name string, sync *bool, way string) error {
+	keys := map[string]any{}
+	if sync != nil {
+		keys["sync"] = *sync
+	}
+	switch way {
+	case "":
+	case forge.WayBoth:
+		keys["way"] = nil // no line in the file
+	case forge.WayPush, forge.WayPull:
+		keys["way"] = way
+	default:
+		return &Error{Class: Usage, Code: "invalid", Err: fmt.Errorf("way %q: push, pull or both", way)}
+	}
+	if b.tableNamed(name) == nil {
+		set := map[string]any{}
+		for k, v := range keys {
+			set["forges."+name+"."+k] = v
+		}
+		_, err := SetConfigKeys(b.Dir, set, "", false)
 		return err
 	}
-	_, err := SetConfigKeys(b.Dir, map[string]any{"forges." + name + ".sync": on}, "", false)
+	if !b.Config.Forges.Discover {
+		return b.tableNamed(name)
+	}
+	found, err := b.foundToWrite(ctx, name)
+	if err != nil {
+		return err
+	}
+	set := map[string]any{}
+	for _, g := range found {
+		t := forgeTable(g)
+		if g.Name == name {
+			for k, v := range keys {
+				if t[k] = v; v == nil {
+					delete(t, k)
+				}
+			}
+		}
+		set["forges."+g.Name] = t
+	}
+	if _, ok := set["forges."+name]; !ok {
+		return b.tableNamed(name)
+	}
+	_, err = SetConfigKeys(b.Dir, set, "", false)
 	return err
 }
 

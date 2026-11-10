@@ -1,7 +1,12 @@
 package httpapi
 
 import (
+	"archive/zip"
 	"bytes"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -73,4 +78,54 @@ func rewriteImages(clean string, media func(string) string) string {
 			out.Write(z.Raw())
 		}
 	}
+}
+
+// exportMarkdown (route 61) answers every issue as Markdown, one
+// NNN-slug.md each, in a zip: git board export --md, downloaded from the
+// web app. The files are written in a folder of their own first, removed
+// once sent.
+func exportMarkdown(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	dir, err := os.MkdirTemp("", "git-board-export-")
+	if err != nil {
+		writeError(w, r, logOf(ctx), err)
+		return
+	}
+	defer os.RemoveAll(dir)
+	if _, err := board(ctx).ExportMarkdown(ctx, dir); err != nil {
+		writeError(w, r, logOf(ctx), err)
+		return
+	}
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		writeError(w, r, logOf(ctx), err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="issues.zip"`)
+	z := zip.NewWriter(w)
+	for _, f := range files {
+		if err := addFile(z, filepath.Join(dir, f.Name())); err != nil {
+			logOf(ctx).Warn("exporting Markdown", "file", f.Name(), "error", err)
+			return // the zip is cut short: the download fails
+		}
+	}
+	if err := z.Close(); err != nil {
+		logOf(ctx).Warn("exporting Markdown", "error", err)
+	}
+}
+
+// addFile puts the file at path in z, under its base name.
+func addFile(z *zip.Writer, path string) error {
+	src, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := z.Create(filepath.Base(path))
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(dst, src)
+	return err
 }

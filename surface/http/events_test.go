@@ -187,4 +187,14 @@ func TestEventsConfigOnce(t *testing.T) {
 	if e := next(t, ch, "config"); e.By != "" {
 		t.Fatalf("a hand edit = %+v", e)
 	}
+	// broken by hand: the board keeps the last file, and the pages hear why
+	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte("schema = 2\n[views\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if e := next(t, ch, "config-error"); e.Error == "" {
+		t.Fatalf("a broken hand edit = %+v, want its error", e)
+	}
+	if res := a.do("GET", "/api/issues", nil); res.StatusCode != 200 {
+		t.Fatalf("issues after a broken edit: %d", res.StatusCode)
+	}
 }

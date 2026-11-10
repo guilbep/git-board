@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/forge/fake"
 	"github.com/guilbep/git-board/forge/github"
+	"github.com/guilbep/git-board/kernel"
 	"github.com/guilbep/git-board/tools/ghproject"
 	"github.com/guilbep/git-board/tools/ghproject/projectfake"
 )
@@ -53,7 +55,7 @@ func projectBoard(t *testing.T) (*Board, *projectfake.Fake) {
 	for _, title := range []string{"One", "Two"} {
 		f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: title})
 	}
-	if _, err := b.SyncForges(ctx, WayPull, ForgeRun{Forges: []NamedForge{{"gh", f}}}); err != nil {
+	if _, err := b.SyncForges(ctx, WayPull, ForgeRun{Forges: []NamedForge{{Name: "gh", Forge: f}}}); err != nil {
 		t.Fatal(err)
 	}
 	b.Close()
@@ -113,6 +115,38 @@ func statusOf(t *testing.T, b *Board, n string) []string {
 	}
 	t.Fatalf("no issue #%s", n)
 	return nil
+}
+
+// TestProjectLogin: with no [forges] table naming a login, the Project
+// bridge reads the token of your own account on the host (what forge
+// login stores by default), not any account's.
+func TestProjectLogin(t *testing.T) {
+	b, _ := projectBoard(t)
+	ctx := t.Context()
+	me := string(b.People.Me)
+	if _, err := issuesync.DoPerson(ctx, b.Kernel, me, issuesync.AddAccount(me, issuesync.Account{Server: "github.com", ID: "42", Login: "ada"})); err != nil {
+		t.Fatal(err)
+	}
+	sessions := func() (string, error) {
+		var login string
+		was := OpenProjectV2
+		OpenProjectV2 = func(ctx context.Context, host, l, owner string, number int) (ghproject.Project, error) {
+			login = l
+			return was(ctx, host, l, owner, number)
+		}
+		t.Cleanup(func() { OpenProjectV2 = was })
+		_, _, err := b.projectSession(ctx)
+		return login, err
+	}
+	if login, err := sessions(); err != nil || login != "ada" {
+		t.Errorf("login %q, %v", login, err)
+	}
+	if _, err := issuesync.DoPerson(ctx, b.Kernel, me, kernel.Op{Kind: "remove-account", Author: me, Time: 1700000500, Data: json.RawMessage(`{"server":"github.com","id":"42"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if login, err := sessions(); err != nil || login != "" {
+		t.Errorf("login without the account %q, %v", login, err)
+	}
 }
 
 // The bridge through the app: a pull, a push, a conflict resolved, and
@@ -178,8 +212,31 @@ func TestConfigureProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	text, _, _ := ConfigText(b.Dir)
-	if !strings.Contains(string(text), "write = true") {
-		t.Errorf("write lost:\n%s", text)
+	if !strings.Contains(string(text), "write = true") || !strings.Contains(string(text), `fields = ["status", "prio", "mod", "est", "sprint", "moscow", "milestone"]`) {
+		t.Errorf("write lost, or the fields not stated:\n%s", text)
+	}
+	// a board that says its Project holds two fields keeps saying so
+	if _, err := SetConfigKeys(b.Dir, map[string]any{"github-project.fields": []any{"status", "prio"}}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	b2, err := Open(t.Context(), b.Dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b2.Close()
+	held, _ := b2.Config.Tools.GithubProject.Get()
+	if !held.Holds("prio") || held.Holds("moscow") {
+		t.Errorf("two fields held: %v", held.Columns())
+	}
+	// on GitHub, prio stays off the labels; moscow is a label again
+	if !b2.Config.Held("github.com/o/r", "prio:p1") || b2.Config.Held("github.com/o/r", "moscow:must") {
+		t.Errorf("held: prio:p1 %v, moscow:must %v", b2.Config.Held("github.com/o/r", "prio:p1"), b2.Config.Held("github.com/o/r", "moscow:must"))
+	}
+	if _, err := ConfigureProject(b.Dir, held, "o", 2); err != nil {
+		t.Fatal(err)
+	}
+	if text, _, _ := ConfigText(b.Dir); !strings.Contains(string(text), `fields = ["status", "prio"]`) {
+		t.Errorf("configure dropped the board's fields:\n%s", text)
 	}
 	if _, err := ConfigureProject(b.Dir, gp, "EPFL-ENAC", 40); err != nil {
 		t.Fatal(err)

@@ -8,7 +8,8 @@
 // markdown:issues, kept elsewhere than git, an origin all the same, and
 // attachments on, to a fake S3 (E2E_PORT + 2) that keeps what it is put.
 // On E2E_PORT + 3, the clone board: a fresh clone of a local origin that
-// holds two issues, whose first open pulls them (clone.spec.ts).
+// holds two issues, whose first open pulls them (clone.spec.ts). On
+// E2E_PORT + 6, the new board: no file, no origin, no identity (start.spec.ts).
 // Playwright's webServer runs this; it lives until killed. E2E_SKIP_BUILD=1
 // reuses web/dist and the binary.
 import { execFileSync, spawn } from 'node:child_process';
@@ -170,8 +171,13 @@ await serve(join(work, 'markdown'), port + 5, {
   ACCESS_KEY_ID: 'e2e', ACCESS_KEY_SECRET: 'e2e-secret', BUCKET_NAME: 'e2e', UPLOADS_ENDPOINT: `http://127.0.0.1:${port + 2}`,
 });
 await serve(join(work, 'clone'), port + 3);
+// the new board (start.spec.ts): a repository with no file, no origin,
+// no identity and no issue, as on a first run
+mkdirSync(join(work, 'new'));
+sh('git', ['init', '-q', '-b', 'main'], join(work, 'new'));
+await serve(join(work, 'new'), port + 6);
 await serve(join(work, 'repo'), port);
-console.log(`e2e board: ${join(work, 'repo')} on :${port}, GitHub at ${api}; clone board on :${port + 3}; Markdown board on :${port + 5}`);
+console.log(`e2e board: ${join(work, 'repo')} on :${port}, GitHub at ${api}; clone board on :${port + 3}; Markdown board on :${port + 5}; new board on :${port + 6}`);
 // one board gone, or a signal: both go
 process.on('exit', () => boards.forEach((b) => b.kill()));
 for (const b of boards) b.on('exit', (code) => process.exit(code ?? 1));

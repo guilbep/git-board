@@ -179,3 +179,33 @@ func TestGithubProjectNone(t *testing.T) {
 		t.Errorf("check: %+v", e)
 	}
 }
+
+// Route 58: the Project named from the page, its fields stated with it,
+// as project configure writes them; a board with no file gets one.
+func TestConfigureProjectRoute(t *testing.T) {
+	t.Parallel()
+	dir, _ := newBoard(t)
+	path := filepath.Join(dir, ".git-board.toml")
+	a := newAPI(t, dir)
+	got := want[projectRes](t, a.do("PUT", "/api/github-project", map[string]any{"owner": "guilbep", "number": 2}), 200)
+	if got.Project != "guilbep/2" || !got.Stated || len(got.Fields) != 7 {
+		t.Fatalf("configured: %+v", got)
+	}
+	if text := read(t, path); !strings.Contains(text, `fields = ["status", "prio", "mod", "est", "sprint", "moscow", "milestone"]`) {
+		t.Errorf("the fields aren't stated:\n%s", text)
+	}
+	if e := want[apiError](t, a.do("PUT", "/api/github-project", map[string]any{"owner": "a/b", "number": 1}), 400); e.Field != "owner" {
+		t.Errorf("a bad owner = %+v", e)
+	}
+	// a table without the key: the default, said as not stated
+	want[configRes](t, a.do("PATCH", "/api/config", map[string]any{"set": map[string]any{"github-project.fields": nil}}), 200)
+	if got := want[projectRes](t, a.do("GET", "/api/github-project", nil), 200); got.Stated || len(got.Fields) != 7 {
+		t.Errorf("not stated: %+v", got)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := want[projectRes](t, a.do("PUT", "/api/github-project", map[string]any{"owner": "guilbep", "number": 2}), 200); got.Project != "guilbep/2" {
+		t.Errorf("no file first: %+v", got)
+	}
+}

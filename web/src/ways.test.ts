@@ -17,6 +17,7 @@ test('a run’s steps and counts', () => {
   assert.equal(stepWords({ forge: 'github', way: 'pull', line: 'reading', done: 2, total: 40 }), 'github pull: reading 2 of 40');
   assert.equal(reportWords({ created: 2, updated: 0, unchanged: 5, posted: 1, pushed: 0 }), '2 created, 1 posted');
   assert.equal(reportWords({ created: 0, updated: 0, unchanged: 5, posted: 0, pushed: 0 }), 'nothing to change');
+  assert.equal(reportWords({ created: 0, updated: 0, unchanged: 0, posted: 0, pushed: 1, restored: 2 }), '1 pushed, 2 put back on a backup');
 });
 
 test('what the Sync button says', () => {

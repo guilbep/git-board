@@ -15,16 +15,18 @@ A failed pull stops the steps after it. A forge or the Project that fails is tol
 
 A forge doesn't replace a remote: the people who use git-board pull and push the issues with git; a forge is for the people who stay on GitHub or GitLab.
 
+The model behind all of it is **one truth, many mirrors**: the board holds every field's value as a label; each forge and the GitHub Project show it as whatever they offer, per field; and every write either side accepts is recorded as the value both sides last agreed on, so switching a mirror on, off or round moves only what changed since. [The spec's Where a value lives](../spec/places.md) states it; [ADR 0008](../adr/0008-sync-state-in-the-data-model.md) records it.
+
 ## Tokens
 
-A forge is read and written with a token, never kept in git-board's files: `.git-board.toml` is committed, and names only the forge's posting account, `login`. The token comes from the environment when it is set for that forge's host (`GITHUB_TOKEN` for github.com, `GITHUB_ENTERPRISE_TOKEN` for the host `GITHUB_ENTERPRISE_HOST` names, `GITLAB_TOKEN` for the host `GITLAB_HOST` names, gitlab.com by default), as in CI; else from git's credential helper for the host, with the login as user name (`git credential fill`). A token pasted in Settings goes to that helper (`git credential approve`), and is never shown again. On the command line, `git board forge login <forge>` stores one the same way, read at a hidden prompt or from stdin, and `git board forge status` says, for each forge, whether a token is found and where; `--check` asks the forge whose it is.
+A forge is read and written with a token, never kept in git-board's files: `.git-board.toml` is committed, and names only the forge's posting account, `login`. The token comes from the environment when it is set for that forge's host (`GITHUB_TOKEN` for github.com, `GITHUB_ENTERPRISE_TOKEN` for the host `GITHUB_ENTERPRISE_HOST` names, `GITLAB_TOKEN` for the host `GITLAB_HOST` names, gitlab.com by default), as in CI; else from git's credential helper for the host, with the login as user name (`git credential fill`). On github.com, **Log in with GitHub** in Settings › Sync › **Tokens** (and on the Start page) shows a code: type it on GitHub and approve, and the token GitHub gives goes to that helper. A token pasted in the same section goes to that helper (`git credential approve`), and is never shown again; the same section says, for each forge and account, whether a token is found and where, and **Check** asks each forge whose it is. On the command line, `git board forge login <forge>` stores one the same way, read at a hidden prompt or from stdin, and `git board forge status` says the same.
 
 - **GitHub**: a classic personal access token (github.com/settings/tokens) with the `repo` scope, or `public_repo` for a public repository.
 - **GitLab**: a personal access token of the instance (`/-/user_settings/personal_access_tokens`) with the `api` scope; `read_api` is enough to only get. Reporter on the project to read, Developer to send.
 
 Someone else with a token of their own on the forge, in their own credential helper, has their comments posted as themselves when they sync; the others' are posted by the posting account, under a line naming them.
 
-The GitHub Project is read and written through GitHub's GraphQL API with the GitHub forge's token, found as above: it needs the `read:project` scope to read the Project, `project` to write it.
+The GitHub Project is read and written through GitHub's GraphQL API with the GitHub forge's token, found as above: it needs the `read:project` scope to read the Project, `project` to write it. The token is found in this order: the posting `login` of the first GitHub `[forges]` table; else your own account on the host, the one `forge login` stores by default; else, with no account of yours there, any token the credential helper has for the host.
 
 ## Adding a forge
 
@@ -42,10 +44,27 @@ Settings › Sync › **+ Add a forge**, for a forge no remote names, in four st
 
 1. **Forge**: GitHub or GitLab.
 2. **Project**: its address, as in your browser (`https://github.com/owner/repo`, `https://gitlab.epfl.ch/group/project`); a short name, `gh` or `gl` when left empty; and whether it syncs.
-3. **Token**: one git's credential helper holds for that host already, or a new one pasted.
-4. **Check**: git-board asks the forge whose token it is, the posting account, and whether it sees the project. Nothing is kept when it doesn't. A GitLab project is kept by its numeric id, which a renamed group doesn't change.
+3. **Its way**: both ways (the default), push only (a backup), or read only — see [The way of a mirror](#the-way-of-a-mirror).
+4. **Token**: one git's credential helper holds for that host already, or a new one pasted.
+5. **Check**: git-board asks the forge whose token it is, the posting account, and whether it sees the project. Nothing is kept when it doesn't. A GitLab project is kept by its numeric id, which a renamed group doesn't change.
 
 Adding writes a `[forges.<name>]` table, and syncs nothing: the first sync is yours to start, from Settings › Sync, after its check. While the forges come from the remotes, adding one writes their tables too, as a table turns the finding off; one the remotes name already is refused. The address `#/settings/sync?add=1` opens the steps.
+
+## The way of a mirror
+
+A forge's table states its `way`, the direction the sync takes with it:
+
+- `way = "both"`, the default: the sync pulls from it, then pushes to it.
+- `way = "push"`, a backup: the issues go there, and nothing comes back. An edit made on the backup never reaches the board: the next run puts the board's value back there, and says so (*put back on a backup*). A comment someone adds on the backup stays there. The backup's own row in Settings › Sync says *push only, a backup*, and a `git board forge pull` says nothing was pulled from it.
+- `way = "pull"`, read-only: the sync reads its issues, and writes nothing there.
+
+Settings › Sync sets it per row; `git board forge backup <url>` writes it in one step — the easy path to a backup:
+
+```
+git board forge backup https://gitlab.example.com/team/repo
+```
+
+The command reads the kind from the host's name (a host that names gitlab is GitLab, one that names github is GitHub; any other needs `--kind`), asks for a token at a hidden prompt (or reads it from stdin, as `forge login` does), and writes the `[forges.backup]` table with `way = "push"`. From then on, `git board sync` and `git board forge sync` send the issues there, and pull nothing from it.
 
 ## Sync on or off
 
@@ -55,7 +74,7 @@ The check runs the forge sync on a copy of the repository, and answers the forge
 
 Each run, the check too, also asks each forge who can be assigned on its project, and says how many it found. The assignee boxes (every person field) then offer them, with the people git-board knows. A forge that doesn't answer is a warning: the boxes keep its last list.
 
-Off (`sync = false`), the forge is kept but stays out of it, until you switch it on again in Settings › Sync. A forge found in the remotes always syncs: to leave one out, give the forges tables. Saving where a field lives on one (Settings › Fields, **Where it lives** on each field; its row in Settings › Sync says where its fields live) writes them: its table and every found forge's, as adding a forge does, since a table turns the finding off.
+Off (`sync = false`), the forge is kept but stays out of it, until you switch it on again in Settings › Sync. A forge found in the remotes always syncs, both ways: to leave one out, or to give it a way of its own, give the forges tables. Saving where a field lives on one (Settings › Fields, **Where it lives** on each field; its row in Settings › Sync says where its fields live) writes them: its table and every found forge's, as adding a forge does, since a table turns the finding off.
 
 ## Removing a forge
 
@@ -76,7 +95,7 @@ A sync moves your issues to three places, and each has its own commands with git
 | Side | What it holds | Commands |
 | --- | --- | --- |
 | The git remote (origin) | the board itself, merged without loss | `git board fetch`, `pull`, `push` |
-| The forges | a translation of it, both ways: a write there emails people | `git board forge pull`, `push`, `sync` |
+| The forges | a translation of it, both ways: a write there emails people | `git board forge pull`, `push`, `sync`, `status`, `login`, `backup` |
 | The GitHub Project | field values, matched to labels | `git board project pull`, `push`, `sync`, `resolve`, `configure` |
 
 Each acts at once and takes `--check`, which says what it would do and writes nothing. `pull` takes the other side's changes, `push` sends this clone's, `sync` does both.

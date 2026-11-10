@@ -42,6 +42,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/fields/{name}/migrate", migrateField)
 	Route(mux, "GET /api/people", listPeople)
 	Route(mux, "GET /api/me", me)
+	Route(mux, "GET /api/state", s.state)
 	Route(mux, "PUT /api/me", s.setMe)
 
 	Route(mux, "GET /api/inbox", inbox)
@@ -51,22 +52,38 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "GET /api/config", getConfig)
 	Route(mux, "PUT /api/config", s.putConfig)
 	Route(mux, "PATCH /api/config", s.patchConfig)
+	// a template's path or URL reads this machine's files or the network:
+	// on loopback alone (initConfig)
+	initMux := http.NewServeMux()
+	Route(initMux, "POST /api/config/init", s.initConfig)
+	mux.Handle("POST /api/config/init", markLoopback(initMux))
 
 	Route(mux, "GET /api/datastore", datastore)
-	copyMux := http.NewServeMux()
-	Route(copyMux, "POST /api/datastore/copy", copyDatastore)
-	mux.Handle("POST /api/datastore/copy", loopbackOnly(copyMux))
+	// what writes a secret, or says where the board goes, answers on
+	// loopback alone (localRoutes)
+	local := http.NewServeMux()
+	Route(local, "PUT /api/datastore", s.putDatastore)
+	Route(local, "POST /api/datastore/copy", copyDatastore)
+	Route(local, "POST /api/forges", s.addForge)
+	Route(local, "POST /api/forges/auth", s.storeToken)
+	Route(local, "POST /api/forges/auth/device", s.startDevice)
+	Route(local, "GET /api/forges/auth/device", s.deviceStatus)
+	Route(local, "POST /api/remotes/{name}", s.addRemote)
+	for _, p := range localRoutes {
+		mux.Handle(p, loopbackOnly(local))
+	}
 
 	Route(mux, "GET /api/sync", s.syncStatus)
 	Route(mux, "POST /api/sync", s.startSync)
 	Route(mux, "POST /api/remotes/{name}/{action}", remote)
 	Route(mux, "POST /api/numbers", numbers)
-	Route(mux, "POST /api/forges", s.addForge)
 	Route(mux, "PATCH /api/forges/{name}", s.patchForge)
 	Route(mux, "DELETE /api/forges/{name}", s.removeForge)
 	Route(mux, "GET /api/forges/credentials", credentials)
+	Route(mux, "GET /api/forges/auth", forgeAuths)
 
 	Route(mux, "GET /api/github-project", s.projectStatus)
+	Route(mux, "PUT /api/github-project", s.configureProject)
 	Route(mux, "POST /api/github-project/{action}", s.projectAction)
 
 	Route(mux, "POST /api/markdown", markdown)
@@ -79,6 +96,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "POST /api/environments/{env}/deploy", s.deploy)
 	Route(mux, "GET /api/uploads", uploadStatus)
 	mux.HandleFunc("GET /api/media", media)
+	mux.HandleFunc("GET /api/export/markdown", exportMarkdown)
 	mux.HandleFunc("POST /api/uploads", s.upload)
 	Route(mux, "GET /api/issues/{id}/cycle", issueCycle)
 	Route(mux, "POST /api/issues/{id}/cycle/{action}", cycleAct)
@@ -186,6 +204,9 @@ type setMeReq struct {
 	Name    string  `json:"name"`
 	Email   string  `json:"email"`
 	Avatars *string `json:"avatars"`
+	// Global: write board.avatars at git's global level, so every
+	// repository of the user reads it.
+	Global bool `json:"global,omitempty"`
 }
 
 // setMe changes who writes, or where pictures come from, then opens the
@@ -207,7 +228,7 @@ func (s *Server) setMe(ctx context.Context, r setMeReq) (meRes, error) {
 		return meRes{}, invalid("id", errors.New("an id, a name and an email, or avatars"))
 	}
 	if err == nil && r.Avatars != nil {
-		err = b.SetAvatars(ctx, *r.Avatars)
+		err = b.SetAvatars(ctx, *r.Avatars, r.Global)
 	}
 	if err != nil {
 		return meRes{}, on("id", err)
@@ -353,6 +374,43 @@ func (s *Server) patchConfig(ctx context.Context, r patchConfigReq) (Reply, erro
 		}
 	}
 	return configReply(dir, text), nil
+}
+
+// initConfigReq names the template the file starts from: "" the default,
+// else the CLI's --template (a built-in name, a file, or a URL).
+type initConfigReq struct {
+	Template string `json:"template,omitempty"`
+}
+
+// initRes answers the file written, and what reading the forge said.
+type initRes struct {
+	Path  string   `json:"path"`
+	Lines []string `json:"lines"`
+}
+
+// initConfig writes the default .git-board.toml, as `git board init`
+// does: the template, seeded with origin's labels and its Project's
+// fields when it can read them. It never overwrites one: a file there
+// already is an error, 409.
+func (s *Server) initConfig(ctx context.Context, r initConfigReq) (Reply, error) {
+	// A client beyond localhost names no path or URL: it never chooses what
+	// the server reads. "" is the global file's template, which the
+	// machine's owner chose, as git board init uses it.
+	if strings.ContainsAny(r.Template, `/\.:`) && !fromLoopback(ctx) {
+		return Reply{}, on("template", forbidden(errors.New("a template's path or URL answers on localhost only: a built-in name answers anywhere")))
+	}
+	var res initRes
+	err := s.writeConfig(ctx, func() (err error) {
+		res.Path, res.Lines, err = app.InitConfig(ctx, board(ctx).Dir, r.Template)
+		return err
+	})
+	if errors.Is(err, app.ErrConfigExists) {
+		err = &app.Error{Class: app.Changed, Err: err} // 409: init never overwrites
+	}
+	if err != nil {
+		return Reply{}, on("template", err)
+	}
+	return Reply{Status: http.StatusCreated, Body: res}, nil
 }
 
 // tomlish is a JSON value as TOML writes it: a whole number an integer.

@@ -5,7 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/guilbep/git-board/hermetic"
 )
+
+func TestMain(m *testing.M) { hermetic.Run(m) }
 
 // A benchmark's runs are named board/package/name, their median is
 // what a budget holds.

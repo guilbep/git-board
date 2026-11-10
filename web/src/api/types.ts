@@ -219,6 +219,7 @@ export interface SyncForge {
   host: string;
   login?: string;
   sync: boolean;
+  way: string; // push (a backup), pull (read-only), or both
   discovered?: boolean; // found in origin's URLs, no [forges] table
 }
 
@@ -243,7 +244,7 @@ export interface SyncRun {
   ended_at?: string;
   state: 'running' | 'done' | 'failed';
   steps: SyncStep[];
-  report?: { created: number; updated: number; unchanged: number; posted: number; pushed: number };
+  report?: { created: number; updated: number; unchanged: number; posted: number; pushed: number; restored?: number };
   error?: string;
 }
 
@@ -278,8 +279,9 @@ export interface UploadStatus {
 
 // a change event: GET /api/events
 export interface ChangeEvent {
-  kind: 'issue' | 'person' | 'config' | 'me' | 'inbox' | 'sync' | 'progress' | 'release';
+  kind: 'issue' | 'person' | 'config' | 'config-error' | 'me' | 'inbox' | 'sync' | 'progress' | 'release';
   id?: string;
+  error?: string; // config-error: why .git-board.toml, edited by hand, does not open
   version?: string;
   by?: string;
   step?: SyncStep;

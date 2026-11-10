@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/guilbep/git-board/app"
@@ -24,8 +25,12 @@ type projectState struct {
 }
 
 type projectRes struct {
-	Project    string       `json:"project"` // owner/number; "" when none is configured
-	Write      bool         `json:"write"`
+	Project string `json:"project"` // owner/number; "" when none is configured
+	Write   bool   `json:"write"`
+	// Fields are those the Project holds as its columns; Stated says the
+	// file names them ([github-project] fields), else they are the default.
+	Fields     []string     `json:"fields"`
+	Stated     bool         `json:"stated"`
 	Last       *lastRes     `json:"last"`
 	Places     []placeRes   `json:"places"`
 	Problem    string       `json:"problem,omitempty"` // [github-project] doesn't read
@@ -118,7 +123,7 @@ func places(b *app.Board, c *ghproject.Config, last *ghproject.Report) []placeRe
 		tables = []forge.Table{c.Forge}
 	}
 	names := b.Config.Schema.FieldOrder()
-	for _, f := range ghproject.ProjectFields {
+	for _, f := range c.Holds {
 		if c.Configured() && !slices.Contains(names, f) {
 			names = append(names, f)
 		}
@@ -157,14 +162,40 @@ func (s *Server) projectAnswer(ctx context.Context, last *ghproject.Report) proj
 	if err != nil {
 		return projectRes{Places: []placeRes{}, Problem: err.Error()}
 	}
-	res := projectRes{Write: c.Write, Places: places(b, c, nil)}
+	gp, _ := b.Config.Tools.GithubProject.Get()
+	res := projectRes{Write: c.Write, Places: places(b, c, nil), Fields: []string{}}
 	if c.Configured() {
+		res.Fields, res.Stated = c.Holds, gp.Fields != nil
 		res.Project = c.Name()
 		if last != nil && last.Project == c.Name() { // another Project's run says nothing of this one
 			res.Last, res.Places = lastOf(last), places(b, c, last)
 		}
 	}
 	return res
+}
+
+// configureReq is route 58: the Project named from the page, as project
+// configure does (app.ConfigureProject): the fields it holds are written
+// with it; an owner "" removes the table.
+type configureReq struct {
+	Owner  string `json:"owner"`
+	Number int    `json:"number"`
+}
+
+// configureProject writes [github-project], then answers as GET does.
+func (s *Server) configureProject(ctx context.Context, r configureReq) (projectRes, error) {
+	err := s.writeConfig(ctx, func() error {
+		b := board(ctx)
+		gp, _ := b.Config.Tools.GithubProject.Get()
+		_, err := app.ConfigureProject(b.Dir, gp, strings.TrimSpace(r.Owner), r.Number)
+		return err
+	})
+	if err != nil {
+		return projectRes{}, on("owner", err)
+	}
+	h := s.boards.get()
+	defer s.boards.release(h)
+	return s.projectStatus(context.WithValue(ctx, boardKey{}, h.b), none{})
 }
 
 type projectReq struct {

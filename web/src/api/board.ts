@@ -8,3 +8,5 @@ export function getBoard(): Promise<BoardInfo> {
 }
 
 export const eventsURL = () => API_BASE + '/api/events';
+// every issue as NNN-slug.md, in a zip (route 61)
+export const markdownExportURL = () => API_BASE + '/api/export/markdown';

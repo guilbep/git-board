@@ -164,7 +164,7 @@ func gitRunIn(ctx context.Context, dir, stdin string, args ...string) (string, e
 func (b *Board) needGit() (*git.Store, error) {
 	g, ok := b.Kernel.Store().(*git.Store)
 	if !ok {
-		return nil, missing("starting over needs a board kept in git; this board is kept in " + b.keptIn())
+		return nil, missing("starting over needs a board kept in git; this board is kept in " + b.DatastoreName())
 	}
 	return g, nil
 }

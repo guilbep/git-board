@@ -21,7 +21,7 @@ test('Sync is in the project file group; each forge says where its fields live, 
   const nav = page.getByRole('navigation', { name: 'Settings' });
   await expect(nav.locator('.set-group').first()).toHaveText('The project file');
   await expect(nav.locator('.set-group').first().locator('+ a')).toContainText('Sync');
-  await expect(page.getByText(/fields: .* as labels/).first()).toBeVisible();
+  await expect(page.getByText(/fields live here: .* as labels/).first()).toBeVisible();
   await page.getByRole('link', { name: 'change it in Fields' }).first().click();
   await expect(page).toHaveURL(/#\/settings\/fields/);
   // an old link to Forge fields opens Fields

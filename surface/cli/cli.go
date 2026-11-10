@@ -103,7 +103,7 @@ localhost until Ctrl-C. "git board serve" runs the server alone.`,
 	root.Flags().BoolVar(&noOpen, "no-open", false, "serve the board, or say where it runs, without opening a browser")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
 	root.AddCommand(newLs(), newView(), newShow(), newLog(), newLabels(), newMe(),
-		newNew(), newComment(), newEdit(), newSet(), newMove(), newClose(), newReopen(), newDelete(), newUndo(), newFollow(), newUnfollow(), newStatus(), newDatastore(), newConfig(), newNumbers(), newForge(), newProject(), newFetch(), newPull(), newPush(), newSync(), newRelease(), newDeploy(), newVerify(), newBranch(), newSprint(), newTui(), newServe(), newInsights())
+		newNew(), newComment(), newEdit(), newSet(), newMove(), newClose(), newReopen(), newDelete(), newUndo(), newFollow(), newUnfollow(), newStatus(), newState(), newDatastore(), newConfig(), newNumbers(), newForge(), newProject(), newFetch(), newPull(), newPush(), newSync(), newRelease(), newDeploy(), newVerify(), newBranch(), newSprint(), newTui(), newServe(), newInsights())
 	root.AddCommand(newReset(), newExport(), newImport(), newInit(), newLint())
 	root.SetVersionTemplate("git-board version {{.Version}}\n") // v1's, as the binary it replaces
 	root.AddCommand(newGet(), newDiff())

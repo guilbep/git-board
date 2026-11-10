@@ -29,6 +29,7 @@ type Event struct {
 	By      string `json:"by,omitempty"`
 	Issue   string `json:"issue,omitempty"` // progress: the issue a step is about
 	Step    *Step  `json:"step,omitempty"`  // progress
+	Error   string `json:"error,omitempty"` // config-error: why the file edited by hand does not open
 }
 
 // subBuffer is how many events a page may fall behind before it is
@@ -168,7 +169,9 @@ func (s *Server) watch(ctx context.Context, interval time.Duration) {
 		}
 		if s.configMoved() {
 			if err := s.boards.reopen(ctx); err != nil {
+				// the board keeps the last file that opened; the pages say why
 				s.log.Warn(".git-board.toml changed, and the board can't be opened again", "error", err)
+				s.publish(ctx, Event{Kind: "config-error", Error: err.Error()})
 			} else {
 				s.publish(ctx, Event{Kind: "config"})
 			}

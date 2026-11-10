@@ -40,6 +40,8 @@ type Server struct {
 	jobMu   sync.Mutex
 	job     *Job // the release job running, or the last one
 
+	device deviceLogin // the device flow (forges.go)
+
 	firstMu sync.Mutex
 	first   *app.FirstPull // what the first open of a fresh clone pulled (firstpull.go)
 }
