@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -119,4 +120,26 @@ func TestGuardRoutes(t *testing.T) {
 	within(t, "GET /api/cycle, first", countGet(t, h, "/api/cycle?who=team"),
 		map[string]int64{"entities": guardIssues, "loads": 4, "processes": 2, "listings": 8, "view calls": 32})
 	within(t, "GET /api/cycle", countGet(t, h, "/api/cycle?who=team&limit=100"), warmRoute)
+}
+
+// The inbox reads the threads of the issues updated in its window: the
+// people, the forges' records and the logs once for all of them, not a
+// listing and a read per issue.
+func TestGuardInboxRecent(t *testing.T) {
+	t.Parallel()
+	h, gb := guardServer(t)
+	const recent = 20
+	for _, id := range gb.Issues[:recent] {
+		req := httptest.NewRequest("POST", "/api/issues/"+string(id)+"/comments", strings.NewReader(`{"body":"recent"}`))
+		req.Host = "localhost"
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code/100 != 2 {
+			t.Fatalf("comment: %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+	countGet(t, h, "/api/inbox") // the view, fresh again after the writes
+	within(t, "GET /api/inbox, 20 recent", countGet(t, h, "/api/inbox"),
+		map[string]int64{"loads": 1, "listings": 8, "processes": 0})
 }

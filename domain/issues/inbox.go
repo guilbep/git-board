@@ -517,17 +517,26 @@ func (s *Service) Status(ctx context.Context, login string, markRead bool, now t
 	sort.SliceStable(rep.Assigned, func(i, j int) bool { return rep.Assigned[i].UpdatedAt.After(rep.Assigned[j].UpdatedAt) })
 
 	since := now.Add(-Window)
-	var threads []Thread
+	var recent []Issue
 	for _, is := range all {
-		if is.UpdatedAt.Before(since) {
-			continue
+		if !is.UpdatedAt.Before(since) {
+			recent = append(recent, is)
 		}
-		th, err := s.Show(ctx, is.ID)
-		if err != nil {
+	}
+	// the threads in one read: the people, the forges' records and the
+	// logs once for all, where a Show each read them each time
+	threads := make([]Thread, len(recent))
+	errs := make([]error, len(recent))
+	if len(recent) > 0 {
+		if err := s.ThreadsOf(ctx, recent, func(i int, th Thread, err error) { threads[i], errs[i] = th, err }); err != nil {
 			return StatusReport{}, err
 		}
-		th.Inherited = s.Schema.RolesFor(th.Labels)
-		threads = append(threads, th)
+	}
+	if err := errors.Join(errs...); err != nil {
+		return StatusReport{}, err
+	}
+	for i := range threads {
+		threads[i].Inherited = s.Schema.RolesFor(threads[i].Labels)
 	}
 	inViews, err := s.followedViews(ctx, dir, in.Views, m.Login, all, now)
 	if err != nil {
