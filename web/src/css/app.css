@@ -30,7 +30,7 @@ p { margin: 0 0 16px; }
    EPFL's modal backdrop behind it; its content keeps its own box, at most
    560px wide and 48px short of the window when minimized, centered (top:
    under the window's top); the issue side panel, on the right, runs the
-   full height, no inset. The page under an open dialog doesn't scroll. */
+   full height, no inset, as wide as it is dragged (panelsize.ts). The page under an open dialog doesn't scroll. */
 dialog.gb-modal { position: fixed; inset: 0; box-sizing: border-box; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 24px; border: 0; background: transparent; color: inherit; overflow: visible; outline: 0; }
 dialog.gb-modal[open] { display: flex; align-items: center; justify-content: center; }
 dialog.gb-modal::backdrop { background: var(--bg-overlay); }
@@ -38,6 +38,7 @@ dialog.gb-modal-blur::backdrop { backdrop-filter: blur(6px); }
 dialog.gb-modal > * { max-width: 560px; max-height: calc(100vh - 48px); overflow: auto; }
 dialog.gb-modal-top[open] { align-items: flex-start; }
 dialog.gb-modal-right[open] { justify-content: flex-end; padding: 0; }
+dialog.gb-modal-right > * { max-width: 100vw; }
 dialog.gb-modal-full > * { height: 100vh; max-height: 100vh; }
 dialog.gb-modal-max { padding: 0; }
 dialog.gb-modal-max > * { width: 100%; height: 100%; max-width: none; max-height: none; }

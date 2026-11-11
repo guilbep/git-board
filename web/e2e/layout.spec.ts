@@ -2,6 +2,7 @@
 // over its neighbour. Each test measures the page, as a screenshot would
 // show it.
 import { expect, test, type Page } from '@playwright/test';
+import { identity, issue } from './board';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -73,4 +74,25 @@ test.describe('on a phone', () => {
     });
     expect(lines).toBeLessThanOrEqual(2);
   });
+});
+
+// the side panel takes the width it's dragged to (a 560px cap meant for
+// small dialogs clipped it), and a double click puts the default back
+test('the issue side panel resizes by its edge', async ({ page, request }) => {
+  await identity(request);
+  const { id } = await issue(request, 'Resize me');
+  await page.goto('/#/');
+  await page.evaluate(() => localStorage.setItem('gb-panel-mode', 'side'));
+  await page.goto(`/#/?issue=${id}`);
+  const panel = page.locator('.gb-panel');
+  const edge = page.locator('.gb-resize');
+  await expect(edge).toBeVisible();
+  const box = (await edge.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(400, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBeGreaterThan(1000);
+  await edge.dblclick();
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBeLessThan(1040);
 });
