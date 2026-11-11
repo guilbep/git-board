@@ -257,3 +257,62 @@ func (s *Server) projectAction(ctx context.Context, r projectReq) (projectRes, e
 	}
 	return res, nil
 }
+
+// fitReq writes the last check's proposals to .git-board.toml
+// (docs/prd/config-fit.md): those take names (absent: every ticked or
+// answered one), the questions settled by answers, by proposal id. A dry
+// run answers the diff and writes nothing.
+type fitReq struct {
+	DryRun  bool              `query:"dry_run"`
+	Take    []string          `json:"take"`
+	Answers map[string]string `json:"answers"`
+}
+
+// fitRes is what the fit wrote, or would, and the Project as the check
+// after it reads it.
+type fitRes struct {
+	projectRes
+	Fitted app.Fitted `json:"fitted"`
+}
+
+// projectFit writes the fit from the check the server keeps: the file
+// must still be the one that check read (412 otherwise: check again).
+// Written, the Project is checked again.
+func (s *Server) projectFit(ctx context.Context, r fitReq) (fitRes, error) {
+	if !s.project.mu.TryLock() {
+		return fitRes{}, &app.Error{Class: app.Busy, Err: errors.New("the GitHub Project is being read: try again once it ends")}
+	}
+	defer s.project.mu.Unlock()
+	b := board(ctx)
+	last := s.project.last
+	if c, err := b.Config.Project(); err != nil || last == nil || last.Project != c.Name() {
+		return fitRes{}, &app.Error{Class: app.Stale, Err: errors.New("no check of this Project to fit the file to: check the Project first")}
+	}
+	f, err := b.Fit(*last, r.Take, r.Answers, true)
+	if err != nil {
+		return fitRes{}, on("answers", err)
+	}
+	if r.DryRun {
+		return fitRes{projectRes: s.projectAnswer(ctx, last), Fitted: f}, nil
+	}
+	// the file it writes passes the code gate, then is written, and the
+	// board opened again on it
+	if _, err := codeWrite(ctx, b.Dir, last.ConfigVersion, []byte(f.Text), false); err != nil {
+		return fitRes{}, on("answers", err)
+	}
+	if err := s.writeConfig(ctx, func() (err error) {
+		f, err = b.Fit(*last, r.Take, r.Answers, false)
+		return err
+	}); err != nil {
+		return fitRes{}, on("answers", err)
+	}
+	h := s.boards.get()
+	defer s.boards.release(h)
+	ctx = context.WithValue(ctx, boardKey{}, h.b)
+	rep, err := h.b.ProjectRun(ctx, ghproject.Both, false, 0)
+	if err != nil {
+		return fitRes{Fitted: f}, err
+	}
+	s.project.last = &rep
+	return fitRes{projectRes: s.projectAnswer(ctx, &rep), Fitted: f}, nil
+}
