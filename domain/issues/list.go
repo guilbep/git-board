@@ -49,6 +49,9 @@ type Service struct {
 	// (KeptList): a board's lanes and counts filter one build, not one
 	// each. Nil builds them each time.
 	Kept *KeptList
+	// Records, when set, keeps the forges' records while the sync
+	// entities stay (KeptRecords). Nil reads them each time.
+	Records *KeptRecords
 }
 
 // KeptList is the issues a List built, and the board's version they were

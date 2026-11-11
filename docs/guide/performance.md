@@ -186,3 +186,12 @@ files are one `git grep` a ref. 20,000 issues, 12,000 open:
 | first request | 71 s | 2.7 s (the server reads it in the background after the index) |
 | again, every row (7 MB) | 71 s | 230 ms |
 | again, the first page (`limit=100`) | | 190 ms |
+
+### The forges' records
+
+Each thread, follow state and list read the sync entities' records
+whole: ~200 ms on a board of a thousand synced issues, for every issue
+opened. The server keeps them while the sync entities' heads stay
+(`issues.KeptRecords`): a thread reads its issue alone. The complexity
+guards' board links every issue to a forge (`boardgen` `Synced`), so a
+read of the records again shows as one entity more.

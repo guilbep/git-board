@@ -19,6 +19,7 @@ import (
 
 	"github.com/guilbep/git-board/kernel"
 	"github.com/guilbep/git-board/kernel/pack"
+	bsync "github.com/guilbep/git-board/sync"
 )
 
 // Options size the board.
@@ -33,7 +34,15 @@ type Options struct {
 	// table's project is the file's, and nothing is asked of GitHub until
 	// a sync. Without it, no forge path runs.
 	Forge bool
+	// Synced links every issue to an issue of acme/board on GitHub, in
+	// the sync entity a sync leaves (SyncedKey): each read of an issue's
+	// forges reads its records. Written after the issues, so the issues
+	// are the seed's either way.
+	Synced bool
 }
+
+// SyncedKey is the forge project Options.Synced links the issues to.
+const SyncedKey = "github.com/acme/board"
 
 // ForgeConfig is the forge Options.Forge adds to Config.
 const ForgeConfig = `
@@ -94,16 +103,16 @@ func Git(ctx context.Context, dir string, o Options) (*Board, error) {
 	var stream bytes.Buffer
 	mark := 0
 	b := &Board{Dir: dir}
-	// entity writes one entity, a pack per change, and answers its id
-	entity := func(kind string, changes [][]kernel.Op) (kernel.ID, error) {
-		var id kernel.ID
+	// entity writes one entity, a pack per change, and answers its id:
+	// given, or its first pack's hash
+	entity := func(kind string, id kernel.ID, changes [][]kernel.Op) (kernel.ID, error) {
 		prev := 0
 		for i, ops := range changes {
 			data, err := pack.Encode(pack.Pack{Clock: uint64(i + 1), Ops: ops})
 			if err != nil {
 				return "", err
 			}
-			if i == 0 {
+			if i == 0 && id == "" {
 				id = kernel.ID(pack.Hash(data))
 			}
 			mark++
@@ -122,7 +131,7 @@ func Git(ctx context.Context, dir string, o Options) (*Board, error) {
 
 	for i := range o.People {
 		login := fmt.Sprintf("dev%d", i)
-		id, err := entity("person", [][]kernel.Op{{
+		id, err := entity("person", "", [][]kernel.Op{{
 			op("create", "", map[string]string{"name": "Dev " + login, "email": login + "@example.com"}),
 			op("add-account", "", map[string]string{"server": "github.com", "id": fmt.Sprint(1000 + i), "login": login}),
 		}})
@@ -132,6 +141,7 @@ func Git(ctx context.Context, dir string, o Options) (*Board, error) {
 		b.People = append(b.People, id)
 	}
 	statuses := []string{"backlog", "ready", "in-progress", "in-review", "qa", "validated"}
+	var seen [][2]string // each issue's title and status, for Synced
 	for range o.Issues {
 		who := func() kernel.ID { return b.People[rnd.IntN(len(b.People))] }
 		author := who()
@@ -139,7 +149,9 @@ func Git(ctx context.Context, dir string, o Options) (*Board, error) {
 		if rnd.IntN(3) == 0 {
 			body += "\n## Acceptance criteria\n\n- [ ] " + sentence(5) + "\n- [ ] " + sentence(6) + "\n"
 		}
-		changes := [][]kernel.Op{{op("create", author, map[string]string{"title": sentence(3 + rnd.IntN(5)), "body": body})}}
+		title := sentence(3 + rnd.IntN(5))
+		status := "open"
+		changes := [][]kernel.Op{{op("create", author, map[string]string{"title": title, "body": body})}}
 		changes = append(changes, []kernel.Op{op("change-labels", author, map[string]any{"add": []string{
 			"status:" + statuses[rnd.IntN(len(statuses))], fmt.Sprintf("prio:p%d", rnd.IntN(4)),
 			fmt.Sprintf("assignee:dev%d", rnd.IntN(o.People))}, "remove": []string{}})})
@@ -152,12 +164,28 @@ func Git(ctx context.Context, dir string, o Options) (*Board, error) {
 		}
 		if rnd.IntN(3) == 0 {
 			changes = append(changes, []kernel.Op{op("set-status", author, map[string]string{"status": "closed"})})
+			status = "closed"
 		}
-		id, err := entity("issue", changes)
+		id, err := entity("issue", "", changes)
 		if err != nil {
 			return nil, err
 		}
 		b.Issues = append(b.Issues, id)
+		seen = append(seen, [2]string{title, status})
+	}
+	if o.Synced { // after the issues: the seed's random choices stay theirs
+		var ops []kernel.Op
+		me := b.People[0]
+		for i, id := range b.Issues {
+			u := fmt.Sprintf("https://github.com/acme/board/issues/%d", i+1)
+			ops = append(ops,
+				op("link", me, map[string]string{"issue": string(id), "forge_id": u, "number": fmt.Sprint(i + 1), "url": u}),
+				op("seen", me, map[string]string{"issue": string(id), "field": "title", "value": seen[i][0]}),
+				op("seen", me, map[string]string{"issue": string(id), "field": "status", "value": seen[i][1]}))
+		}
+		if _, err := entity("sync", bsync.StateID(SyncedKey), [][]kernel.Op{ops}); err != nil {
+			return nil, err
+		}
 	}
 	stream.WriteString("done\n")
 
