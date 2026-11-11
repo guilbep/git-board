@@ -94,10 +94,17 @@ func TestMediaTokenOnce(t *testing.T) {
 	}
 	b := &Board{Config: &Config{}}
 	var wg sync.WaitGroup
-	for range 30 {
+	// GitHub's hosts share its one token: one lookup for all
+	hosts := []string{"github.com", "private-user-images.githubusercontent.com", "raw.githubusercontent.com"}
+	var key string
+	for i := range 30 {
 		wg.Go(func() {
-			if got := b.mediaToken(t.Context(), "github.com", nil); got != "secret" {
+			got, k := b.mediaToken(t.Context(), hosts[i%len(hosts)], nil)
+			if got != "secret" {
 				t.Errorf("token %q", got)
+			}
+			if i == 0 {
+				key = k
 			}
 		})
 	}
@@ -105,13 +112,24 @@ func TestMediaTokenOnce(t *testing.T) {
 	if n := lookups.Load(); n != 1 {
 		t.Fatalf("30 pictures at once: %d lookups, want 1", n)
 	}
-	b.forges.dropMediaToken("github.com")
-	b.mediaToken(t.Context(), "github.com", nil)
+	b.forges.dropMediaToken(key)
+	b.mediaToken(t.Context(), "user-images.githubusercontent.com", nil)
 	if n := lookups.Load(); n != 2 {
 		t.Fatalf("after the token was dropped: %d lookups, want 2", n)
 	}
 	// S3's bucket, a host no token is for, gets none
-	if got := b.mediaToken(t.Context(), githubAssetBucket, nil); got != "" || lookups.Load() != 2 {
-		t.Fatalf("GitHub's S3: token %q, %d lookups", got, lookups.Load())
+	if got, key := b.mediaToken(t.Context(), githubAssetBucket, nil); got != "" || key != "" || lookups.Load() != 2 {
+		t.Fatalf("GitHub's S3: token %q for %q, %d lookups", got, key, lookups.Load())
+	}
+	// a request gone before the lookup ends doesn't keep "none"
+	b.forges.dropMediaToken(key)
+	gone, cancel := context.WithCancel(t.Context())
+	cancel()
+	FindToken = func(ctx context.Context, f forge.Table, login string) (string, error) {
+		lookups.Add(1)
+		return "secret", ctx.Err()
+	}
+	if got, _ := b.mediaToken(gone, "github.com", nil); got != "secret" {
+		t.Fatalf("looked up for a request gone: %q", got)
 	}
 }

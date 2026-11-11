@@ -74,8 +74,10 @@ func (b *Board) gitlabForges(ctx context.Context) []forge.Table {
 	c := &b.forges
 	out, _ := c.gitlab.get(c.stamp(ctx, b.Dir), func() ([]forge.Table, error) {
 		tables := b.Config.Forges.List
+		var err error // a read that failed (a request gone) keeps nothing
 		if len(tables) == 0 || b.Config.Forges.Discover {
-			out, _ := gitRun(ctx, b.Dir, "remote", "-v")
+			var out string
+			out, err = gitRun(ctx, b.Dir, "remote", "-v")
 			for _, l := range strings.Split(out, "\n") {
 				if f := strings.Fields(l); len(f) >= 2 {
 					if t, _ := forge.FromRemote(NoCredentials(f[1])); t.Kind != "" {
@@ -90,7 +92,7 @@ func (b *Board) gitlabForges(ctx context.Context) []forge.Table {
 				out = append(out, t)
 			}
 		}
-		return out, nil
+		return out, err
 	})
 	return slices.Clone(out)
 }
@@ -170,10 +172,10 @@ func (b *Board) Media(ctx context.Context, raw string) (Picture, error) {
 			kept = &p
 		}
 	}
-	host := u.Hostname()
-	contentType, data, err := fetchMedia(ctx, u, b.mediaToken(ctx, host, gitlabs), hosts)
-	if fa := (forgeAnswered{}); errors.As(err, &fa) && (fa.code == http.StatusUnauthorized || fa.code == http.StatusForbidden) {
-		b.forges.dropMediaToken(host) // revoked, or another account's: looked up again next time
+	token, key := b.mediaToken(ctx, u.Hostname(), gitlabs)
+	contentType, data, err := fetchMedia(ctx, u, token, hosts)
+	if fa := (forgeAnswered{}); key != "" && errors.As(err, &fa) && (fa.code == http.StatusUnauthorized || fa.code == http.StatusForbidden) {
+		b.forges.dropMediaToken(key) // revoked, or another account's: looked up again next time
 	}
 	if err != nil {
 		if kept != nil {
@@ -212,12 +214,14 @@ func immutableMedia(u *url.URL, gitlabHosts []string) bool {
 	return false
 }
 
-// mediaToken is the token host's pictures are fetched with: GitHub's
-// for github.com and its githubusercontent.com, a GitLab forge's for its
-// host; none for any other (S3's bucket: the token never goes there).
-// Yours on that host, else the forge's posting account's, else any
-// (LoginFor's order). Looked up once and kept (forgeCache.mediaToken).
-func (b *Board) mediaToken(ctx context.Context, host string, gitlabs []forge.Table) string {
+// mediaToken is the token host's pictures are fetched with, and the
+// forge it is kept for (key, "" for none): GitHub's for github.com and
+// its githubusercontent.com hosts, one token for all of them; a GitLab
+// forge's for its host; none for any other (S3's bucket: the token never
+// goes there). Yours on that host, else the forge's posting account's,
+// else any (LoginFor's order). Looked up once and kept
+// (forgeCache.mediaToken), whatever becomes of the request that asked.
+func (b *Board) mediaToken(ctx context.Context, host string, gitlabs []forge.Table) (token, key string) {
 	var f forge.Table
 	switch {
 	case host == "github.com" || strings.HasSuffix(host, ".githubusercontent.com"):
@@ -236,30 +240,33 @@ func (b *Board) mediaToken(ctx context.Context, host string, gitlabs []forge.Tab
 		}
 	}
 	if f.Kind == "" {
-		return ""
+		return "", ""
 	}
-	return b.forges.mediaToken(host, func() string {
+	key = f.Kind + " " + f.Host
+	ctx = context.WithoutCancel(ctx) // the others waiting on it keep its answer
+	return b.forges.mediaToken(key, func() string {
 		for _, login := range slices.Compact([]string{cmp.Or(b.myLogin(ctx, f.Host), f.Login), ""}) {
 			if t, err := FindToken(ctx, f, login); err == nil && t != "" {
 				return t
 			}
 		}
 		return ""
-	})
+	}), key
 }
 
-// mediaToken is host's token for its pictures, find's answer kept: a
+// mediaToken is a forge's token for its pictures (key: its kind and
+// host), find's answer kept: a
 // minute found, 10 s not, and until a token is stored here (tokenFound's
 // rule). The lock is held across find, so thirty pictures missing at
 // once run one git credential fill, not thirty. The token stays in this
 // process's memory alone, never on disk nor in an answer.
 // ponytail: one lock for every host; a lock a host if pictures from
 // several forges load at once.
-func (c *forgeCache) mediaToken(host string, find func() string) string {
+func (c *forgeCache) mediaToken(key string, find func() string) string {
 	c.mediaMu.Lock()
 	defer c.mediaMu.Unlock()
 	stored := tokensStored.Load()
-	if k, ok := c.media[host]; ok && k.stored == stored {
+	if k, ok := c.media[key]; ok && k.stored == stored {
 		if age := time.Since(k.at); k.token != "" && age < time.Minute || age < 10*time.Second {
 			return k.token
 		}
@@ -268,18 +275,18 @@ func (c *forgeCache) mediaToken(host string, find func() string) string {
 	if c.media == nil {
 		c.media = map[string]mediaToken{}
 	}
-	c.media[host] = mediaToken{token: t, at: time.Now(), stored: stored}
+	c.media[key] = mediaToken{token: t, at: time.Now(), stored: stored}
 	return t
 }
 
-// dropMediaToken forgets host's token: the forge refused it.
-func (c *forgeCache) dropMediaToken(host string) {
+// dropMediaToken forgets a forge's token: it refused it.
+func (c *forgeCache) dropMediaToken(key string) {
 	c.mediaMu.Lock()
-	delete(c.media, host)
+	delete(c.media, key)
 	c.mediaMu.Unlock()
 }
 
-// mediaToken is a host's token as mediaToken found it ("" for none).
+// mediaToken is a forge's token as mediaToken found it ("" for none).
 type mediaToken struct {
 	token  string
 	at     time.Time
