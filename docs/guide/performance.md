@@ -92,10 +92,15 @@ worse, and reverted; not to try again without a new reason:
 
 - fetching `/api/config` beside the board page's code: largest paint
   2.79 s to 3.08 s (3 runs);
-- preloading the opened page's chunks from `index.html` (a generated
-  `route-preload.js`): the board's largest paint 2.47 s to 2.68 s, an
-  issue's 2.76 s to 2.91 s (3 runs, 2026-11-11). On slow 4G they take
-  the bandwidth the first paint needs.
+- preloading the opened page's code beside the entry, three ways (3
+  runs each, 2026-11-11, the board's largest paint 2.47 s without):
+  - its chunks, their CSS and the chunks they share, from a generated
+    `route-preload.js`: 2.68 s (they take the first paint's bandwidth);
+  - its own chunk alone, from the same file: 2.70 s (the file is a
+    round trip of its own, in the head);
+  - its own chunk alone, inline, its hash in the CSP: 2.47 to 2.56 s,
+    no gain: the entry finds the page's chunk at once, nothing waits on
+    it.
 
 ## Guarded, then timed
 
