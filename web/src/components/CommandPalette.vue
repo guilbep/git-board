@@ -4,7 +4,7 @@
      New issue, Insights, Settings, Sync, the filters, shortcuts). Nothing
      typed: the issues opened lately, then the commands. -->
 <template>
-  <GbDialog v-model="paletteOpen" position="top" @show="onShow" @hide="onHide">
+  <GbDialog v-model="paletteOpen" position="top" warm @show="onShow" @hide="onHide">
     <div class="cp" role="dialog" aria-label="Filter the issues, jump to one, or run a command" @keydown="onKey">
       <div class="cp-search">
         <GbIcon name="search" small />

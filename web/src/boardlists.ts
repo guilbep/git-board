@@ -10,6 +10,7 @@
 import { ref, shallowRef, watch, type Ref } from 'vue';
 import { batchIssues, getLabels, issueIDs, type Issue, type LabelCount } from '@/api';
 import { current, get, issues as kept } from '@/local/store';
+import { localIDs } from '@/local/query';
 import type { Bucket } from '@/bucket';
 import { configModel } from '@/configmodel';
 import { facetsOf, type Counted, type Facet } from '@/facets';
@@ -64,13 +65,26 @@ export function useBoardLists(fields: Ref<Fields>) {
     const signal = ctl.signal;
     loading.value = true;
     error.value = '';
+    let listed = () => {};
     try {
       await current(); // the board kept here, caught up with the events heard
-      let labels: Promise<LabelCount[]> | undefined;
+      // the filters panel's counts and labels go beside the list, not after
+      // it: they wait for its total only to compare with it
+      const listedP = new Promise<void>((r) => (listed = r));
+      const labels = getLabels(p.filter, signal, true);
+      labels.catch(() => {});
+      void loadFacets(p.filter, labels, signal, listedP);
       let next: Bucket[];
       const sort = p.sort || undefined;
       const limit = pageSize();
-      if (!p.group) {
+      const local = answeredHere(p, limit);
+      if (local) {
+        // answered from the board kept here, at once; the server's word in
+        // the background, which wins where they differ
+        next = local.buckets;
+        total.value = local.total;
+        void check(p, local.filters, local.buckets, signal);
+      } else if (!p.group) {
         const r = await issueIDs({ f: [p.filter], sort, limit }, signal);
         next = [bucketOf('', r.lists[0] ?? [], r.totals[0] ?? 0)];
         total.value = r.totals[0] ?? 0;
@@ -79,7 +93,6 @@ export function useBoardLists(fields: Ref<Fields>) {
         // one request, the labels beside it; then, in one more, a lane for
         // each value in use that no option names
         const options = [...optionsOf(p.group), NONE];
-        labels = getLabels(p.filter, signal);
         const known = issueIDs({ f: [p.filter, ...options.map((v) => laneFilter(p.filter, p.group, v))], sort, limit }, signal);
         // awaited below, after labels: a new load aborting it meanwhile
         // is this load's to catch, not an unhandled rejection of the page's
@@ -93,15 +106,59 @@ export function useBoardLists(fields: Ref<Fields>) {
         ];
         total.value = k.totals[0] ?? 0;
       }
-      if (signal.aborted) return;
+      if (signal.aborted) return listed();
       buckets.value = next;
       loading.value = false;
-      void loadFacets(p.filter, labels ?? getLabels(p.filter, signal), signal);
+      listed();
     } catch (e) {
+      listed();
       if (signal.aborted) return;
       error.value = e instanceof Error ? e.message : String(e);
       buckets.value = null;
       loading.value = false;
+    }
+  }
+
+  // answeredHere is every list of p from the board kept here (local/query),
+  // and the filters they are; null when one is the server's alone
+  function answeredHere(p: ListParams, limit: number): { buckets: Bucket[]; total: number; filters: string[] } | null {
+    const all = [...kept.value.values()];
+    const sort = p.sort || '';
+    const whole = localIDs(all, p.filter, sort, 0);
+    if (!whole) return null;
+    if (!p.group) {
+      return { buckets: [bucketOf('', whole.ids.slice(0, limit), whole.total)], total: whole.total, filters: [p.filter] };
+    }
+    // the options' lanes, and one for each value in use that no option names
+    const options = [...optionsOf(p.group), NONE];
+    const prefix = `${p.group}:`;
+    const inUse = new Set<string>();
+    for (const id of whole.ids) for (const l of get(id)?.labels ?? []) if (l.startsWith(prefix)) inUse.add(l.slice(prefix.length));
+    const values = [...options, ...[...inUse].filter((v) => !options.includes(v)).sort()];
+    const filters = values.map((v) => laneFilter(p.filter, p.group, v));
+    const lanes = filters.map((f) => localIDs(all, f, sort, limit));
+    if (lanes.some((l) => !l)) return null;
+    return { buckets: values.map((v, i) => bucketOf(v, lanes[i]!.ids, lanes[i]!.total)), total: whole.total, filters };
+  }
+
+  // check asks the server the lists the page answered, in the background:
+  // where its answer differs, it wins, and the console says so (a filter's
+  // rule the page got wrong: local/query.ts)
+  async function check(p: ListParams, filters: string[], mine: Bucket[], signal: AbortSignal) {
+    try {
+      const r = await issueIDs({ f: filters, sort: p.sort || undefined, limit: pageSize() }, signal, true);
+      if (signal.aborted || buckets.value !== mine) return;
+      let differs = false;
+      const fixed = mine.map((b, i) => {
+        const ids = r.lists[i] ?? [];
+        if (ids.join() === (b.ids ?? []).join() && (r.totals[i] ?? 0) === b.total) return b;
+        differs = true;
+        console.warn(`git-board: the page's answer for ${filters[i]} differs from the server's; the server's shows`);
+        return bucketOf(b.group, ids, r.totals[i] ?? 0);
+      });
+      if (differs) buckets.value = fixed;
+    } catch {
+      // the page's answer stays
     }
   }
 
@@ -110,7 +167,7 @@ export function useBoardLists(fields: Ref<Fields>) {
   // only where the state facet reads them, labels only where a field's
   // does: on is:open (a view's default) that is the list, its labels and
   // two counts
-  async function loadFacets(filter: string, labels: Promise<LabelCount[]>, signal: AbortSignal) {
+  async function loadFacets(filter: string, labels: Promise<LabelCount[]>, signal: AbortSignal, listed: Promise<void>) {
     // how many a filter matches: the list's own total when it is the
     // list's filter (is:open, a view's default), else counted, every
     // count in one request
@@ -127,10 +184,11 @@ export function useBoardLists(fields: Ref<Fields>) {
       const wanted = [...(sharedStates ? states(filter) : []), ...own.flatMap((k) => states(rest(filter, k)))];
       const ask = [...new Set(wanted.filter((f) => !same(f, filter)))];
       const [counts, sharedLabels, ownLabels] = await Promise.all([
-        batchIssues({ counts: ask }, signal),
+        batchIssues({ counts: ask }, signal, true),
         labels,
-        Promise.all(own.map((k) => (k === STATE ? Promise.resolve([]) : getLabels(rest(filter, k), signal)))),
+        Promise.all(own.map((k) => (k === STATE ? Promise.resolve([]) : getLabels(rest(filter, k), signal, true)))),
       ]);
+      await listed; // its total, for the counts of its own filter
       const n = (f: string) => (same(f, filter) ? total.value : (counts.totals[ask.indexOf(f)] ?? 0));
       const counted = (f: string, l: LabelCount[]): Counted => {
         const [o, c] = states(f);

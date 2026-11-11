@@ -211,6 +211,8 @@
 </template>
 
 <script setup lang="ts">
+import { begin } from '@/interaction';
+import { prefetchThread } from '@/issue';
 import GbDialog from '@/components/GbDialog.vue';
 import FilterBox from '@/components/FilterBox.vue';
 import ViewBar from '@/components/ViewBar.vue';
@@ -545,7 +547,10 @@ async function load() {
     void fieldsRead.then(loadColors, () => {});
   }
 }
-watch(sort, () => void load());
+watch(sort, () => {
+  begin('sort');
+  void load();
+});
 
 watch(activeView, resetView);
 
@@ -553,6 +558,7 @@ watch(activeView, resetView);
 // asked once typing pauses, unless a tick or the view asked already
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
 watch(applied, () => {
+  begin('apply filter'); // timed to the paint after its lists (interaction.ts)
   clearTimeout(filterTimer);
   filterTimer = setTimeout(() => applied.value !== loaded && void load(), 50);
 });
@@ -610,6 +616,8 @@ function openIssue(issue: Issue) {
   openId(issue.id);
 }
 function openId(id: string) {
+  begin('open issue'); // timed to the paint after its thread (interaction.ts)
+  void prefetchThread(id); // its reads at once, not after its thread
   void setQuery({ issue: id });
 }
 function step(delta: number) {

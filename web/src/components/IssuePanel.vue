@@ -175,6 +175,7 @@ import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { cycleOn, loadMe, me, meLoaded } from '@/me';
 import { getCycle } from '@/api';
+import { OPEN_KEEP } from '@/issue';
 import type { Cycle } from '@/api/cycletypes';
 import CommentCard from '@/components/CommentCard.vue';
 import CyclePanel from '@/components/CyclePanel.vue';
@@ -255,7 +256,7 @@ watch(
     if (!want || !version) return;
     if (cycle.value?.version === version) return; // the action's answer is this version's
     const id = props.id;
-    const c = await getCycle(id).catch(() => null);
+    const c = await getCycle(id, OPEN_KEEP).catch(() => null);
     if (id === props.id) cycle.value = c;
   },
   { immediate: true },

@@ -63,12 +63,21 @@
 5k/web/IssueFCP           2.3s    an issue's first paint (target 1.8 s)
 5k/web/IssueTBT           200ms   an issue's main thread blocked
 
-# What a person does on a page (web/e2e/interactions.ts), from the act to
-# what they see, the CPU 4x slower (as the mobile run), on 5,000 issues;
-# a laptop's medians on 2026-11-11, the targets named: 100 ms for what the
-# page answers alone, 200 ms for what asks the server.
-5k/web/InteractionOpenPalette   200ms   the command palette (149 ms; target 100 ms: its list of commands rendered)
-5k/web/InteractionOpenShortcuts 180ms   every shortcut (135 ms; target 100 ms)
-5k/web/InteractionOpenIssue     160ms   a card clicked to its panel (116 ms; target 200 ms)
-5k/web/InteractionRenameIssue   80ms    a title saved, shown before the answer (53 ms; target 100 ms)
-5k/web/InteractionApplyFilter   50ms    a filter entered (15 ms; target 200 ms)
+# What a person does on a page (web/e2e/interactions.ts), timed in the
+# page (Event Timing, and interaction.ts's act to the paint after its
+# requests), in two setups on 5,000 issues:
+#   Worst: the CPU 6x slower, slow 4G (150 ms a round trip); the targets
+#          100 ms for what the page answers alone (an optimistic write,
+#          what it shows), 200 ms for what needs the server's answer
+#   Desk:  as it is; 50 and 60 ms (an act's paint waits a frame, ~16 ms)
+# The laptop's medians on 2026-11-11 in each reason.
+5k/web/InteractionOpenPaletteDesk     50ms    the command palette (40 ms)
+5k/web/InteractionOpenPaletteWorst    100ms   (88 ms; its content made while closed: GbDialog warm)
+5k/web/InteractionOpenShortcutsDesk   50ms    every shortcut (40 ms)
+5k/web/InteractionOpenShortcutsWorst  100ms   (88 ms)
+5k/web/InteractionApplyFilterDesk     50ms    a filter typed, answered from the board kept (32 ms)
+5k/web/InteractionApplyFilterWorst    100ms   (72 ms; 470 ms when the server answered it)
+5k/web/InteractionRenameIssueDesk     50ms    a title saved, as shown before its answer (16 ms)
+5k/web/InteractionRenameIssueWorst    100ms   (40 ms)
+5k/web/InteractionOpenIssueDesk       60ms    a card clicked to its panel, every read at once (40 ms)
+5k/web/InteractionOpenIssueWorst      200ms   (152 ms: one round trip; read ahead on hover, less)

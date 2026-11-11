@@ -14,7 +14,7 @@
     @close="onClose"
     @click="onClick"
   >
-    <slot v-if="shown" />
+    <slot v-if="shown || warmed" />
   </dialog>
 </template>
 
@@ -34,7 +34,7 @@ if (typeof document !== 'undefined')
 </script>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 const props = defineProps<{
@@ -46,11 +46,20 @@ const props = defineProps<{
   blur?: boolean | undefined; // the page behind it blurred
   noFocus?: boolean | undefined; // the content focuses itself: nothing is focused for it
   noRouteDismiss?: boolean | undefined; // a new address leaves it open
+  // warm: its content is made while it is closed, once the page is idle,
+  // and kept: opening it is showing it (the palette, the shortcuts: a
+  // person's keystroke answered in a frame, even on a slow phone)
+  warm?: boolean | undefined;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [open: boolean]; show: []; hide: [] }>();
 
 const el = ref<HTMLDialogElement | null>(null);
 const shown = ref(false);
+const warmed = ref(false);
+if (props.warm) {
+  const idle = (fn: () => void) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 2000 }) : setTimeout(fn, 500));
+  onMounted(() => idle(() => (warmed.value = true)));
+}
 let before: Element | null = null; // what had the focus: it gets it back
 
 const me = { close: () => close(), persistent: () => !!props.persistent };

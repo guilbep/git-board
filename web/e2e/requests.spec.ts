@@ -18,7 +18,7 @@ test('a config changed elsewhere asks who writes once, though several parts relo
   const errs = errors(page);
   await identity(request);
   await page.goto('/#/settings');
-  await expect(page.locator('header')).toBeVisible();
+  await expect(page.getByRole('banner')).toBeVisible();
   await page.waitForLoadState('networkidle');
   const me = asked(page, '/api/me');
   const before = (await (await request.get('/api/config')).json()) as { text: string; version: string };
@@ -39,11 +39,11 @@ test("another page's header doesn't ask the board's state again", async ({ page,
   const errs = errors(page);
   await identity(request);
   await page.goto('/#/inbox');
-  await expect(page.locator('header')).toBeVisible();
+  await expect(page.getByRole('banner')).toBeVisible();
   await page.waitForLoadState('networkidle');
   const state = asked(page, '/api/state');
   await page.goto('/#/releases');
-  await expect(page.locator('header')).toBeVisible();
+  await expect(page.getByRole('banner')).toBeVisible();
   await page.waitForLoadState('networkidle');
   expect(state()).toBe(0);
   expect(errs).toEqual([]);

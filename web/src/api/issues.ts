@@ -31,15 +31,15 @@ export interface Batch {
 // several, at once
 const MAX_BATCH = 64;
 
-export async function batchIssues(q: { pages?: string[]; counts?: string[]; sort?: string | undefined; limit?: number }, signal?: AbortSignal): Promise<Batch> {
+export async function batchIssues(q: { pages?: string[]; counts?: string[]; sort?: string | undefined; limit?: number }, signal?: AbortSignal, background?: boolean): Promise<Batch> {
   const pages = q.pages ?? [];
   const counts = q.counts ?? [];
   if (pages.length + counts.length === 0) return { pages: [], totals: [] };
   const pa = pages.slice(0, MAX_BATCH);
   const ca = counts.slice(0, MAX_BATCH - pa.length);
-  const first = get<Batch>('/api/issues/batch', { query: { f: pa, c: ca, sort: q.sort, limit: q.limit }, signal });
+  const first = get<Batch>('/api/issues/batch', { query: { f: pa, c: ca, sort: q.sort, limit: q.limit }, signal, background });
   if (pa.length === pages.length && ca.length === counts.length) return first;
-  const [a, b] = await Promise.all([first, batchIssues({ ...q, pages: pages.slice(pa.length), counts: counts.slice(ca.length) }, signal)]);
+  const [a, b] = await Promise.all([first, batchIssues({ ...q, pages: pages.slice(pa.length), counts: counts.slice(ca.length) }, signal, background)]);
   return { pages: [...a.pages, ...b.pages], totals: [...a.totals, ...b.totals] };
 }
 
@@ -109,8 +109,8 @@ export function undo(id: string, force = false): Promise<Undone> {
   return send('POST', `${path(id)}/undo`, { body: { force } });
 }
 
-export function getFollow(id: string): Promise<FollowState> {
-  return get(`${path(id)}/follow`);
+export function getFollow(id: string, keep?: number): Promise<FollowState> {
+  return get(`${path(id)}/follow`, { keep });
 }
 
 // null: back to following automatically

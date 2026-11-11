@@ -48,7 +48,10 @@ export const interactions: Interaction[] = [
     maxRequests: 6, // its thread, its cycle, follow, the uploads' settings, the inbox's line
     arrange: async (page, g) => {
       await page.goto(`/#/?filter=${g.issue.id.slice(0, 12)}`); // the issue itself, on any board
-      await expect(page.getByRole('button', { name: g.issue.title }).first()).toBeVisible();
+      const card = page.getByRole('button', { name: g.issue.title }).first();
+      await expect(card).toBeVisible();
+      await card.hover(); // as a person's pointer comes to it: its thread read ahead
+      await page.waitForTimeout(100);
     },
     // a card on the board, a title in the table: the issue's own button
     act: (page, g) => page.getByRole('button', { name: g.issue.title }).first().click(),
@@ -74,9 +77,11 @@ export const interactions: Interaction[] = [
     arrange: async (page) => {
       await page.goto('/#/');
       await expect(page.locator('#filter')).toBeVisible();
-      await page.locator('#filter').fill('is:closed');
     },
-    act: (page) => page.locator('#filter').press('Enter'),
+    act: async (page) => {
+      await page.locator('#filter').fill('is:closed');
+      await page.locator('#filter').press('Enter');
+    },
     done: (page) => expect(page).toHaveURL(/filter=is%3Aclosed|filter=is:closed/),
   },
 ];

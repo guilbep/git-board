@@ -8,8 +8,9 @@ type Read = Cycle & { evidence: Cycle['evidence'] & { stages?: CycleStages } };
 // the server keeps the stages in the evidence; the page reads them beside
 const withStages = (c: Read): Cycle => ({ ...c, stages: c.stages ?? c.evidence.stages! });
 
-export async function getCycle(id: string): Promise<Cycle> {
-  return withStages(await get<Read>(`/api/issues/${enc(id)}/cycle`));
+// keep: an issue opened reads what its card's hover read ahead
+export async function getCycle(id: string, keep?: number): Promise<Cycle> {
+  return withStages(await get<Read>(`/api/issues/${enc(id)}/cycle`, { keep }));
 }
 
 // cycleAct does one of a step's actions from the version read (If-Match:

@@ -22,6 +22,13 @@ export interface Call {
   ifMatch?: string | undefined; // a version, unquoted
   ifNoneMatch?: string | undefined;
   signal?: AbortSignal | undefined;
+  // keep: a GET's answer serves the same GET for this many ms, unless a
+  // write or a change event came between (forgetPending): what a page
+  // read ahead (a card hovered) is what it opens
+  keep?: number | undefined;
+  // background: no act waits for it (a check of what the page answered
+  // itself, the filters panel's counts): it isn't counted in an act's time
+  background?: boolean | undefined;
 }
 
 export interface Answer<T> {
@@ -64,7 +71,7 @@ async function fetchRaw(method: string, path: string, c: Call): Promise<Raw> {
   const init: RequestInit = { method, headers };
   if (method !== 'GET' && method !== 'DELETE') init.body = JSON.stringify(c.body ?? {});
   if (c.signal) init.signal = c.signal;
-  started();
+  if (!c.background) started();
   try {
     const res = await fetch(url(path, c.query), init).catch((e: unknown) => {
       if (e instanceof DOMException && e.name === 'AbortError') throw e;
@@ -73,7 +80,7 @@ async function fetchRaw(method: string, path: string, c: Call): Promise<Raw> {
     const text = res.status === 204 || res.status === 304 ? '' : await res.text();
     return { status: res.status, ok: res.ok, version: unquote(res.headers.get('ETag')), location: res.headers.get('Location') ?? '', text };
   } finally {
-    finished();
+    if (!c.background) finished();
   }
 }
 
@@ -97,7 +104,17 @@ const pending = new Map<string, Promise<Raw>>();
 
 export function forgetPending(): void {
   pending.clear();
+  kept.clear();
+  changes++;
 }
+
+// changes counts the writes and change events heard: an answer read at
+// the same count is the board's as it still is, as far as the page knows
+let changes = 0;
+export const changesHeard = () => changes;
+
+// the answers kept a moment (Call.keep), by URL
+const kept = new Map<string, { at: number; raw: Raw }>();
 
 function sharedGet(path: string, c: Call): Promise<Raw> {
   const key = url(path, c.query) + '\n' + (c.ifNoneMatch ?? '');
@@ -116,7 +133,10 @@ export async function call<T>(method: string, path: string, c: Call = {}): Promi
     forgetPending();
     if (!active()) begin(`${method} ${routeName(path)}`); // a write is an interaction, unless a named one goes on
   }
-  const r = await (method === 'GET' && !c.signal ? sharedGet(path, c) : fetchRaw(method, path, c));
+  const key = c.keep && method === 'GET' && !c.ifNoneMatch ? url(path, c.query) : '';
+  const held = key ? kept.get(key) : undefined;
+  const r = held && performance.now() - held.at < c.keep! ? held.raw : await (method === 'GET' && !c.signal ? sharedGet(path, c) : fetchRaw(method, path, c));
+  if (key && r !== held?.raw && r.ok) kept.set(key, { at: performance.now(), raw: r });
   const answer = { status: r.status, version: r.version, location: r.location };
   if (r.status === 204 || r.status === 304) return { ...answer, data: undefined as T };
   if (!r.ok) {

@@ -4,8 +4,8 @@ import type { AvatarsMode, FieldConfig, Items, LabelCount, MeResponse, Person } 
 
 // the labels in use among the issues filter matches (every issue when
 // absent), each counted open and closed: the filter panel's counts
-export async function getLabels(filter?: string, signal?: AbortSignal): Promise<LabelCount[]> {
-  return (await get<Items<LabelCount>>('/api/labels', { query: { filter }, signal })).items;
+export async function getLabels(filter?: string, signal?: AbortSignal, background?: boolean): Promise<LabelCount[]> {
+  return (await get<Items<LabelCount>>('/api/labels', { query: { filter }, signal, background })).items;
 }
 
 export function getFields(): Promise<Record<string, FieldConfig>> {

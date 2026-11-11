@@ -6,10 +6,12 @@
 // without a version, the last writer wins, field by field).
 import { ref, watch, type Ref } from 'vue';
 import {
-  addComment, ApiError, editComment, getThread, getThreadSince, isStale, message, patchIssue,
+  addComment, ApiError, changesHeard, editComment, getCycle, getFollow, getThread, getThreadSince, isStale, message, patchIssue,
   type IssueChange, type Thread,
 } from '@/api';
 import { latestOnly } from '@/latest';
+import { cycleOn } from '@/me';
+import { loadUploadStatus } from '@/uploads';
 import { apply as applyKept } from '@/local/store';
 
 export { message };
@@ -19,20 +21,35 @@ export { message };
 // card hovered reads its thread before the click (prefetchThread)
 // ponytail: the last 200 kept; an LRU if people open thousands a visit
 const threads = new Map<string, Thread>();
+const readAt = new Map<string, { at: number; heard: number }>(); // when, and at which change heard
 function keepThread(t: Thread) {
   threads.delete(t.id);
   threads.set(t.id, t);
-  if (threads.size > 200) threads.delete(threads.keys().next().value!);
+  readAt.set(t.id, { at: performance.now(), heard: changesHeard() });
+  if (threads.size > 200) {
+    const old = threads.keys().next().value!;
+    threads.delete(old);
+    readAt.delete(old);
+  }
+}
+// fresh: read a moment ago, and nothing heard since: no need to ask again
+function fresh(id: string): boolean {
+  const r = readAt.get(id);
+  return !!r && r.heard === changesHeard() && performance.now() - r.at < OPEN_KEEP;
 }
 
-// prefetchThread reads an issue's thread before it is opened
-export async function prefetchThread(id: string): Promise<void> {
-  if (threads.has(id)) return;
-  try {
-    keepThread(await getThread(id));
-  } catch {
-    // opened, it reads it again and says why
-  }
+// OPEN_KEEP is how long what an issue's opening read ahead serves it
+export const OPEN_KEEP = 10_000;
+
+// prefetchThread reads what opening an issue reads, at once rather than
+// one after the other: its thread, its cycle (when on), whether one
+// follows it, whether files attach; a card hovered, an issue opened
+export function prefetchThread(id: string): Promise<void> {
+  loadUploadStatus();
+  void getFollow(id, OPEN_KEEP).catch(() => {});
+  if (cycleOn.value) void getCycle(id, OPEN_KEEP).catch(() => {});
+  if (threads.has(id)) return Promise.resolve();
+  return getThread(id).then(keepThread, () => {}); // opened, it reads it again and says why
 }
 
 export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => {}) {
@@ -54,6 +71,11 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     if (kept && thread.value?.id !== kept.id) {
       thread.value = kept; // shown at once, then asked whether it moved
       loading.value = false;
+    }
+    if (kept && fresh(id.value)) {
+      thread.value = kept;
+      loading.value = false;
+      return;
     }
     try {
       const t = kept ? await getThreadSince(id.value, kept.version) : await getThread(id.value);

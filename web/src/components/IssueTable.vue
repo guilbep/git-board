@@ -83,7 +83,7 @@
             <!-- The whole row opens the issue, but its box and its field
                  cells (edited in place); the title button is the keyboard
                  entry point (its click bubbles up to the row). -->
-            <tr v-for="issue in bucket.issues.slice(...win(bucket))" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)">
+            <tr v-for="issue in bucket.issues.slice(...win(bucket))" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)" @mouseenter="hover(issue.id)" @focusin="hover(issue.id)" @mouseleave="unhover">
               <td class="cell-pick" @click.stop>
                 <input type="checkbox" :aria-label="`Select ${issue.shown_title}`" :checked="selected.has(issue.id)" @click="toggleRow(issue.id, $event)" />
               </td>
@@ -116,8 +116,9 @@
 </template>
 
 <script setup lang="ts">
+import { prefetchThread } from '@/issue';
 import { safeHref } from '@/links';
-import { computed, onUpdated, reactive, ref, watch } from 'vue';
+import { computed, onUpdated, reactive, ref, watch, onBeforeUnmount } from 'vue';
 import { scrollerOf, vNear } from '@/near';
 import { LONG, useScroll, windowRange } from '@/windowrows';
 import { patchIssue, type Issue, type IssueChange } from '@/api';
@@ -278,6 +279,15 @@ async function write(i: Issue, change: IssueChange) {
   i.labels = t.labels;
   i.status = t.status;
 }
+
+// a row rested on 80 ms reads its issue (prefetchThread): the click opens it at once
+let hovering: ReturnType<typeof setTimeout> | undefined;
+function hover(id: string) {
+  clearTimeout(hovering);
+  hovering = setTimeout(() => void prefetchThread(id), 80);
+}
+const unhover = () => clearTimeout(hovering);
+onBeforeUnmount(unhover);
 </script>
 
 <style scoped>

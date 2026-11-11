@@ -34,5 +34,5 @@ export interface IDLists {
 
 // issueIDs is the ids each filter matches, sorted, from offset, limit of
 // them (0: all), and how many it matches, in the order asked
-export const issueIDs = (q: { f: string[]; sort?: string | undefined; limit?: number; offset?: number }, signal?: AbortSignal) =>
-  get<IDLists>('/api/issues/ids', { query: { f: q.f, sort: q.sort, limit: q.limit, offset: q.offset }, signal });
+export const issueIDs = (q: { f: string[]; sort?: string | undefined; limit?: number; offset?: number }, signal?: AbortSignal, background?: boolean) =>
+  get<IDLists>('/api/issues/ids', { query: { f: q.f, sort: q.sort, limit: q.limit, offset: q.offset }, signal, background });

@@ -16,6 +16,9 @@ export const boardFile = (): string => readFileSync(join(process.env.E2E_DIR ?? 
 export function errors(page: Page): Error[] {
   const out: Error[] = [];
   page.on('pageerror', (e) => out.push(e));
+  // a filter the page answered itself that the server answers otherwise
+  // (local/query.ts) is a bug too, though the page then shows the server's
+  page.on('console', (m) => m.text().includes("differs from the server's") && out.push(new Error(m.text())));
   return out;
 }
 

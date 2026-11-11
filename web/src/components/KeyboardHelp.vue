@@ -1,6 +1,6 @@
 <!-- Every keyboard shortcut, in one list: ? opens it, Esc closes it. -->
 <template>
-  <GbDialog v-model="helpOpen">
+  <GbDialog v-model="helpOpen" warm>
     <section class="kh" role="document" aria-labelledby="kh-title">
       <header class="kh-head">
         <h2 id="kh-title" class="h5">Keyboard shortcuts</h2>
