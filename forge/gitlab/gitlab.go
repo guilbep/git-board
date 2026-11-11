@@ -375,6 +375,15 @@ func (f *Forge) Complete(ctx context.Context, is forge.Issue) (forge.Issue, erro
 	}
 	is.Comments, is.Changed = nil, map[string]int64{}
 	at := f.p.issue(iid)
+	// the state events beside the notes: two round trips at once, not in a row
+	var closedAt int64
+	stateErr := make(chan error, 1)
+	go func() {
+		stateErr <- each(ctx, f, at+"/resource_state_events", url.Values{}, func(e stateEvent) (bool, error) {
+			closedAt = max(closedAt, e.CreatedAt.Unix())
+			return true, nil
+		})
+	}()
 	err = each(ctx, f, at+"/notes", url.Values{"sort": {"asc"}, "order_by": {"created_at"}}, func(n note) (bool, error) {
 		switch {
 		case n.System:
@@ -386,13 +395,14 @@ func (f *Forge) Complete(ctx context.Context, is forge.Issue) (forge.Issue, erro
 		}
 		return true, nil
 	})
+	serr := <-stateErr
 	if err != nil {
 		return is, err
 	}
-	err = each(ctx, f, at+"/resource_state_events", url.Values{}, func(e stateEvent) (bool, error) {
-		is.Changed["status"] = max(is.Changed["status"], e.CreatedAt.Unix())
-		return true, nil
-	})
+	err = serr
+	if closedAt > 0 {
+		is.Changed["status"] = max(is.Changed["status"], closedAt)
+	}
 	if errors.Is(err, forge.ErrNotFound) {
 		err = nil // GitLab before 13.2: the system notes said it
 	}

@@ -62,12 +62,23 @@ func tenOld(t *testing.T) (*kernel.Board, *reads, []forge.Issue) {
 func cut(t *testing.T, s *kernel.Board, r *reads, failOn string) {
 	t.Helper()
 	r.then(failOn)
-	if _, err := Sync(t.Context(), s, Options{}, r); err == nil || !strings.Contains(err.Error(), "the connection dropped") {
+	if _, err := Sync(t.Context(), s, Options{Readers: 1}, r); err == nil || !strings.Contains(err.Error(), "the connection dropped") {
 		t.Fatalf("the cut run: %v", err)
 	}
 }
 
 func titles(l []string) string { return strings.Join(l, " ") }
+
+// syncInOrder is syncAll reading one issue at a time: the journal's tests
+// hold the reads' order, which reading ahead (Options.Readers) mixes.
+func syncInOrder(t *testing.T, s *kernel.Board, fs ...forge.Forge) Report {
+	t.Helper()
+	r, err := Sync(t.Context(), s, Options{Readers: 1}, fs...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
 
 // A sync cut mid-pull leaves what it read; the next reads only the rest.
 func TestACutPullGoesOn(t *testing.T) {
@@ -79,7 +90,7 @@ func TestACutPullGoesOn(t *testing.T) {
 	}
 	r.then("")
 	var bar []string
-	opt := Options{Progress: func(_, way string, done, total int, _ string) {
+	opt := Options{Readers: 1, Progress: func(_, way string, done, total int, _ string) {
 		if way == "pull" {
 			bar = append(bar, fmt.Sprint(done, "/", total))
 		}
@@ -108,7 +119,7 @@ func TestGoingOnReadsWhatChanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.then("")
-	syncAll(t, s, r)
+	syncInOrder(t, s, r)
 	if got := r.then(""); titles(got) != "i2, renamed i6 i7 i8 i9" {
 		t.Fatalf("going on read %q", got)
 	}
@@ -127,7 +138,7 @@ func TestGoingOnReadsWhatChanged(t *testing.T) {
 func TestGoingOnReadsWhatItDidntReach(t *testing.T) {
 	t.Parallel()
 	s, r, added := tenOld(t)
-	syncAll(t, s, r)
+	syncInOrder(t, s, r)
 	for _, i := range []int{1, 5} {
 		if err := r.SetTitle(t.Context(), added[i].Ref(), fmt.Sprint("i", i, ", renamed")); err != nil {
 			t.Fatal(err)
@@ -135,7 +146,7 @@ func TestGoingOnReadsWhatItDidntReach(t *testing.T) {
 	}
 	cut(t, s, r, "i5, renamed")
 	r.then("")
-	syncAll(t, s, r)
+	syncInOrder(t, s, r)
 	if got := r.then(""); !slices.Contains(got, "i5, renamed") {
 		t.Fatalf("going on read %q, without i5", got)
 	}
@@ -150,7 +161,7 @@ func TestTwoCutsInARow(t *testing.T) {
 	if got := r.then(""); titles(got) != "i4 i5 i6 i7" {
 		t.Fatalf("the second cut run read %q", got)
 	}
-	syncAll(t, s, r)
+	syncInOrder(t, s, r)
 	if got := r.then(""); titles(got) != "i8 i9" {
 		t.Fatalf("going on read %q", got)
 	}
@@ -162,11 +173,11 @@ func TestOneIssueLeavesTheJournal(t *testing.T) {
 	s, r, _ := tenOld(t)
 	cut(t, s, r, "i6")
 	r.then("")
-	if _, err := Sync(t.Context(), s, Options{Issue: allIssues(t, s)[0].ID}, r); err != nil {
+	if _, err := Sync(t.Context(), s, Options{Readers: 1, Issue: allIssues(t, s)[0].ID}, r); err != nil {
 		t.Fatal(err)
 	}
 	r.then("")
-	syncAll(t, s, r)
+	syncInOrder(t, s, r)
 	if got := r.then(""); titles(got) != "i6 i7 i8 i9" {
 		t.Fatalf("going on read %q", got)
 	}
@@ -179,7 +190,7 @@ func TestACompleteRunEmptiesTheJournal(t *testing.T) {
 	s, r, _ := tenOld(t)
 	cut(t, s, r, "i6")
 	r.then("")
-	syncAll(t, s, r)
+	syncInOrder(t, s, r)
 	data, err := os.ReadFile(filepath.Join(s.Store().Folder(), "sync.lock"))
 	if err != nil {
 		t.Fatal(err)
@@ -196,12 +207,12 @@ func TestAWaitingMirrorIsntReached(t *testing.T) {
 	s := newStore(t)
 	a, b := forkPair()
 	ra, rb := &reads{Forge: a, failOn: "T"}, &reads{Forge: b}
-	if _, err := Pull(t.Context(), s, Options{}, rb, ra); err == nil { // b first: its mirror waits for a's original
+	if _, err := Pull(t.Context(), s, Options{Readers: 1}, rb, ra); err == nil { // b first: its mirror waits for a's original
 		t.Fatal("the cut run didn't stop")
 	}
 	rb.then("")
 	ra.then("")
-	if _, err := Pull(t.Context(), s, Options{}, rb, ra); err != nil {
+	if _, err := Pull(t.Context(), s, Options{Readers: 1}, rb, ra); err != nil {
 		t.Fatal(err)
 	}
 	if got := rb.then(""); titles(got) != "T" {
@@ -234,7 +245,7 @@ func TestCutSaysWhereARunStopped(t *testing.T) {
 	}
 	j.Unlock()
 	r.then("")
-	syncAll(t, s, r)
+	syncInOrder(t, s, r)
 	if c, err := bsync.Cut(s.Store()); err != nil || c != nil {
 		t.Fatalf("after a run went through: %+v, %v", c, err)
 	}
@@ -246,7 +257,7 @@ func TestAnIssueGoneMidPull(t *testing.T) {
 	t.Parallel()
 	s, r, _ := tenOld(t)
 	g := &gone{reads: r, title: "i4"}
-	if _, err := Sync(t.Context(), s, Options{}, g); err != nil {
+	if _, err := Sync(t.Context(), s, Options{Readers: 1}, g); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(allIssues(t, s)); n != 9 {
@@ -279,7 +290,7 @@ func TestAPullThatWentThroughIsntCut(t *testing.T) {
 	if err := st.write(t.Context(), s, key, []kernel.Op{linkOp("a", 1, "nothere", added[3].ID, added[3].Number, "")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Pull(t.Context(), s, Options{}, r); err != nil {
+	if _, err := Pull(t.Context(), s, Options{Readers: 1}, r); err != nil {
 		t.Fatal(err)
 	}
 	if c, err := bsync.Cut(s.Store()); err != nil || c != nil {
@@ -298,7 +309,7 @@ func TestTheCutKeepsItsTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.then("")
-	if _, err := Sync(t.Context(), s, Options{Issue: allIssues(t, s)[0].ID}, r); err != nil {
+	if _, err := Sync(t.Context(), s, Options{Readers: 1, Issue: allIssues(t, s)[0].ID}, r); err != nil {
 		t.Fatal(err)
 	}
 	if c, err := bsync.Cut(s.Store()); err != nil || c == nil || !c.At.Equal(then) {
@@ -312,7 +323,7 @@ func TestAForgeOutOfTheSyncTakesItsJournal(t *testing.T) {
 	t.Parallel()
 	s, r, _ := tenOld(t)
 	cut(t, s, r, "i6")
-	if _, err := Pull(t.Context(), s, Options{}, fake.New("example.com/other")); err != nil {
+	if _, err := Pull(t.Context(), s, Options{Readers: 1}, fake.New("example.com/other")); err != nil {
 		t.Fatal(err)
 	}
 	if c, err := bsync.Cut(s.Store()); err != nil || c != nil {
@@ -330,10 +341,10 @@ func TestASkippedOriginalJoinsItsMirror(t *testing.T) {
 	for _, f := range []*fake.Forge{a, b} {
 		f.Add(forge.Issue{Author: board, Created: 1000, Title: "T", Body: forkMarker('5') + "\nB", Status: "open"})
 	}
-	if _, err := Pull(t.Context(), s, Options{}, a); err != nil {
+	if _, err := Pull(t.Context(), s, Options{Readers: 1}, a); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Pull(t.Context(), s, Options{}, a, b); err != nil {
+	if _, err := Pull(t.Context(), s, Options{Readers: 1}, a, b); err != nil {
 		t.Fatal(err)
 	}
 	if all := allIssues(t, s); len(all) != 1 {

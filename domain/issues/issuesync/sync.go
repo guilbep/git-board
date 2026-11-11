@@ -18,6 +18,9 @@ import (
 
 // Options are git-board's settings for a run.
 type Options struct {
+	// Readers is how many issues a pull reads from a forge at once, ahead
+	// of the pull, which takes them in order; 0 is 4 (DefaultReaders).
+	Readers int
 	// ForgeOnly is a board kept on the forges alone, in a copy pull fills
 	// (ADR 0002, section 4): a marker from sync's accounts naming an id that
 	// isn't here is pulled as new, as anyone's text is, since that id has
@@ -489,11 +492,20 @@ func (r *run) pullFrom(p *project) error {
 	if r.opt.Issue == "" {
 		r.j.Listed(p.key, len(p.list))
 	}
+	// the reads ahead: an issue goes on or is read (goesOn's answer for
+	// one doesn't move while the others are pulled), Options.Readers at a time
+	// ahead of the pull, which takes them in order
+	skip := make([]bool, len(p.list))
+	for i, fi := range p.list {
+		skip[i] = r.goesOn(p, fi)
+	}
+	read := r.readAhead(p, skip)
+	defer read.stop()
 	for i, fi := range p.list {
 		if err := r.ctx.Err(); err != nil {
 			return err
 		}
-		if r.goesOn(p, fi) {
+		if skip[i] {
 			// counted done by the next issue read, so the rate is the reads';
 			// out of p.listed too: a push that writes to it reads it
 			if w := bsync.Unwrap(fi.Body); w.ForkID != "" && r.isSync(p, fi.Author) {
@@ -503,7 +515,7 @@ func (r *run) pullFrom(p *project) error {
 			continue
 		}
 		r.progress(p.key, "pull", i+1, len(p.list), fi.Number, fi.Title)
-		whole, err := p.f.Complete(r.ctx, fi)
+		whole, err := read.take(i)
 		if errors.Is(err, forge.ErrNotFound) || errors.Is(err, forge.ErrConfidential) {
 			r.report.Unchanged++
 			continue // gone or made confidential since the listing: as if not listed
@@ -541,6 +553,77 @@ func (r *run) goesOn(p *project, fi forge.Issue) bool {
 	_, here := r.issues[id]
 	return linked && here && fi.Updated < read-bsync.GoOnMargin
 }
+
+// DefaultReaders is how many issues a pull reads at once when Options
+// say none: a forge answers each in a round trip, and a board of a
+// thousand issues waited a thousand in a row.
+// ponytail: 4, reads alone (writes stay one at a time, paced); fewer if a
+// forge's secondary limits answer 403s to it.
+const DefaultReaders = 4
+
+// readAhead reads the issues of p.list not skipped, Options.Readers at a time:
+// a read waits for its slot, which the pull frees as it takes an answer,
+// so no more than Readers answers wait.
+type readAhead struct {
+	got    []chan completed
+	slots  chan struct{}
+	cancel context.CancelFunc
+	// one reader is none ahead: the pull reads each issue as it takes it,
+	// and nothing past one that fails
+	direct func(i int) (forge.Issue, error)
+}
+
+type completed struct {
+	is  forge.Issue
+	err error
+}
+
+func (r *run) readAhead(p *project, skip []bool) *readAhead {
+	n := r.opt.Readers
+	if n <= 0 {
+		n = DefaultReaders
+	}
+	if n == 1 {
+		return &readAhead{cancel: func() {}, direct: func(i int) (forge.Issue, error) { return p.f.Complete(r.ctx, p.list[i]) }}
+	}
+	ctx, cancel := context.WithCancel(r.ctx)
+	ra := &readAhead{got: make([]chan completed, len(p.list)), slots: make(chan struct{}, n), cancel: cancel}
+	for i := range p.list {
+		if !skip[i] {
+			ra.got[i] = make(chan completed, 1)
+		}
+	}
+	go func() {
+		for i, fi := range p.list {
+			if skip[i] {
+				continue
+			}
+			select {
+			case ra.slots <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			go func() {
+				whole, err := p.f.Complete(ctx, fi)
+				ra.got[i] <- completed{whole, err}
+			}()
+		}
+	}()
+	return ra
+}
+
+// take is issue i as read, and frees its slot.
+func (ra *readAhead) take(i int) (forge.Issue, error) {
+	if ra.direct != nil {
+		return ra.direct(i)
+	}
+	c := <-ra.got[i]
+	<-ra.slots
+	return c.is, c.err
+}
+
+// stop drops the reads not taken: the pull ended, or failed.
+func (ra *readAhead) stop() { ra.cancel() }
 
 // reached journals a forge issue the pull finished, for a run that goes
 // on after this one is cut.
