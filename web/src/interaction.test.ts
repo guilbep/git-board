@@ -38,9 +38,13 @@ test('an act that asks nothing ends at its first frame, once QUIET_MS showed it 
   const before = settled.length;
   begin('nothing asked');
   await new Promise((r) => setTimeout(r, QUIET_MS / 2));
-  assert.equal(settled.length, before, 'ended before its first request could come');
-  await new Promise((r) => setTimeout(r, QUIET_MS));
-  const last = settled.at(-1)!;
-  assert.equal(last.name, 'nothing asked');
-  assert.ok(last.ms < QUIET_MS, `timed to its first frame, not to the wait: ${last.ms} ms`);
+  assert.ok(!settled.slice(before).some((a) => a.name === 'nothing asked'), 'ended before its first request could come');
+  // its own entry, whatever else settles meanwhile (a busy machine's timers)
+  let mine: { name: string; ms: number } | undefined;
+  for (let i = 0; i < 100 && !mine; i++) {
+    await new Promise((r) => setTimeout(r, 20));
+    mine = settled.slice(before).find((a) => a.name === 'nothing asked');
+  }
+  assert.ok(mine, 'never ended');
+  assert.ok(mine.ms < QUIET_MS, `timed to its first frame, not to the wait: ${mine.ms} ms`);
 });
