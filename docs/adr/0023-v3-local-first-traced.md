@@ -65,11 +65,15 @@ stamp (`GET /api/snapshot`), then the changes since a cursor (`GET
 ETags and 304s. The page holds the snapshot, asks which ids each of its
 lists holds (`GET /api/issues/ids`: many filters, sorted, in one request
 of a few KB), shows its own copies of them, pages them without a request,
-and writes optimistically, rolled back on a refusal. The filter grammar
-stays the server's alone: a second implementation in TypeScript, kept
-one with the Go by shared vectors, would save a request of a few
-milliseconds on a filter not asked before, and is left for a remote
-server where that request is slow. JSON stays the format: the browser's
+and writes optimistically, rolled back on a refusal. The grammar is the
+server's. The page answers the terms a board's lanes and ticks are made
+of (`is:`, `field:value`, `label:`, `no:`, commas and minus, the sorts by
+creation and update) from its copy (`web/src/local/query.ts`, the
+server's rules), and asks the server the same in the background: its
+answer wins where they differ, and the e2e tests fail on a difference.
+Everything else (free text, `involves:`, dates, `@me`, a sprint) is the
+server's alone. On slow 4G that is the difference between 470 ms and
+72 ms for a filter typed. JSON stays the format: the browser's
 own parser is faster than any decoder shipped to it.
 
 ### 5. Interactions are named and held (M7)
@@ -87,7 +91,11 @@ adds its entry.
   go" from Tempo's API, for a person or an agent.
 - The page holds the whole board in memory: fine to about 50,000 issues;
   beyond, the snapshot pages.
-- A filter not asked before costs one request of ids; the grammar has one
-  implementation.
+- The board's common terms are answered twice, in the page and on the
+  server, the server's answer the truth; a rule changed in
+  `domain/issues/filter.go` must change in `web/src/local/query.ts` too.
+- Every act is held, in the page, to 100 ms on the worst setup (a CPU 6x
+  slower, slow 4G) when the page answers it, 200 ms when it needs the
+  server (`testdata/perf/budgets.txt`).
 - A native app or a remote server speaks the same snapshot, changes and
   events; this ADR adds no login and changes no guard (ADR 0010).
