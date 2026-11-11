@@ -44,12 +44,14 @@ export function useBoardLists(fields: Ref<Fields>) {
   let params: ListParams = { filter: '', group: '', sort: '' };
   let abort: AbortController | null = null;
 
-  // a bucket of ids, its first page shown from the board kept here
-  const bucketOf = (group: string, ids: string[]): Bucket => {
-    const n = params.group ? LANE_PAGE : PAGE;
-    return { group, ids, issues: shown(ids.slice(0, n)), total: ids.length, next: ids.length > n ? String(n) : undefined };
-  };
+  // a list's page: its ids (a page of them: the next asked as one scrolls),
+  // shown from the board kept here
+  const pageSize = () => (params.group ? LANE_PAGE : PAGE);
+  const bucketOf = (group: string, ids: string[], total: number): Bucket => ({
+    group, ids, issues: shown(ids), total, next: total > ids.length ? String(ids.length) : undefined,
+  });
   const shown = (ids: string[]): Issue[] => ids.map(get).filter((i): i is Issue => !!i);
+  const filterOf = (b: Bucket) => (params.group ? laneFilter(params.filter, params.group, b.group) : params.filter);
 
   // the group field's options, known before any count: the fields', else
   // the file's (the page's fields come beside the first list)
@@ -67,25 +69,29 @@ export function useBoardLists(fields: Ref<Fields>) {
       let labels: Promise<LabelCount[]> | undefined;
       let next: Bucket[];
       const sort = p.sort || undefined;
+      const limit = pageSize();
       if (!p.group) {
-        const [ids = []] = (await issueIDs({ f: [p.filter], sort }, signal)).lists;
-        next = [bucketOf('', ids)];
-        total.value = ids.length;
+        const r = await issueIDs({ f: [p.filter], sort, limit }, signal);
+        next = [bucketOf('', r.lists[0] ?? [], r.totals[0] ?? 0)];
+        total.value = r.totals[0] ?? 0;
       } else {
-        // the options' lanes and the list itself in one request, the
-        // labels beside it; then, in one more, a lane for each value in
-        // use that no option names
+        // the options' lanes, a page of ids each, and the list's total in
+        // one request, the labels beside it; then, in one more, a lane for
+        // each value in use that no option names
         const options = [...optionsOf(p.group), NONE];
         labels = getLabels(p.filter, signal);
-        const known = issueIDs({ f: [p.filter, ...options.map((v) => laneFilter(p.filter, p.group, v))], sort }, signal);
+        const known = issueIDs({ f: [p.filter, ...options.map((v) => laneFilter(p.filter, p.group, v))], sort, limit }, signal);
         // awaited below, after labels: a new load aborting it meanwhile
         // is this load's to catch, not an unhandled rejection of the page's
         known.catch(() => {});
         const extra = [...new Set((await labels).filter((l) => l.field === p.group && !options.includes(l.value)).map((l) => l.value))];
-        const [k, x] = await Promise.all([known, extra.length ? issueIDs({ f: extra.map((v) => laneFilter(p.filter, p.group, v)), sort }, signal) : Promise.resolve({ lists: [] as string[][] })]);
-        const [all = [], ...lanes] = k.lists;
-        next = [...options.map((v, i) => bucketOf(v, lanes[i] ?? [])), ...extra.map((v, i) => bucketOf(v, x.lists[i] ?? []))];
-        total.value = all.length;
+        const none = { stamp: '', lists: [] as string[][], totals: [] as number[] };
+        const [k, x] = await Promise.all([known, extra.length ? issueIDs({ f: extra.map((v) => laneFilter(p.filter, p.group, v)), sort, limit }, signal) : Promise.resolve(none)]);
+        next = [
+          ...options.map((v, i) => bucketOf(v, k.lists[i + 1] ?? [], k.totals[i + 1] ?? 0)),
+          ...extra.map((v, i) => bucketOf(v, x.lists[i] ?? [], x.totals[i] ?? 0)),
+        ];
+        total.value = k.totals[0] ?? 0;
       }
       if (signal.aborted) return;
       buckets.value = next;
@@ -138,14 +144,21 @@ export function useBoardLists(fields: Ref<Fields>) {
     }
   }
 
-  // more shows a bucket's next page: its ids are held, its issues kept here
+  // more shows a bucket's next page: its ids asked, its issues kept here
   async function more(b: Bucket): Promise<void> {
-    if (!b.next || !b.ids) return;
+    if (!b.next || b.loading) return;
+    b.loading = true;
     const from = Number(b.next);
-    const n = params.group ? LANE_PAGE : PAGE;
-    const to = Math.min(b.ids.length, from + n);
-    const fresh: Bucket = { ...b, issues: [...b.issues, ...shown(b.ids.slice(from, to))], next: to < b.ids.length ? String(to) : undefined };
-    buckets.value = (buckets.value ?? []).map((x) => (x === b ? fresh : x));
+    try {
+      const r = await issueIDs({ f: [filterOf(b)], sort: params.sort || undefined, limit: pageSize(), offset: from });
+      const ids = [...(b.ids ?? []).slice(0, from), ...(r.lists[0] ?? [])];
+      const total = r.totals[0] ?? ids.length;
+      const fresh: Bucket = { ...b, ids, issues: shown(ids), total, next: total > ids.length ? String(ids.length) : undefined, loading: false };
+      buckets.value = (buckets.value ?? []).map((x) => (x === b ? fresh : x));
+    } catch (e) {
+      b.loading = false;
+      error.value = e instanceof Error ? e.message : String(e);
+    }
   }
 
   // moved: a card's lane changed here before the server said so

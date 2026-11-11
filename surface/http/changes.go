@@ -168,24 +168,31 @@ func (s *Server) changesSince(ctx context.Context, r changesReq) (changesRes, er
 type idsReq struct {
 	Filters []string `query:"f"`
 	Sort    string   `query:"sort"`
+	Limit   int      `query:"limit"`  // ids a list at most; 0 for every one
+	Offset  int      `query:"offset"` // where each list starts
 }
 
 type idsRes struct {
-	Stamp string     `json:"stamp"`
-	Lists [][]string `json:"lists"`
+	Stamp  string     `json:"stamp"`
+	Lists  [][]string `json:"lists"`
+	Totals []int      `json:"totals"` // how many each filter matches
 }
 
-// issueIDs is GET /api/issues/ids?f=…&f=…&sort=: the ids each filter
-// matches, in the sort, in the order asked, from one snapshot of the
-// board: a page that keeps the board asks its lanes and counts so, the
-// filter grammar the server's alone, and shows its own copies.
+// issueIDs is GET /api/issues/ids?f=…&f=…&sort=&limit=&offset=: the ids
+// each filter matches, in the sort, from offset, limit of them, with how
+// many it matches, in the order asked, from one snapshot of the board: a
+// page that keeps the board asks its lanes' first pages so (a few KB:
+// an id is 40 characters that don't compress), and shows its own copies.
 func issueIDs(ctx context.Context, r idsReq) (idsRes, error) {
 	if n := len(r.Filters); n == 0 || n > maxBatch {
 		return idsRes{}, invalid("f", fmt.Errorf("%d lists: from 1 to %d", n, maxBatch))
 	}
+	if r.Limit < 0 || r.Offset < 0 {
+		return idsRes{}, invalid("limit", fmt.Errorf("limit %d, offset %d: 0 or more", r.Limit, r.Offset))
+	}
 	b := board(ctx)
 	ctx = issues.ReadOnce(ctx)
-	res := idsRes{Stamp: stamp(ctx), Lists: make([][]string, 0, len(r.Filters))}
+	res := idsRes{Stamp: stamp(ctx), Lists: make([][]string, 0, len(r.Filters)), Totals: make([]int, 0, len(r.Filters))}
 	for _, f := range r.Filters {
 		found, err := b.Issues.List(ctx, issues.ListReq{Filter: f})
 		if err != nil {
@@ -194,11 +201,17 @@ func issueIDs(ctx context.Context, r idsReq) (idsRes, error) {
 		if err := b.Issues.Schema.Sort(found, r.Sort); err != nil {
 			return idsRes{}, on("sort", err)
 		}
-		ids := make([]string, len(found))
-		for i, is := range found {
-			ids[i] = is.ID
+		from := min(r.Offset, len(found))
+		to := len(found)
+		if r.Limit > 0 {
+			to = min(to, from+r.Limit)
+		}
+		ids := make([]string, 0, to-from)
+		for _, is := range found[from:to] {
+			ids = append(ids, is.ID)
 		}
 		res.Lists = append(res.Lists, ids)
+		res.Totals = append(res.Totals, len(found))
 	}
 	return res, nil
 }

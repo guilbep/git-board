@@ -168,7 +168,7 @@ event for each issue pulled.
 | 14 | `PUT /api/issues/{id}/follow` | `{follow: true, false or null}` | the same |
 | 64 | `GET /api/snapshot` | `If-None-Match` | `{stamp, cursor, issues}`: every issue, open and closed, as a list shows it; `ETag` its stamp, 304 when held |
 | 65 | `GET /api/changes` | `since`: a cursor | `{cursor, put, dropped}`: the issues changed since, as they are now, and those gone; 410 `gone` when the cursor is older than the server holds |
-| 66 | `GET /api/issues/ids` | `f` (up to 64), `sort` | `{stamp, lists}`: the ids each filter matches, sorted, in the order asked |
+| 66 | `GET /api/issues/ids` | `f` (up to 64), `sort`, `limit` (0: all), `offset` | `{stamp, lists, totals}`: the ids each filter matches, sorted, from `offset`, `limit` of them, and how many it matches, in the order asked |
 
 **The board a page keeps (64 to 66; ADR 0023).** A page takes the
 snapshot once, then the changes since its cursor, as the change events
