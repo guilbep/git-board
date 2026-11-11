@@ -352,7 +352,7 @@ DOC = "docs"
 category = ["SPECS", "TEXT"]
 ```
 
-`git board project fit`, and the GitHub Project tab after a check, propose these keys for a Project that came before the file: the options a status lacks (with their name in `project` when it doesn't slug to the value), the aliases, and a `[[sprints.list]]` entry with its start date for each iteration ([`project fit`](cli.md#project-the-github-project)).
+`git board project fit`, and Settings › Sync after a check, propose these keys for a Project that came before the file: the options a status lacks (with their name in `project` when it doesn't slug to the value), the aliases, and a `[[sprints.list]]` entry with its start date for each iteration ([`project fit`](cli.md#project-the-github-project)).
 
 git-board reads and writes the Project through GitHub's GraphQL API with the GitHub forge's token ([Forges › Tokens](forges.md#tokens)): it needs the `read:project` scope to read the Project, `project` to write it.
 

@@ -347,7 +347,7 @@ page and the Start page download it.
 |---|---|---|---|
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
 | 60 | `GET /api/state` | | the board's state, as `git board state --json` |
-| 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
+| 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create, only}` | 202, the run |
 | 67 | `DELETE /api/sync` | | 202; 409 `busy` when no run of this server's runs |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
 | 57 | `POST /api/remotes/{name}` | `{url}`; loopback only | 204 |
@@ -382,17 +382,25 @@ run (31) started while another process holds the lock answers 409.
 is `forges` (`forge sync`), or `all` (fetch, the forges, push: `sync`).
 `way` is `sync` (or `both`, the forge table's word), `pull` or `push` (`forge pull|push|sync`); `forges`
 limits it to those named; `remote` is the whole sync's git remote
-(`origin`); `dry_run` says what a forge run would do (`--check`),
-`allow_create` included, as the run would; a
-whole sync goes both ways and has none. One issue's run (v1's
+(`origin`); `dry_run` says what the run does and writes nothing (`--check`),
+with `allow_create` as the run has it. A whole check is the fetch,
+the forges' dry run and the Project's check, in one report. `only` lists
+the parts the run writes, empty for every one: `pull-changes`,
+`pull-new`, `create`, `send` (`sync --only`). A part left out is left for
+the next sync. The Project runs on the side the parts name (labels
+with a pull part, the Project with create or send). A whole sync goes
+both ways. One issue's run (v1's
 `/api/issues/{id}/sync`, an `issue` here) waits for the sync engine to
 take one issue (*later*). A run while another runs answers 409 `busy`.
 **Stopping one (67)** cuts this server's run at its next step: it ends
 `stopped`, with no error. What a sync wrote stays, and its journal lets
 the next run go on from there; a check wrote nothing, and its scratch
 copy goes. A run the CLI or another server started is theirs to stop.
-A run is `{id, scope, way, dry_run, started_at, ended_at, state, steps,
-tallies, report, error}`: `state` is `running`, `done`, `failed` or
+A run is `{id, scope, way, dry_run, only, started_at, ended_at, state, steps,
+tallies, parts, report, error}`: `parts` are each part's issues, every
+one, by part (`{forge, way, what, issue, title, part}`, `title` the
+forge number and title), in `GET /api/sync` alone, not in the progress
+events. `state` is `running`, `done`, `failed` or
 `stopped`; a
 step is a whole sync's (`{name, state, line}`: `pull`, `forges`,
 `project`, `push`) or a forge's event a person reads whole (`{forge,
@@ -501,14 +509,15 @@ Until then they answer 404 `not-found`.
 | 49 | `GET /api/issues/{id}/cycle` | the cycle (experimental): its step, gate and evidence (branches, plan, tests, PRs), and the environments, as one read (built); its list, `GET /api/cycle` (`who`: `me`, `team`), is the Work page's `{needs, waiting}` (built) |
 | 50 | `POST /api/issues/{id}/cycle/{action}` | a step's action: the risk, a status move, approve the plan, the spec's verdict, review and resolve, open, edit or merge a pull, verify, check, sign off (built; below) |
 | 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
-| 52 | `GET /api/github-project` | the GitHub Project bridge: its last check, and where each field lives (*built*) |
-| 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve` (*built*) |
-| 68 | `POST /api/github-project/fit` | `{take, answers}`, `dry_run`: the last check's proposals (`last.fit`) written to `.git-board.toml`, those `take` names (absent: all), the questions settled by `answers` (`{id: "map=<value>" \| "add-kind" \| "unmapped"}`); answers as 52 with `fitted` (`{diff, changes, clears, open, written}`), the Project checked again once written; 412 `stale` when the file moved since the check, or none was made (*built*) |
+| 52 | `GET /api/github-project` | the GitHub Project bridge: its last check or run, a whole sync's Project step, and where each field lives (*built*) |
+| 53 | `POST /api/github-project/resolve` | `{issue, field, keep}`: a conflict resolved (*built*) |
+| 68 | `POST /api/github-project/fit` | `{take, answers}`, `dry_run`: the last check's proposals (`last.fit`) written to `.git-board.toml`, those `take` names (absent: all), the questions settled by `answers` (`{id: "map=<value>" \| "add-kind" \| "unmapped"}`); answers as 52 with `fitted` (`{diff, changes, clears, open, written}`), and `last` `null` once written: the next check reads the file; 412 `stale` when the file moved since the check, or none was made (*built*) |
 | 58 | `PUT /api/github-project` | `{owner, number}`: `[github-project]` written as `project configure` writes it, the fields it holds stated with it; owner `""` removes it; answers as 52 (*built*) |
 
 **The GitHub Project (52, 53)**, built with the bridge
-(`tools/ghproject`). Only an action reads the Project: a read
-answers the last run, which the server keeps. They answer `{project,
+(`tools/ghproject`). The whole sync (31, `scope: all`) checks and runs
+the Project, and Stop (67) stops it: a read answers its last Project
+step, which the server keeps. They answer `{project,
 write, fields, stated, last, places, problem}`: `fields` are those the
 Project holds as its columns, `stated` whether `[github-project] fields`
 names them (else they are the default seven); `project` is `owner/number`, `""` when
@@ -532,16 +541,14 @@ one, else its type's `default`); `column` the Project's column of a
 field that lives there, and `on_project` whether the last run found it
 there (absent before any). Settings › Fields shows them.
 
-`check` plans a sync both ways, and writes nothing. `apply` runs one:
-`side` is `labels` (`project pull`), `project` (`project push`) or
-`both` (`project sync`, the default); writing to the Project needs
-`write = true`. `resolve` is `{issue, field, keep}`: `issue` is its
+Writing to the Project needs `write = true`. `resolve` is `{issue, field, keep}`: `issue` is its
 number on GitHub, `owner/repo#n` or its URL; `keep` is `git-board`
 (written to the Project, with `write`) or `project` (set on the label);
-it answers `kept`, the value both now hold, after checking again. A
+it answers `kept`, the value both now hold, and the last check without
+that conflict: it reads nothing again. A
 field in no conflict is `not-found`; a value the Project has no option
 for, or a number two repositories have in conflict, `invalid`. One
-action at a time: another is `busy`.
+write at a time: another is `busy`.
 
 ### The cycle (49, 50)
 
@@ -782,8 +789,8 @@ tokens (55, 59), init (56), a git remote (57), and the Project named
 | `POST /api/worktrees/preview` | dropped: the same |
 | `POST /api/worktrees/init` | dropped: the same |
 | `GET /api/sync` | `GET /api/github-project`: v1's `/api/sync` was the Project's |
-| `POST /api/sync/check` | `POST /api/github-project/check` |
-| `POST /api/sync/apply` | `POST /api/github-project/apply` |
+| `POST /api/sync/check` | `POST /api/sync` with `scope: all, dry_run` |
+| `POST /api/sync/apply` | `POST /api/sync` with `scope: all`, `only` its side |
 | `POST /api/sync/resolve` | `POST /api/github-project/resolve`: `keep` the same, `issue` for `number` |
 | `PUT /api/github-project` | the same route, 58: `{owner, number}` |
 | `DELETE /api/github-project` | `PATCH /api/config` with `null` |

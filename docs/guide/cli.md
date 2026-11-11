@@ -613,8 +613,13 @@ Sync does: a git pull from the remote, the forge sync of every forge whose
 sync is on, the GitHub Project's fields when `[github-project]` names one,
 then a git push, which numbers the issues origin has. A failed pull stops
 the steps after it; a failed forge or Project step is told, and the push
-still runs. `--check` runs the same steps writing nothing; `--git` syncs
-with git alone, a pull then a push. With no path it syncs the current
+still runs. `--check` runs the same steps writing nothing, and ends with
+a count of each part. `--only <parts>` runs some parts of the forges'
+sync and leaves the others for the next one: `pull-changes` (the forge
+issues that changed), `pull-new` (the forge issues new here), `create`
+(the issues to create on a forge) and `send` (the changes to send). The
+Project pulls with a pull part, and is written to with `create` or
+`send`. `--git` syncs with git alone, a pull then a push. With no path it syncs the current
 directory; it goes on past a path that fails and reports every failure at
 the end. Each step has its own commands: `fetch`, `pull` and `push` (the
 git remote), `forge pull|push|sync` and `project pull|push|sync`
@@ -622,6 +627,7 @@ git remote), `forge pull|push|sync` and `project pull|push|sync`
 
 ```bash
 git board sync --check
+git board sync --only pull-changes,pull-new   # push nothing to the forges
 git board sync
 git board sync --git ../co2-calculator ../git-time
 ```
