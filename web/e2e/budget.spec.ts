@@ -26,7 +26,7 @@ async function open(browser: Browser, baseURL: string, url: string): Promise<Ope
           const res = await r.response();
           const size = (await r.sizes()).responseBodySize;
           out.assets += size;
-          if (size > 1024 && res?.headers()['content-encoding'] !== 'gzip') out.plain.push(u.pathname);
+          if (size > 1024 && !['br', 'gzip'].includes(res?.headers()['content-encoding'] ?? '')) out.plain.push(u.pathname);
         })(),
       );
   });
@@ -38,8 +38,10 @@ async function open(browser: Browser, baseURL: string, url: string): Promise<Ope
   return out;
 }
 
-// a page's JS and CSS at most, KB as sent: a library imported whole shows
-const MAX_KB = 300;
+// a page's JS and CSS at most, KB as sent: a library imported whole shows.
+// 300 with Quasar's CSS (281 KB raw); without it (ADR 0023) the entry is
+// 185 KB raw, under 60 sent
+const MAX_KB = 200;
 
 // page, its API requests at most
 const budgets: [string, number][] = [
@@ -51,7 +53,7 @@ const budgets: [string, number][] = [
   ['/#/releases', 9], // local first, then fetched: 2
 ];
 
-test('each page asks for no more than its budget, nothing twice, its files gzipped', async ({ browser, request, baseURL }) => {
+test('each page asks for no more than its budget, nothing twice, its files compressed', async ({ browser, request, baseURL }) => {
   await identity(request);
   const made = await issue(request, 'Budget issue');
   for (const [path, maxAPI] of budgets) {
@@ -60,7 +62,7 @@ test('each page asks for no more than its budget, nothing twice, its files gzipp
     const twice = gets.filter((a, i) => gets.indexOf(a) !== i);
     expect.soft(twice, `${path}: asked twice`).toEqual([]);
     expect.soft(got.api.length, `${path}: API requests\n  ${got.api.sort().join('\n  ')}`).toBeLessThanOrEqual(maxAPI);
-    expect.soft(got.plain, `${path}: files sent without gzip`).toEqual([]);
+    expect.soft(got.plain, `${path}: files sent uncompressed`).toEqual([]);
     expect.soft(Math.round(got.assets / 1024), `${path}: JS and CSS, KB`).toBeLessThanOrEqual(MAX_KB);
   }
 });

@@ -1,7 +1,7 @@
 <!-- How forges work: docs/guide/forges.md whole (GET /api/forges/docs), the
      same text readers find on GitHub. -->
 <template>
-  <q-dialog v-model="open" @show="load">
+  <GbDialog v-model="open" @show="load">
     <section class="fg" aria-labelledby="fg-title">
       <header class="fg-head">
         <h2 id="fg-title" class="h5">How forges work</h2>
@@ -13,10 +13,11 @@
         <div class="gb-md" v-html="d.html" />
       </div>
     </section>
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { ref } from 'vue';
 import { getDocs, type DocSection } from '@/api';
 import { message } from '@/issue';

@@ -15,8 +15,10 @@ import (
 // change while the server runs: what nginx does in front of a deployed
 // app. /assets/ files are named by their content (Vite's hash), so a
 // browser keeps them for good; the rest (index.html, theme.js) it asks
-// again each time. A text file a browser takes gzipped goes gzipped,
-// compressed on its first request and kept.
+// again each time. A text file goes as brotli to a browser that takes it,
+// from the .br the build wrote beside it (web/vite.config.ts); else
+// gzipped, compressed on its first request and kept. A .br itself is no
+// page of the app: asked by its name, it isn't found.
 func static(fsys fs.FS) http.Handler {
 	files := http.FileServerFS(fsys)
 	var gz sync.Map // name -> []byte, or nil: not worth it
@@ -31,7 +33,24 @@ func static(fsys fs.FS) http.Handler {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
 		w.Header().Add("Vary", "Accept-Encoding")
-		if (r.Method != http.MethodGet && r.Method != http.MethodHead) || !acceptsGzip(r) || !compressible(name) {
+		if strings.HasSuffix(name, ".br") {
+			http.NotFound(w, r)
+			return
+		}
+		read := r.Method == http.MethodGet || r.Method == http.MethodHead
+		if read && compressible(name) && accepts(r, "br") {
+			if body, err := fs.ReadFile(fsys, name+".br"); err == nil {
+				h := w.Header()
+				h.Set("Content-Type", mime.TypeByExtension(path.Ext(name)))
+				h.Set("Content-Encoding", "br")
+				w.WriteHeader(http.StatusOK)
+				if r.Method == http.MethodGet {
+					w.Write(body)
+				}
+				return
+			}
+		}
+		if !read || !acceptsGzip(r) || !compressible(name) {
 			files.ServeHTTP(w, r)
 			return
 		}
@@ -55,9 +74,12 @@ func static(fsys fs.FS) http.Handler {
 	})
 }
 
-func acceptsGzip(r *http.Request) bool {
+func acceptsGzip(r *http.Request) bool { return accepts(r, "gzip") }
+
+// accepts says whether r's Accept-Encoding takes coding.
+func accepts(r *http.Request, coding string) bool {
 	for part := range strings.SplitSeq(r.Header.Get("Accept-Encoding"), ",") {
-		if enc, q, _ := strings.Cut(strings.TrimSpace(part), ";"); strings.TrimSpace(enc) == "gzip" && strings.TrimSpace(q) != "q=0" {
+		if enc, q, _ := strings.Cut(strings.TrimSpace(part), ";"); strings.TrimSpace(enc) == coding && strings.TrimSpace(q) != "q=0" {
 			return true
 		}
 	}

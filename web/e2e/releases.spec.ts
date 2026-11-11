@@ -40,7 +40,7 @@ test('a release cut from the page, its page, its notes, a comment and a yank', a
     await expect(page.getByText('No release tag yet.')).toBeVisible();
 
     await page.getByRole('button', { name: 'Cut a release' }).click();
-    const cut = page.locator('.q-dialog').getByRole('button', { name: /^Cut v/ });
+    const cut = page.locator('dialog[open]').getByRole('button', { name: /^Cut v/ });
     await expect(cut).toBeEnabled({ timeout: 10_000 });
     const tag = ((await cut.textContent()) ?? '').trim().replace(/^Cut /, '').split(' ')[0]!;
     await cut.click();

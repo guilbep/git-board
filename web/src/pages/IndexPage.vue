@@ -175,12 +175,12 @@
     </main>
   </div>
 
-  <q-dialog
+  <GbDialog
     v-model="detailOpen"
     :position="panelMode === 'side' ? 'right' : 'standard'"
     :full-height="panelMode === 'side'"
     :class="`gb-dialog-${panelMode}`"
-    :backdrop-filter="panelMode === 'wide' ? 'blur(6px)' : undefined"
+    :blur="panelMode === 'wide'"
     no-route-dismiss
     no-focus
     @hide="closePanel"
@@ -203,14 +203,15 @@
       @changed="load"
       @open="openId"
     />
-  </q-dialog>
+  </GbDialog>
 
-  <q-dialog v-model="newOpen">
+  <GbDialog v-model="newOpen">
     <NewIssueDialog :names="names" :fields="fields" :view="activeView" :prefill="prefill" @close="newOpen = false" @created="onCreated" />
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import FilterBox from '@/components/FilterBox.vue';
 import ViewBar from '@/components/ViewBar.vue';
 import FilterHelp from '@/components/FilterHelp.vue';

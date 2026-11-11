@@ -141,7 +141,7 @@ function moveAll(bucket: Bucket, e: Event) {
 watch(() => picked.value.length > 0, (v) => (bottomBarShown.value = v), { immediate: true });
 onBeforeUnmount(() => (bottomBarShown.value = false));
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && picked.value.length && !document.querySelector('.q-dialog')) picked.value = [];
+  if (e.key === 'Escape' && picked.value.length && !document.querySelector('dialog[open]')) picked.value = [];
 }
 onMounted(() => window.addEventListener('keydown', onKey));
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));

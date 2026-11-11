@@ -1,4 +1,4 @@
-<!-- An issue, whole: the side panel (in the board's q-dialog) or the full
+<!-- An issue, whole: the side panel (in the board's dialog) or the full
      page (#/issues/<id>). Design: the canvas's "Issue side panel" and "Full
      page" artboards. Every write answers with the whole history (issue.ts). -->
 <template>

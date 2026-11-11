@@ -17,9 +17,10 @@ The look is the ENAC IT4R EPFL design system
 ([EPFL-ENAC/epfl-design-skill](https://github.com/EPFL-ENAC/epfl-design-skill)),
 vendored by copy in `epfl-design/` from commit
 `55fc0a8b7fcff0bf5533923a88ed66ab41023c8d` (2026-10-09, merge of PR #5):
-its `tokens/`, `css/` and `kits/quasar/epfl-quasar-brand.css`, unmodified,
+its `tokens/`, `css/` and `kits/quasar/epfl-quasar-brand.css` (no longer
+loaded: the app has no Quasar since ADR 0023), unmodified,
 in the same layout. `public/epfl-logo.svg` is its `assets/svg/epfl-logo.svg`.
-`src/css/app.css` loads `css/epfl.css` then the Quasar brand mapping;
+`src/css/app.css` loads `css/epfl.css`;
 
 A copy, not the submodule its INSTALL.md suggests: `go install` and module
 downloads never see submodule content. To update, copy those paths again from a newer commit and change the
@@ -44,7 +45,7 @@ npx --package=stylelint@16 --package=postcss-html -- \
 
 ```bash
 npm install
-npm run dev       # Quasar dev server, http://localhost:9000
+npm run dev       # Vite's dev server, http://localhost:9000
 ```
 
 The dev server needs `git board serve` running separately on `:8080`

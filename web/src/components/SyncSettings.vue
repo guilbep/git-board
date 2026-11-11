@@ -138,7 +138,7 @@
       </details>
     </section>
 
-    <q-dialog v-model="confirming">
+    <GbDialog v-model="confirming">
       <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="sy-confirm-title">
         <header class="gb-dialog-head">
           <h2 id="sy-confirm-title" class="h5">Sync now?</h2>
@@ -158,7 +158,7 @@
           <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting" @click="runReal">Sync</button>
         </footer>
       </section>
-    </q-dialog>
+    </GbDialog>
 
     <ForgeTokens :key="forges.map((f) => f.name).join(',')" @changed="reload" />
 
@@ -168,6 +168,7 @@
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { message, patchConfig, remoteAction, startSync, type SyncRequest, type SyncStatus } from '@/api';

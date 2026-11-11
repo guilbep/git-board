@@ -55,6 +55,34 @@ func TestStatic(t *testing.T) {
 	}
 }
 
+// A file with a .br beside it (the build's) goes as brotli to a browser
+// that takes it, as gzip to one that takes only that; the .br itself is
+// no page.
+func TestStaticBrotli(t *testing.T) {
+	t.Parallel()
+	js := strings.Repeat("console.log('git-board');\n", 200)
+	h := static(fstest.MapFS{
+		"assets/app-1a.js":    {Data: []byte(js)},
+		"assets/app-1a.js.br": {Data: []byte("brotli bytes")},
+	})
+	get := func(path, enc string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Header.Set("Accept-Encoding", enc)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := get("/assets/app-1a.js", "gzip, deflate, br"); w.Header().Get("Content-Encoding") != "br" || w.Body.String() != "brotli bytes" || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/javascript") {
+		t.Errorf("br: %v %q", w.Header(), w.Body.String())
+	}
+	if w := get("/assets/app-1a.js", "gzip"); w.Header().Get("Content-Encoding") != "gzip" {
+		t.Errorf("gzip only: %v", w.Header())
+	}
+	if w := get("/assets/app-1a.js.br", "br"); w.Code != http.StatusNotFound {
+		t.Errorf("the .br asked: %d", w.Code)
+	}
+}
+
 // An API reply over a kilobyte goes gzipped to a client that takes it; a
 // small one, or to a client that doesn't, as is.
 func TestJSONGzipped(t *testing.T) {

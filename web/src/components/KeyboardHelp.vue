@@ -1,6 +1,6 @@
 <!-- Every keyboard shortcut, in one list: ? opens it, Esc closes it. -->
 <template>
-  <q-dialog v-model="helpOpen">
+  <GbDialog v-model="helpOpen">
     <section class="kh" role="document" aria-labelledby="kh-title">
       <header class="kh-head">
         <h2 id="kh-title" class="h5">Keyboard shortcuts</h2>
@@ -22,10 +22,11 @@
         <template v-else>A tip shows one of these at a time, until you use it. <button type="button" class="gb-linkbtn" @click="setTipsOff(true)">Hide tips</button></template>
       </p>
     </section>
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { helpOpen } from '@/shortcuts';
 import { groups as titles, keyLabel, shortcuts } from '@/keys';
 import { resetTips, setTipsOff, tipsOff } from '@/tips';

@@ -36,7 +36,7 @@ design](docs/rewrite/design.md#packages), [ADR
 | `app/` | opens a board and wires the domains: the one API every surface calls |
 | `surface/` | `cli`, `http` (the server and its API) and `tui`, on `app` |
 | `cmd/git-board` | the binary; `cmd/boardgen` makes the boards `make perf` times |
-| `web/` | the web app (Quasar/Vue), embedded in the binary |
+| `web/` | the web app (Vue on Vite), embedded in the binary |
 | `golden/`, `testdata/golden/` | the golden boards and the outputs git-board is held to (`make compat`, [compat.md](docs/rewrite/compat.md)) |
 | `contrib/board-agents` | `git-board-agents`, a module of its own: agents and wtx, through git-board's CLI and HTTP API |
 
@@ -84,7 +84,7 @@ board's file instead, for a one-off smoke run of `e2e/tabs.spec.ts`. `make web-e
 CI runs it in its own job (`e2e` in `.github/workflows/ci.yml`), Playwright's
 Chromium in a cache.
 
-The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
+The `web/` frontend (Vue on Vite) has its own toolchain: `make web-dev` /
 `make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly
 ([web/README.md](web/README.md)).
 

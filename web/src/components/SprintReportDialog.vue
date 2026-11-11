@@ -1,7 +1,7 @@
 <!-- The sprint report (report.go): Markdown ready for Slack, an email or an
      issue, shown rendered or as text, copied or downloaded in one click. -->
 <template>
-  <q-dialog v-model="open" @show="load">
+  <GbDialog v-model="open" @show="load">
     <section class="srep" aria-labelledby="srep-title">
       <header class="srep-head">
         <h2 id="srep-title" class="h5">Sprint report<span v-if="report" class="gb-hint"> · {{ report.title }}</span></h2>
@@ -21,10 +21,11 @@
         <span class="gb-hint">Paste it in Slack, an email or an issue.</span>
       </footer>
     </section>
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { ref } from 'vue';
 import { getReport, renderMarkdown, type SprintReport } from '@/api';
 import { message } from '@/issue';
