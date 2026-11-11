@@ -1,6 +1,6 @@
 // Sync's words: a run (POST /api/sync, its steps as progress events), a
 // remote's fetch, what each moved. Pure: node runs ways.test.ts on it.
-import type { Ahead, RemoteResult, SyncRun, SyncStep, SyncTally } from './api/types.ts';
+import type { Ahead, RemoteResult, SyncPart, SyncRun, SyncStep, SyncTally } from './api/types.ts';
 
 const n = (v: number) => v.toLocaleString();
 export const plural = (v: number, one: string, many = `${one}s`) => `${n(v)} ${v === 1 ? one : many}`;
@@ -109,4 +109,19 @@ export function tallyGroups(ts: SyncTally[]): TallyGroup[] {
     g.warnings.sort(byN);
   }
   return groups;
+}
+
+// the parts of a sync, in a run's order, as a check counts them: the
+// person picks those the sync runs, and the others wait for the next
+export const syncParts: { id: SyncPart; one: string; many: string }[] = [
+  { id: 'pull-changes', one: 'issue to pull that changed', many: 'issues to pull that changed' },
+  { id: 'pull-new', one: 'new issue to pull', many: 'new issues to pull' },
+  { id: 'create', one: 'issue to create on the forge', many: 'issues to create on the forge' },
+  { id: 'send', one: 'issue to send its changes', many: 'issues to send their changes' },
+];
+
+// the parts a sync runs, as POST /api/sync takes them: absent for every one
+export function onlyOf(chosen: SyncPart[]): SyncPart[] | undefined {
+  if (chosen.length === syncParts.length) return undefined;
+  return syncParts.map((p) => p.id).filter((id) => chosen.includes(id));
 }

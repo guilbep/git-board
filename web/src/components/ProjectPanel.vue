@@ -1,11 +1,12 @@
-<!-- Settings › GitHub Project: the bridge (git board project) between the
-     Project's fields and the labels. Its last run, a check, a pull or a
-     sync, and its conflicts: the fields both sides changed since they last
-     agreed, held on both until someone keeps one side (api.md, routes 52
-     and 53). Only a button reads the Project. -->
+<!-- Settings › Sync, its GitHub Project: the bridge (git board project)
+     between the Project's fields and the labels. The Sync page's Check
+     and Sync read and run it with the forges; this is its part of their
+     report: what the file lacks for it (the fit), what a sync changes, and
+     its conflicts, the fields both sides changed since they last agreed,
+     held on both until someone keeps one side (api.md, routes 52 and 53). -->
 <template>
-  <div class="set-panel pj">
-    <h2 class="h4">GitHub Project</h2>
+  <section class="pj" aria-labelledby="pj-title">
+    <h3 id="pj-title" class="h5">GitHub Project</h3>
     <p class="pj-lead">
       The board is the truth; the Project mirrors the fields you give it, kept in step with the labels: a field changed on one
       side since both agreed takes that side; changed on both, it is a conflict, left alone until you keep one.
@@ -46,16 +47,12 @@
         The board writes its values to the Project.
         <button type="button" class="gb-linkbtn" :disabled="saving" @click="setWrite(false)">Stop writing to it</button>
       </p>
-      <!-- what the file lacks for the Project: before Pull and Sync, open on the first check -->
-      <ProjectFit v-if="last && !last.applied && last.fit.length" :key="last.checked_at" :run="last" @fitted="status = $event" />
+      <!-- what the file lacks for the Project: before Sync, open on the first check -->
+      <ProjectFit v-if="last && !last.applied && last.fit.length" :key="last.checked_at" :run="last" @fitted="fitted" />
+      <p v-if="wrote" class="pj-muted" role="status">{{ wrote }}</p>
       <p v-for="l in last?.unmapped_by_choice ?? []" :key="l" class="pj-muted">{{ l }}.</p>
-      <div class="pj-actions">
-        <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="run(checkProject, 'Reading the Project…')">Check the Project</button>
-        <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="apply('labels')">Pull fields</button>
-        <button v-if="status.write" type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="apply('both')">Sync fields</button>
-        <span v-if="busy" class="pj-muted" role="status">{{ busy }}</span>
-      </div>
-      <p v-if="!last" class="pj-muted">Not checked yet. Reading a big Project takes a few seconds and costs GitHub API points, so it happens when you ask.</p>
+      <span v-if="busy" class="pj-muted" role="status">{{ busy }}</span>
+      <p v-if="!last && !wrote" class="pj-muted">Not checked yet. Check reads it with the forges: a big Project takes a few seconds and costs GitHub API points.</p>
 
       <section v-if="last" aria-labelledby="pj-conflicts">
         <h3 id="pj-conflicts" class="pj-h">{{ last.conflicts.length ? plural(last.conflicts.length, 'conflict') + ', nothing overwritten' : 'No conflicts' }}</h3>
@@ -93,12 +90,13 @@
       </section>
       <p v-if="last?.unmatched.length" class="pj-muted">{{ last.unmatched.length }} item{{ last.unmatched.length === 1 ? '' : 's' }} of the Project match no issue here: pull requests, drafts, or issues a forge sync hasn't brought yet.</p>
     </template>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { applyProject, checkProject, configureProject, getConfig, getProject, message, patchConfig, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { configureProject, getConfig, getProject, message, patchConfig, resolveProject, type Fitted, type ProjectConflict, type ProjectStatus } from '@/api';
+import { onLive } from '@/live';
 import { safeHref } from '@/links';
 import { issueRef, plural, runWords, shown } from '@/projectview';
 import ProjectFit from '@/components/ProjectFit.vue';
@@ -122,9 +120,11 @@ async function run(action: () => Promise<ProjectStatus>, doing: string) {
   }
 }
 
-function apply(side: 'labels' | 'both') {
-  const what = side === 'both' ? 'Sync brings the Project’s values in as labels, and writes yours to the Project' : 'Pull brings the Project’s values in as labels; nothing is written to the Project';
-  if (window.confirm(`${what}. Conflicts stay held. Go on?`)) void run(() => applyProject(side), side === 'both' ? 'Syncing…' : 'Pulling…');
+// the fit written: the check it came from is dropped, the next reads the file
+const wrote = ref('');
+function fitted(res: ProjectStatus & { fitted: Fitted }) {
+  status.value = res;
+  wrote.value = `Wrote ${plural(res.fitted.changes, 'change')} to .git-board.toml. Check again to see the sync with it.`;
 }
 
 // [github-project] written as project configure writes it (route 58):
@@ -171,10 +171,18 @@ function resolve(c: ProjectConflict, keep: 'git-board' | 'project') {
 }
 
 onMounted(() => void run(getProject, ''));
+// a whole check or sync ended, here or elsewhere: its Project step is the last run
+const off = onLive((e) => {
+  if (e.kind !== 'sync') return;
+  wrote.value = '';
+  void run(getProject, '');
+}, { own: true });
+onBeforeUnmount(off);
 </script>
 
 <style scoped>
 .pj { display: grid; gap: .75rem; }
+.pj h3 { margin: 0; }
 .pj-lead, .pj-meta { margin: 0; }
 .pj-muted { color: var(--fg-muted); font-size: .875rem; }
 .pj-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }

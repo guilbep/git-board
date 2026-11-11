@@ -1,7 +1,7 @@
 // Where the board is kept, and its sync (docs/rewrite/api.md, routes 27 to
 // 38).
 import { call, enc, get, send } from './http.ts';
-import type { Copied, Datastore, Numbered, RemoteResult, SyncRun, SyncStatus } from './types.ts';
+import type { Copied, Datastore, Numbered, RemoteResult, SyncPart, SyncRun, SyncStatus } from './types.ts';
 
 export function getDatastore(): Promise<Datastore> {
   return get('/api/datastore');
@@ -23,6 +23,7 @@ export interface SyncRequest {
   remote?: string;
   dry_run?: boolean;
   allow_create?: boolean;
+  only?: SyncPart[]; // the parts a sync runs, absent for every one
 }
 
 // stopSync stops this server's run at its next step (DELETE /api/sync):

@@ -47,7 +47,7 @@ import { fitProject, message, type Fitted, type ProjectRun, type ProjectStatus }
 import { answerWords, fitLine, plural } from '@/projectview';
 
 const props = defineProps<{ run: ProjectRun }>();
-const emit = defineEmits<{ fitted: [status: ProjectStatus] }>();
+const emit = defineEmits<{ fitted: [status: ProjectStatus & { fitted: Fitted }] }>();
 
 // a ticked change is taken unless unticked; a question once answered
 const taken = reactive<Record<string, boolean>>(Object.fromEntries(props.run.fit.filter((p) => p.ticked).map((p) => [p.id, true])));

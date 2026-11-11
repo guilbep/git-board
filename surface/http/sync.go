@@ -358,6 +358,9 @@ func (s *Server) runSync(ctx context.Context, b *app.Board, run *Run, r syncReq,
 	var mu sync.Mutex
 	var rep *report
 	see := func(e app.SyncEvent) {
+		if e.What == "held" { // how many: the creations a check counts, left for consent
+			e.Line = e.Text(r.DryRun, "")
+		}
 		s.step(ctx, run, Step{Forge: e.Forge, Way: e.Way, What: e.What, Issue: e.Issue, Line: e.Line, Done: e.Done, Total: e.Total,
 			Part: string(e.Part()), Title: e.Name})
 	}

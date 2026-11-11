@@ -1,12 +1,15 @@
 <!-- Settings › Sync: where your issues go, one table, a row per place: each
-     git remote and each forge (GET /api/sync). A remote's row fetches,
-     pulls or pushes at once (POST /api/remotes/<name>/<action>); a forge's
-     row switches its sync on or off, or removes its table (PATCH
-     /api/config). Then Check and Sync: a run in the background (POST
-     /api/sync), its steps as they come (progress events). Check is the
-     forges' dry run; Sync the whole sync: git pull, the forges, git push,
-     confirmed first, with "allow creating" for creations a forge holds.
-     #/settings/sync?add=1 opens "Add a forge", for one no remote names. -->
+     git remote and each forge (GET /api/sync), then the GitHub Project. A
+     remote's row fetches, pulls or pushes at once (POST
+     /api/remotes/<name>/<action>); a forge's row switches its sync on or
+     off, or removes its table (PATCH /api/config). Then Check, Sync and
+     Stop: a run in the background (POST /api/sync), its steps as they come
+     (progress events). Check is the whole sync's dry run, the forges and
+     the Project in one report, with what the file lacks for the Project;
+     it counts each part, and the person picks the parts Sync runs
+     (docs/prd/config-fit.md, Part 2). Sync is confirmed first, with "allow
+     creating" for creations a forge holds. #/settings/sync?add=1 opens
+     "Add a forge", for one no remote names. -->
 <template>
   <div class="set-panel sy">
     <div class="sy-head">
@@ -95,15 +98,13 @@
     <p v-else-if="!error" class="sy-note">Loading…</p>
 
     <div class="sy-run">
-      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="starting || running || !forges.length" @click="start({ scope: 'forges', dry_run: true, allow_create: allowCreate })">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
-      <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting || running" @click="confirming = true">{{ running && !run?.dry_run ? 'Syncing…' : 'Sync' }}</button>
+      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="starting || running" @click="start({ scope: 'all', dry_run: true, remote, allow_create: allowCreate })">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
+      <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting || running || !parts.length" @click="confirming = true">{{ running && !run?.dry_run ? 'Syncing…' : 'Sync' }}</button>
       <button v-if="running" type="button" class="epfl-btn epfl-btn-secondary" :disabled="stopping" @click="stop">{{ stopping ? 'Stopping…' : 'Stop' }}</button>
-      <span class="sy-note">Check says what Sync would do with the forges, as counts, and writes nothing. Sync pulls, syncs the forges, and pushes.</span>
+      <span class="sy-note">Check says what Sync would do with the forges and the Project, part by part, and writes nothing. Sync pulls, syncs the forges and the Project, and pushes.</span>
     </div>
     <label class="sy-check"><input v-model="allowCreate" type="checkbox" /> Create issues on a forge never synced with, or 50 or more at once (a forge may email everyone watching it, once per issue)</label>
     <p v-if="startError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not started.</b> {{ startError }}</p>
-    <!-- the last Project check's fit: its panel is on the GitHub Project tab -->
-    <p v-if="projectFit" class="gb-hint" data-testid="sync-fit">{{ projectFit }} <router-link to="/settings/project">See the changes on the GitHub Project tab</router-link></p>
 
     <!-- the run in progress, or the last one: its steps as they came -->
     <section v-if="run" class="sy-report" aria-labelledby="sy-report">
@@ -115,6 +116,7 @@
       <p v-if="run.state === 'failed'" class="epfl-alert epfl-alert-danger" role="alert"><b>{{ run.dry_run ? 'The check' : 'The sync' }} stopped.</b> {{ run.error }}</p>
       <p v-else-if="run.state === 'stopped'" class="gb-hint" role="status">{{ run.dry_run ? 'Stopped. Nothing was written.' : 'Stopped. What it wrote stays; the next sync goes on from there.' }}</p>
       <p v-else-if="run.report" class="gb-hint">{{ reportWords(run.report) }}</p>
+      <SyncParts v-if="wholeCheck" v-model="parts" :run="run" :disabled="starting" />
       <div v-for="g in groups" :key="g.forge" class="sy-forge">
         <h4 class="h6">{{ g.forge || 'The run' }}</h4>
         <p v-if="!g.ways.length && !g.warnings.length" class="gb-hint">Nothing to change.</p>
@@ -142,6 +144,8 @@
       </details>
     </section>
 
+    <ProjectPanel />
+
     <GbDialog v-model="confirming">
       <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="sy-confirm-title">
         <header class="gb-dialog-head">
@@ -152,6 +156,7 @@
           <ul class="gb-plain-list">
             <li><span><b>git pull from {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
             <li v-for="f in forges.filter((x) => x.sync)" :key="f.name"><span><b>{{ f.name }}</b>: {{ wayWords(f.way) }}</span></li>
+            <li v-if="onlyOf(parts)"><span><b>Only</b>: {{ parts.join(', ') }}. The other parts are left for the next sync.</span></li>
             <li><span><b>git push to {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
           </ul>
           <p class="gb-hint">{{ allowCreate ? 'Issues are created on a forge never synced with, or 50 or more at once.' : 'No issue is created on a forge never synced with, nor 50 or more at once: tick “Create issues” first.' }} A failed pull stops the sync; a forge that fails is told, and the push still runs. It goes on if you leave this page.</p>
@@ -175,8 +180,7 @@
 import GbDialog from '@/components/GbDialog.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getProject, message, patchConfig, remoteAction, startSync, type SyncRequest, type SyncStatus } from '@/api';
-import { fitLine } from '@/projectview';
+import { message, patchConfig, remoteAction, startSync, type SyncPart, type SyncRequest, type SyncStatus } from '@/api';
 import { configModel, loadConfigModel, takeFile } from '@/configmodel';
 import { keptIn, needsGit } from '@/datastore';
 import { placesSummary } from '@/fieldplaces';
@@ -184,13 +188,15 @@ import { datastore, loadDatastore } from '@/kept';
 import { onLive } from '@/live';
 import { setForgeWay, addRemote, stopSync, type ForgeWay } from '@/api/sync';
 import { loadSync, syncStatus } from '@/sync';
-import { reportWords, remoteWords, stepWords, tallyGroups, tallyWords } from '@/ways';
+import { onlyOf, reportWords, remoteWords, stepWords, syncParts, tallyGroups, tallyWords } from '@/ways';
 import { boardState } from '@/me';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
 import ForgeTokens from '@/components/ForgeTokens.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
 import GbIcon from '@/components/GbIcon.vue';
 import SyncProgress from '@/components/SyncProgress.vue';
+import SyncParts from '@/components/SyncParts.vue';
+import ProjectPanel from '@/components/ProjectPanel.vue';
 
 // changed: the sync as it stands, for the menu's line
 const emit = defineEmits<{ changed: [st: SyncStatus] }>();
@@ -264,7 +270,7 @@ const remoteActs = [
 
 const reportTitle = computed(() => {
   const r = run.value!;
-  const what = r.scope === 'all' ? 'The sync' : r.dry_run ? 'The check' : 'The forges’ sync';
+  const what = r.dry_run ? 'The check' : r.scope === 'all' ? 'The sync' : 'The forges’ sync';
   if (r.state === 'running') return `${what}: so far`;
   return `${what} ${r.state === 'failed' ? 'failed' : r.state === 'stopped' ? 'stopped' : 'finished'} ${new Date(r.ended_at ?? r.started_at).toLocaleString()}`;
 });
@@ -356,9 +362,13 @@ async function stop() {
     stopping.value = false;
   }
 }
+// the parts Sync runs, every one until a whole check let the person pick
+const parts = ref<SyncPart[]>(syncParts.map((p) => p.id));
+const wholeCheck = computed(() => run.value?.scope === 'all' && run.value.dry_run && run.value.state === 'done');
 async function runReal() {
   confirming.value = false;
-  await start({ scope: 'all', remote, allow_create: allowCreate.value });
+  const only = onlyOf(parts.value);
+  await start({ scope: 'all', remote, allow_create: allowCreate.value, ...(only ? { only } : {}) });
 }
 
 // a run started or ended, here or elsewhere: the status again
@@ -368,15 +378,6 @@ const off = onLive((e) => {
 onBeforeUnmount(off);
 onMounted(reload);
 
-// what the last Project check found the file lacks (docs/prd/config-fit.md):
-// a read of the check the server keeps, which asks GitHub nothing
-const projectFit = ref('');
-onMounted(() => {
-  getProject().then(
-    (p) => (projectFit.value = p.last && !p.last.applied ? fitLine(p.last) : ''),
-    () => undefined,
-  );
-});
 </script>
 
 <style scoped>

@@ -234,7 +234,13 @@ export interface SyncStep {
   line?: string;
   done?: number;
   total?: number;
+  part?: SyncPart; // the part an issue counts in
+  title?: string; // the issue's forge number and title, "#12 Export CSV"
 }
+
+// the parts of a sync, which a person picks after a check: a part left
+// out is left for the next sync
+export type SyncPart = 'pull-changes' | 'pull-new' | 'create' | 'send';
 
 // how many of one thing a run did on one forge, one way: a write
 // (create-comment…), an issue pulled or pushed, or a warning of one
@@ -259,6 +265,8 @@ export interface SyncRun {
   tallies: SyncTally[];
   current?: SyncStep; // the page's own: the last count heard
   report?: { created: number; updated: number; unchanged: number; posted: number; pushed: number; restored?: number };
+  only?: SyncPart[]; // the parts it writes, empty for every one
+  parts?: Partial<Record<SyncPart, SyncStep[]>>; // each part's issues, every one: GET /api/sync's alone
   error?: string;
 }
 

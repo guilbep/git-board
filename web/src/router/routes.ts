@@ -7,7 +7,7 @@ const routes: RouteRecordRaw[] = [
   // the Sync page's old address, and its parts': one Sync, in Settings
   { path: '/sync', redirect: { path: '/settings/sync', hash: '' } },
   // v1's GitHub Project conflicts page: Settings › Project now
-  { path: '/conflicts', redirect: { path: '/settings/project', hash: '' } },
+  { path: '/conflicts', redirect: { path: '/settings/sync', hash: '' } },
   { path: '/inbox', component: () => import('@/pages/InboxPage.vue') },
   // a new board's first run (docs/design/first-run/proposal.md)
   { path: '/start', component: () => import('@/pages/StartPage.vue') },
