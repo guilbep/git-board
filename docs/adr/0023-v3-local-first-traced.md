@@ -62,11 +62,15 @@ The server keeps the issues it built while the board's version holds
 (`issues.KeptList`), and serves the whole board as a snapshot with its
 stamp (`GET /api/snapshot`), then the changes since a cursor (`GET
 /api/changes`), from a ring of its last issue events. Lists answer
-ETags and 304s. The page holds the snapshot, filters, sorts, groups and
-counts it itself, asks the server only for what it can't answer from its
-copy (free text, `involves:`, `follows:`: `GET /api/issues/ids`), and
-writes optimistically, rolled back on a refusal. JSON stays the format:
-the browser's own parser is faster than any decoder shipped to it.
+ETags and 304s. The page holds the snapshot, asks which ids each of its
+lists holds (`GET /api/issues/ids`: many filters, sorted, in one request
+of a few KB), shows its own copies of them, pages them without a request,
+and writes optimistically, rolled back on a refusal. The filter grammar
+stays the server's alone: a second implementation in TypeScript, kept
+one with the Go by shared vectors, would save a request of a few
+milliseconds on a filter not asked before, and is left for a remote
+server where that request is slow. JSON stays the format: the browser's
+own parser is faster than any decoder shipped to it.
 
 ### 5. Interactions are named and held (M7)
 
@@ -83,7 +87,7 @@ adds its entry.
   go" from Tempo's API, for a person or an agent.
 - The page holds the whole board in memory: fine to about 50,000 issues;
   beyond, the snapshot pages.
-- The filter grammar runs in Go and in TypeScript; shared vectors
-  (`testdata/filter/vectors.json`) keep them one.
+- A filter not asked before costs one request of ids; the grammar has one
+  implementation.
 - A native app or a remote server speaks the same snapshot, changes and
   events; this ADR adds no login and changes no guard (ADR 0010).
