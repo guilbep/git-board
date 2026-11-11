@@ -177,10 +177,14 @@ func (s *Schema) checkLabels() error {
 }
 
 // checkAliases refuses an alias that shadows an option or folds into
-// nothing.
+// nothing. The kind field of plain labels has [branches] kinds as its
+// options: FIX = "bug" folds a Project's Category into a kind.
 func (s *Schema) checkAliases() error {
 	for _, name := range s.names() {
 		f := s.Fields[name]
+		if name == "kind" && len(f.Options) == 0 {
+			f.Options = slices.Sorted(maps.Keys(s.Kinds))
+		}
 		for _, old := range slices.Sorted(maps.Keys(f.Aliases)) {
 			cur := f.Aliases[old]
 			if strings.TrimSpace(old) == "" || strings.TrimSpace(cur) == "" {

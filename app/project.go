@@ -70,7 +70,7 @@ func (c *Config) Project() (*ghproject.Config, error) {
 	if len(probs) > 0 {
 		return nil, usage(probs[0].Err)
 	}
-	return &ghproject.Config{Owner: gp.Owner, Number: gp.Number, Write: gp.Write, Holds: gp.Columns(), Schema: c.Schema, Forge: c.githubForge()}, nil
+	return &ghproject.Config{Owner: gp.Owner, Number: gp.Number, Write: gp.Write, Holds: gp.Columns(), Unmapped: gp.Unmapped, Schema: c.Schema, Forge: c.githubForge()}, nil
 }
 
 // projectSession is the bridge opened: its config, the Project, the board.
@@ -175,6 +175,13 @@ func ConfigureProject(dir string, gp tools.GithubProject, owner string, number i
 		t := map[string]any{"owner": owner, "number": int64(number), "fields": slices.Clone(gp.Columns())}
 		if gp.Write && strings.EqualFold(gp.Owner, owner) && gp.Number == number {
 			t["write"] = true
+		}
+		if len(gp.Unmapped) > 0 { // the table is written whole: what it doesn't name goes
+			um := map[string]any{}
+			for f, vs := range gp.Unmapped {
+				um[f] = slices.Clone(vs)
+			}
+			t["unmapped"] = um
 		}
 		table = t
 	}

@@ -39,8 +39,11 @@ type Config struct {
 	Write bool
 	// Holds are the fields the Project holds, declared or not:
 	// [github-project]'s fields (tools.GithubProject.Columns).
-	Holds  []string
-	Schema *issues.Schema
+	Holds []string
+	// Unmapped are the Project's values left out by choice, by field:
+	// [github-project.unmapped].
+	Unmapped map[string][]string
+	Schema   *issues.Schema
 	// Forge is the GitHub forge's table, its fields' mappings: the first
 	// GitHub one, else github.com's with none.
 	Forge forge.Table
@@ -338,6 +341,25 @@ type Plan struct {
 	// both sides agree on afterwards, where that changed.
 	Bases     map[string]map[string]string
 	Unmatched []Unmatched
+	// Unmapped are the Project's values this plan skipped by choice
+	// ([github-project.unmapped]), by field, each once.
+	Unmapped map[string][]string
+}
+
+// unmapped says the file leaves the Project's value of a field out, in
+// any case.
+func (c *Config) unmapped(field, value string) bool {
+	return slices.ContainsFunc(c.Unmapped[field], func(v string) bool { return strings.EqualFold(v, value) })
+}
+
+// skip records a value left out by choice.
+func (p *Plan) skip(field, value string) {
+	if p.Unmapped == nil {
+		p.Unmapped = map[string][]string{}
+	}
+	if !slices.Contains(p.Unmapped[field], value) {
+		p.Unmapped[field] = append(p.Unmapped[field], value)
+	}
 }
 
 // Issue is the board's side of one issue: its id, its GitHub issue, its
@@ -493,6 +515,10 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 			continue
 		}
 		raw := f.value(it)
+		if raw != "" && c.unmapped(f.name, raw) {
+			plan.skip(f.name, raw)
+			continue
+		}
 		p, ok := c.toLabel(pf, f.name, raw)
 		if !ok {
 			change.Warnings = append(change.Warnings, Warning{WarnNoOption, f.name, raw, fmt.Sprintf("%s value %q from the Project has no matching option, field left alone", f.name, raw)})
@@ -562,7 +588,12 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 		record("assignee", a.base)
 	}
 
-	res, warning := c.planKind(is.Labels, it.Labels, valueOf(it, "Category"))
+	category := valueOf(it, "Category")
+	if category != "" && c.unmapped(CategoryField, category) {
+		plan.skip(CategoryField, category)
+		category = ""
+	}
+	res, warning := c.planKind(is.Labels, it.Labels, category)
 	if warning != "" {
 		change.Warnings = append(change.Warnings, Warning{WarnNotAKind, CategoryField, valueOf(it, "Category"), warning})
 	}
@@ -576,6 +607,23 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 	if len(newBases) > 0 {
 		plan.Bases[is.ID] = newBases
 	}
+}
+
+// kindNamed is the kind a Category names, in any case: one of [branches]
+// kinds, else the kind [fields.kind.aliases] folds it into; "" for none.
+func (c *Config) kindNamed(category string) string {
+	for _, k := range slices.Sorted(maps.Keys(c.kinds())) {
+		if strings.EqualFold(k, category) {
+			return k
+		}
+	}
+	aliases := c.field("kind").Aliases
+	for _, a := range slices.Sorted(maps.Keys(aliases)) {
+		if _, ok := c.kinds()[aliases[a]]; ok && strings.EqualFold(a, category) {
+			return aliases[a]
+		}
+	}
+	return ""
 }
 
 // planKind fills an issue's kind from the Project's Category, the same
@@ -598,11 +646,8 @@ func (c *Config) planKind(current, onForge []string, category string) (FieldResu
 	var warning string
 	if c.kindOf(current) == "" && c.kindOf(onForge) == "" {
 		warning = fmt.Sprintf("category value %q is none of [branches] kinds, skipped", category)
-		for _, k := range slices.Sorted(maps.Keys(c.kinds())) {
-			if strings.EqualFold(k, category) {
-				res.Value, res.Added, warning = k, []string{c.label("kind", k)}, ""
-				break
-			}
+		if k := c.kindNamed(category); k != "" {
+			res.Value, res.Added, warning = k, []string{c.label("kind", k)}, ""
 		}
 	}
 	if len(res.Added)+len(res.Removed) == 0 {

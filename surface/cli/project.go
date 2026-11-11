@@ -207,6 +207,9 @@ func printReport(out io.Writer, r ghproject.Report) {
 	for _, u := range plan.Unmatched {
 		fmt.Fprintf(out, "unmatched #%d %s: %s\n", u.Number, u.Title, u.Reason)
 	}
+	for _, l := range plan.UnmappedLines() {
+		fmt.Fprintln(out, l)
+	}
 	n := plan.Counts()
 	fmt.Fprintf(out, "\nsummary: %d issue(s) matched, %d with label changes, %d Project write(s), %d conflict(s), %d warning(s), %d unmatched\n",
 		n.Matched, n.LabelChanges, n.ProjectWrites, n.Conflicts, n.Warnings, n.Unmatched)

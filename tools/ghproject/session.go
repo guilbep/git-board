@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -336,6 +338,20 @@ type Counts struct {
 	Conflicts     int `json:"conflicts"`
 	Warnings      int `json:"warnings"`
 	Unmatched     int `json:"unmatched"`
+}
+
+// UnmappedLines says the values the plan skipped by choice, a line a
+// field: "4 Category values unmapped by choice".
+func (p Plan) UnmappedLines() []string {
+	var out []string
+	for _, f := range slices.Sorted(maps.Keys(p.Unmapped)) {
+		s := "s"
+		if len(p.Unmapped[f]) == 1 {
+			s = ""
+		}
+		out = append(out, fmt.Sprintf("%d %s value%s unmapped by choice", len(p.Unmapped[f]), titleCase(f), s))
+	}
+	return out
 }
 
 // Counts counts the plan.

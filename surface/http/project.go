@@ -51,6 +51,8 @@ type lastRes struct {
 	Conflicts []ghproject.Conflict  `json:"conflicts"`
 	Unmatched []ghproject.Unmatched `json:"unmatched"`
 	Changes   []changeRes           `json:"changes"`
+	// Unmapped says the values skipped by choice, a line a field.
+	Unmapped []string `json:"unmapped_by_choice"`
 }
 
 // changeRes is what a run does to one issue: its labels, its writes on
@@ -83,7 +85,8 @@ func lastOf(r *ghproject.Report) *lastRes {
 	if r == nil {
 		return nil
 	}
-	l := &lastRes{Report: *r, Counts: r.Plan.Counts(), Conflicts: r.Plan.Conflicts, Unmatched: r.Plan.Unmatched, Changes: []changeRes{}}
+	l := &lastRes{Report: *r, Counts: r.Plan.Counts(), Conflicts: r.Plan.Conflicts, Unmatched: r.Plan.Unmatched, Changes: []changeRes{},
+		Unmapped: nonNil(r.Plan.UnmappedLines())}
 	if l.Conflicts == nil {
 		l.Conflicts = []ghproject.Conflict{}
 	}
