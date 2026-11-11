@@ -100,6 +100,9 @@ PERF_COUNT ?= 5
 PERF_TOLERANCE ?= 0.15
 PERF_SEED ?= 1
 PERF_BOARDS ?= 5k:5000 20k:20000
+# The perf boards are boardgen's without -forge: a forge found in the
+# remotes is a project the server resolves on its forge, a call out to
+# github.com in each timed run; the forge paths are the tests' (forge/fake).
 perf: ## Time the CLI and the server on 5k and 20k issues against testdata/perf/budgets.txt
 	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; args=""; \
 	for spec in $(PERF_BOARDS); do label=$${spec%%:*}; n=$${spec#*:}; \
