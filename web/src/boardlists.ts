@@ -9,7 +9,7 @@
 // the older one's requests.
 import { ref, shallowRef, watch, type Ref } from 'vue';
 import { batchIssues, getLabels, issueIDs, type Issue, type LabelCount } from '@/api';
-import { current, get, issues as kept } from '@/local/store';
+import { current, get, issues as kept, pull } from '@/local/store';
 import { localIDs } from '@/local/query';
 import type { Bucket } from '@/bucket';
 import { configModel } from '@/configmodel';
@@ -148,15 +148,21 @@ export function useBoardLists(fields: Ref<Fields>) {
     try {
       const r = await issueIDs({ f: filters, sort: p.sort || undefined, limit: pageSize() }, signal, true);
       if (signal.aborted || buckets.value !== mine) return;
-      let differs = false;
-      const fixed = mine.map((b, i) => {
-        const ids = r.lists[i] ?? [];
-        if (ids.join() === (b.ids ?? []).join() && (r.totals[i] ?? 0) === b.total) return b;
-        differs = true;
-        console.warn(`git-board: the page's answer for ${filters[i]} differs from the server's; the server's shows`);
-        return bucketOf(b.group, ids, r.totals[i] ?? 0);
+      const same = (i: number, ids: string[], total: number) => ids.join() === (r.lists[i] ?? []).join() && total === (r.totals[i] ?? 0);
+      const off = mine.map((b, i) => !same(i, b.ids ?? [], b.total ?? 0));
+      if (!off.some(Boolean)) return;
+      // a change the page hadn't caught up with yet (the server's answer is
+      // newer): caught up, answered again; one that still differs is a
+      // rule the page got wrong, and says so
+      await pull().catch(() => {});
+      const all = [...kept.value.values()];
+      off.forEach((o, i) => {
+        if (!o) return;
+        const again = localIDs(all, filters[i]!, p.sort || '', pageSize());
+        if (again && !same(i, again.ids, again.total)) console.warn(`git-board: the page's answer for ${filters[i]} differs from the server's; the server's shows`);
       });
-      if (differs) buckets.value = fixed;
+      if (signal.aborted || buckets.value !== mine) return;
+      buckets.value = mine.map((b, i) => (off[i] ? bucketOf(b.group, r.lists[i] ?? [], r.totals[i] ?? 0) : b));
     } catch {
       // the page's answer stays
     }
