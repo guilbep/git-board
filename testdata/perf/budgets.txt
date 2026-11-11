@@ -23,6 +23,7 @@
 20k/http/ListColumn       60ms    a board's column, filtered and sorted
 20k/http/ListAll          120ms   every issue at once (design.md's target 60 ms: not met, the JSON of 20,000)
 20k/http/Facets           60ms    GET /api/labels, the filters panel's counts
+20k/http/Snapshot         150ms   every issue at once for a page to keep (ADR 0023): ListAll's work, the kept build shared
 20k/http/Thread           40ms    one issue's thread (design.md's target 10 ms: not met)
 20k/http/EventsFanOut     70ms    a comment told to 50 pages
 20k/http/WorkTeam         300ms   the Work page, every open issue (12,000), unpaged: 71 s before its rows were kept
@@ -44,6 +45,7 @@
 5k/http/ListColumn        20ms    a board's column
 5k/http/ListAll           35ms    every issue at once
 5k/http/Facets            20ms    the filters panel's counts
+5k/http/Snapshot          40ms    every issue at once for a page to keep
 5k/http/Thread            15ms    one issue's thread
 5k/http/EventsFanOut      45ms    a comment told to 50 pages
 5k/http/WorkTeam          60ms    the Work page, unpaged

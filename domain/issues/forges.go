@@ -49,8 +49,9 @@ func ReadOnce(ctx context.Context) context.Context {
 type readOnceKey struct{}
 
 type readOnce struct {
-	mu   sync.Mutex
-	kept map[bool]reading // by now
+	mu      sync.Mutex
+	kept    map[bool]reading // by now
+	version *string          // the board's, for the kept list (Service.version)
 }
 
 func (s *Service) read1(ctx context.Context, notice Notice, now bool) (rd reading) {

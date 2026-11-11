@@ -31,6 +31,7 @@ type Event struct {
 	Step    *Step   `json:"step,omitempty"`    // progress
 	Tallies []Tally `json:"tallies,omitempty"` // progress: the run's tallies so far
 	Error   string  `json:"error,omitempty"`   // config-error: why the file edited by hand does not open
+	Cursor  string  `json:"cursor,omitempty"`  // issue: the changes' cursor after it (GET /api/changes)
 }
 
 // subBuffer is how many events a page may fall behind before it is
@@ -60,6 +61,13 @@ func (b *broker) subscribe() (<-chan []byte, func()) {
 	}
 }
 
+// listened says whether a page listens.
+func (b *broker) listened() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.subs) > 0
+}
+
 func (b *broker) publish(e Event) {
 	data, _ := json.Marshal(e)
 	b.mu.Lock()
@@ -76,6 +84,9 @@ func (b *broker) publish(e Event) {
 
 // publish sends e to every page, and logs it at debug.
 func (s *Server) publish(ctx context.Context, e Event) {
+	if e.Kind == "issue" && e.ID != "" {
+		e.Cursor = s.changes.add(e.ID)
+	}
 	s.log.LogAttrs(ctx, slog.LevelDebug, "event", slog.String("kind", e.Kind), slog.String("id", e.ID))
 	s.events.publish(e)
 }
@@ -177,7 +188,13 @@ func (s *Server) watch(ctx context.Context, interval time.Duration) {
 				s.publish(ctx, Event{Kind: "config"})
 			}
 		}
-		s.heads(ctx, true)
+		// no page listens: nothing to tell, and the next tick a page
+		// listens finds what moved since, against the versions last told
+		// ponytail: a tick lists the heads; a stat of refs/board's folders
+		// first (refsStamp's way) if many boards serve idle pages
+		if s.events.listened() {
+			s.heads(ctx, true)
+		}
 	}
 }
 

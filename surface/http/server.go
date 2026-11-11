@@ -22,6 +22,7 @@ type Server struct {
 	log        *slog.Logger
 	boards     *boards
 	events     broker
+	changes    *changeRing // the issues' changes, numbered (changes.go)
 	seen       seen
 	configPath string
 	own        ownConfig // the server's own writes of .git-board.toml
@@ -68,7 +69,7 @@ func New(ctx context.Context, o Options) (*Server, error) {
 		o.Log = slog.New(slog.DiscardHandler)
 	}
 	s := &Server{log: o.Log, version: o.Version, exposed: o.Exposed, static: o.Static, done: make(chan struct{}),
-		seen: seen{at: map[string]string{}, pending: map[string]string{}}, base: context.WithoutCancel(ctx)}
+		seen: seen{at: map[string]string{}, pending: map[string]string{}}, base: context.WithoutCancel(ctx), changes: newChangeRing()}
 	open := o.Open
 	if open == nil {
 		open = func(ctx context.Context, dir string) (*app.Board, error) {
@@ -124,7 +125,7 @@ func (s *Server) Handler() http.Handler {
 	if s.static != nil {
 		mux.Handle("/", static(s.static))
 	}
-	return withLog(s.log, withCORS(withGuard(s.log, s.exposed, s.withBoard(mux))))
+	return withLog(s.log, withCORS(withGuard(s.log, s.exposed, s.withBoard(withConditional(mux)))))
 }
 
 // withBoard holds the board for the request, and makes the request one

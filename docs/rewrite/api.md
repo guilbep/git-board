@@ -166,6 +166,20 @@ event for each issue pulled.
 | 12 | `POST /api/issues/{id}/undo` | `{force}` | `{issue, title, undone, what}`, as `undo --json` |
 | 13 | `GET /api/issues/{id}/follow` | | `{following, reasons, set}`, as `follow --json` |
 | 14 | `PUT /api/issues/{id}/follow` | `{follow: true, false or null}` | the same |
+| 64 | `GET /api/snapshot` | `If-None-Match` | `{stamp, cursor, issues}`: every issue, open and closed, as a list shows it; `ETag` its stamp, 304 when held |
+| 65 | `GET /api/changes` | `since`: a cursor | `{cursor, put, dropped}`: the issues changed since, as they are now, and those gone; 410 `gone` when the cursor is older than the server holds |
+| 66 | `GET /api/issues/ids` | `filter` | `{stamp, ids}`: the ids a filter matches, for a term a page can't answer from its copy |
+
+**The board a page keeps (64 to 66; ADR 0023).** A page takes the
+snapshot once, then the changes since its cursor, as the change events
+say when (an `issue` event carries the cursor after it). The server
+remembers its last 4,096 issue changes; a cursor older, or of a server
+started since, answers 410, and the page takes the snapshot again (a
+304 when nothing changed). A stamp is the board's version: its issues',
+people's, forges' records' and counter's, and which open of the board it
+is. `GET /api/issues`, `/api/issues/batch`, `/api/labels` and
+`/api/issues/ids` answer an `ETag` too (the stamp, the query, who `@me`
+is and the day), and a 304 to a page that holds it, no list built.
 
 **List (3).** `sort` is `ls --sort`'s: `created`, `updated`,
 `title` or a field, then `asc` or `desc` (`prio desc`); absent, oldest
@@ -603,7 +617,7 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 
 | `kind` | When | `id` |
 |---|---|---|
-| `issue` | an issue was written (a delete too: a tombstone is a version), here or by anyone else (a command, a fetch, a sync) | the issue, with its `version`; none when its ref is gone |
+| `issue` | an issue was written (a delete too: a tombstone is a version), here or by anyone else (a command, a fetch, a sync) | the issue, with its `version`; none when its ref is gone; `cursor`, the changes' after it (65) |
 | `person` | a person was written | the person |
 | `config` | `.git-board.toml` changed | |
 | `config-error` | `.git-board.toml` was edited by hand and does not open: the board keeps the last file that opened, and `error` says why | |

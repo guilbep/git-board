@@ -67,6 +67,10 @@ func BenchmarkListColumn(b *testing.B) {
 	benchGet(b, "/api/issues?filter=status:ready+is:open&sort=updated+desc")
 }
 
+// The board as a page keeps it: every issue, open and closed, its ETag
+// (the page's first open, and each after a change of the board).
+func BenchmarkSnapshot(b *testing.B) { benchGet(b, "/api/snapshot") }
+
 // One issue's thread: budget 10 ms.
 func BenchmarkThread(b *testing.B) {
 	_, _, dir := benchAPI(b)

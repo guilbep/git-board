@@ -117,6 +117,15 @@ func TestGuardRoutes(t *testing.T) {
 	// list, none an issue
 	within(t, "GET /api/issues/batch", countGet(t, h, "/api/issues/batch?f=status:backlog&f=status:ready&f=status:in-progress&f=status:in-review&f=status:qa&f=status:validated&f=no:status&c=is:open&c=is:closed&limit=40"),
 		map[string]int64{"entities": 0, "objects": 0, "loads": 0, "processes": 0, "listings": 3, "view calls": 4 * 9, "rows put": 0})
+	// the issues built once while the board stays (issues.KeptList): a
+	// list again, a batch's lanes, read no issue row, whatever the size
+	countGet(t, h, "/api/issues?filter=")
+	for _, path := range []string{"/api/issues?filter=is:open", "/api/issues/batch?f=status:backlog&f=status:ready&c=is:open"} {
+		c := countGet(t, h, path)
+		if c.RowsRead.Load() > 0 {
+			t.Errorf("GET %s, the board unchanged: %d rows read, want the kept build's 0", path, c.RowsRead.Load())
+		}
+	}
 	// one issue: its entity alone
 	id := string(gb.Issues[5])
 	within(t, "GET /api/issues/{id}", countGet(t, h, "/api/issues/"+id),
