@@ -27,10 +27,14 @@ var sortKeys = map[string]func(x, y Issue) int{
 	"title": func(x, y Issue) int {
 		return cmp.Compare(strings.ToLower(x.ShownTitle()), strings.ToLower(y.ShownTitle()))
 	},
+	// the table's other columns: who opened it, its id, open or closed
+	"author": func(x, y Issue) int { return cmp.Compare(strings.ToLower(x.Author), strings.ToLower(y.Author)) },
+	"id":     func(x, y Issue) int { return cmp.Compare(x.ID, y.ID) },
+	"is":     func(x, y Issue) int { return cmp.Compare(x.Status, y.Status) },
 }
 
-// Sort sorts issues by spec, "key [asc|desc]": created, updated, title or
-// a field, stably. A key that is none of them, or another direction, is
+// Sort sorts issues by spec, "key [asc|desc]": created, updated, title,
+// author, id, is or a field, stably. A key that is none of them, or another direction, is
 // an ErrUsage: a sort that does nothing says so.
 func (s *Schema) Sort(issues []Issue, spec string) error {
 	if spec == "" {
@@ -55,7 +59,7 @@ func (s *Schema) Sort(issues []Issue, spec string) error {
 		known = known || slices.ContainsFunc(is.AllLabels(), func(l string) bool { return strings.HasPrefix(l, key+":") })
 	}
 	if !known && len(issues) > 0 {
-		return usage{fmt.Errorf("--sort %q: %s is no field here; sort by created, updated, title or a field (%s)", spec, key, strings.Join(s.FieldNames(issues), ", "))}
+		return usage{fmt.Errorf("--sort %q: %s is no field here; sort by created, updated, title, author, id, is or a field (%s)", spec, key, strings.Join(s.FieldNames(issues), ", "))}
 	}
 	s.sortByField(issues, key, dir == "desc")
 	return nil

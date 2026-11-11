@@ -43,6 +43,8 @@ type Issue struct {
 	// index (an issue as it was: ls --at).
 	Body          string   `json:"-"`
 	CommentBodies []string `json:"-"`
+	// Author is who opened it, by name: the table's Author column.
+	Author string `json:"opened_by,omitempty"`
 	// AuthorLogins are who opened it, for author:: name, login, forge
 	// logins.
 	AuthorLogins []string `json:"-"`

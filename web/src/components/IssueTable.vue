@@ -69,7 +69,7 @@
                 :class="{ 'cell-id': key === 'id', 'cell-title': key === 'title' }"
                 :aria-sort="sort?.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined"
               >
-                <button v-if="key !== 'other'" type="button" class="th-sort" @click="emit('sort', key)">
+                <button v-if="key !== 'other' && key !== 'links'" type="button" class="th-sort" @click="emit('sort', key)">
                   {{ label(key) }}<span class="th-arrow" aria-hidden="true">{{ sort?.key === key ? (sort.desc ? '↓' : '↑') : '' }}</span>
                 </button>
                 <template v-else>{{ label(key) }}</template>
@@ -91,6 +91,7 @@
                 <td v-if="key === 'id'" class="cell-id">{{ issue.id.slice(0, 8) }}</td>
                 <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button" :title="issue.shown_title"><span v-if="issue.number" class="gb-num">{{ issue.number }}</span>{{ issue.shown_title }}</button></td>
                 <td v-else-if="key === 'is'">{{ issue.status }}</td>
+                <td v-else-if="key === 'author'" class="cell-author">{{ issue.opened_by }}</td>
                 <td v-else-if="key === 'links'" class="cell-links" @click.stop>
                   <a v-for="f in issue.forges ?? []" :key="f.url" :href="safeHref(f.url)" target="_blank" rel="noopener noreferrer" class="forge-link" :title="`Open on ${f.name}${f.number ? ` #${f.number}` : ''}`">
                     {{ f.name }} #{{ f.number || '?' }}
@@ -191,7 +192,7 @@ watch(
 const win = (b: Bucket): [number, number] => ranges.value[b.group] ?? [0, Math.min(b.issues.length, LONG)];
 
 const cols = computed(() => shownColumns(props.columns, props.names));
-const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'On the forge' };
+const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', author: 'Author', other: 'Other labels', links: 'On the forge' };
 const label = (key: string) => labels[key] ?? displayName(key);
 
 function groupLabel(value: string): string {

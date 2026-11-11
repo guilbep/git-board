@@ -360,6 +360,9 @@ func (s *Service) issue(id kernel.ID, r *Row, dir people.Directory, rd reading) 
 	is.Shown = is.ShownTitle()
 	is.numbered(rd.cnt)
 	is.AuthorLogins = dir.Names(r.Author)
+	if len(is.AuthorLogins) > 0 {
+		is.Author = is.AuthorLogins[0]
+	}
 	if len(r.Commenters) > 0 {
 		is.CommenterIDs = make([]string, 0, len(r.Commenters))
 		is.CommenterLogins = make([]string, 0, len(r.Commenters))

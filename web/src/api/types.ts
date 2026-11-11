@@ -37,6 +37,7 @@ export interface Issue {
   inherited?: string[]; // from the project's [roles], for the roles it doesn't set
   github_url?: string;
   forges?: Forge[];
+  opened_by?: string; // who opened it, by name
   number?: string; // its project number, CO2-3075
   counted?: boolean; // the project numbers its issues
   updated_at: string;
