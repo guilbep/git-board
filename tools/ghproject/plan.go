@@ -184,18 +184,19 @@ type Meta struct {
 }
 
 // Field is a Project field: its id, its type, and its options or
-// iterations, by name, to their id.
+// iterations, by name, to their id; and as the Project lists them.
 type Field struct {
 	ID      string
 	Type    string // SINGLE_SELECT, ITERATION, NUMBER, DATE, TEXT…
 	Options map[string]string
+	Choices []github.ProjectChoice
 }
 
 // MetaOf is a Project's meta as GitHub answers it.
 func MetaOf(m github.ProjectMeta) Meta {
 	out := Meta{ID: m.ID, Title: m.Title, Fields: map[string]Field{}}
 	for _, f := range m.Fields {
-		pf := Field{ID: f.ID, Type: f.DataType, Options: map[string]string{}}
+		pf := Field{ID: f.ID, Type: f.DataType, Options: map[string]string{}, Choices: f.Choices}
 		for _, c := range f.Choices {
 			pf.Options[c.Name] = c.ID
 		}

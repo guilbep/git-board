@@ -56,8 +56,13 @@ type ProjectV2Field struct {
 	Choices            []ProjectChoice
 }
 
-// ProjectChoice is an option or an iteration: its id and its name.
-type ProjectChoice struct{ ID, Name string }
+// ProjectChoice is an option or an iteration: its id and its name; an
+// iteration's first day (2026-11-02) and its length in days.
+type ProjectChoice struct {
+	ID, Name string
+	Start    string
+	Days     int
+}
 
 // ProjectItem is one row of a Project: an issue, a pull request or a draft,
 // and its fields' values.
@@ -82,7 +87,7 @@ const projectMetaQuery = `query($owner: String!, $n: Int!) {
     fields(first: 100) { nodes {
       ... on ProjectV2FieldCommon { id name dataType }
       ... on ProjectV2SingleSelectField { options { id name } }
-      ... on ProjectV2IterationField { configuration { iterations { id title } completedIterations { id title } } }
+      ... on ProjectV2IterationField { configuration { iterations { id title startDate duration } completedIterations { id title startDate duration } } }
     } } } } }
 }`
 
@@ -101,9 +106,11 @@ func gqlErr(errs []gqlError) error {
 // read:project scope gets GitHub's error.
 func (p *ProjectV2) Meta(ctx context.Context) (ProjectMeta, error) {
 	type named struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Title string `json:"title"`
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Title     string `json:"title"`
+		StartDate string `json:"startDate"`
+		Duration  int    `json:"duration"`
 	}
 	var r struct {
 		Data struct {
@@ -146,10 +153,10 @@ func (p *ProjectV2) Meta(ctx context.Context) (ProjectMeta, error) {
 		}
 		f := ProjectV2Field{ID: n.ID, Name: n.Name, DataType: n.DataType}
 		for _, o := range n.Options {
-			f.Choices = append(f.Choices, ProjectChoice{o.ID, o.Name})
+			f.Choices = append(f.Choices, ProjectChoice{ID: o.ID, Name: o.Name})
 		}
 		for _, it := range append(n.Configuration.Iterations, n.Configuration.CompletedIterations...) {
-			f.Choices = append(f.Choices, ProjectChoice{it.ID, it.Title})
+			f.Choices = append(f.Choices, ProjectChoice{ID: it.ID, Name: it.Title, Start: it.StartDate, Days: it.Duration})
 		}
 		meta.Fields = append(meta.Fields, f)
 	}

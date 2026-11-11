@@ -23,8 +23,13 @@ type Field struct {
 	Choices            []Choice // options or iterations
 }
 
-// Choice is an option or an iteration.
-type Choice struct{ ID, Name string }
+// Choice is an option or an iteration; an iteration's first day and its
+// length in days.
+type Choice struct {
+	ID, Name string
+	Start    string
+	Days     int
+}
 
 // Item is a Project item: an issue's content, and its values by field
 // name, as names (an option's, an iteration's title), numbers, dates and
@@ -347,7 +352,7 @@ func (f *Fake) meta(w http.ResponseWriter) {
 		n := map[string]any{"id": fl.ID, "name": fl.Name, "dataType": fl.DataType}
 		var cs []map[string]any
 		for _, c := range fl.Choices {
-			cs = append(cs, map[string]any{"id": c.ID, "name": c.Name, "title": c.Name})
+			cs = append(cs, map[string]any{"id": c.ID, "name": c.Name, "title": c.Name, "startDate": c.Start, "duration": c.Days})
 		}
 		switch fl.DataType {
 		case "SINGLE_SELECT":
