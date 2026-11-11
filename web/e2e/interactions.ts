@@ -22,6 +22,10 @@ export interface Interaction {
 
 const panelTitle = (page: Page) => page.locator('.gb-panel .gb-head-title');
 
+// a comment's text, its own each run: a board the nightly reuses keeps
+// the ones before
+let comment = '';
+
 export const interactions: Interaction[] = [
   {
     name: 'OpenPalette',
@@ -70,6 +74,19 @@ export const interactions: Interaction[] = [
     },
     act: (page) => page.locator('.gb-panel').getByRole('button', { name: 'Save', exact: true }).click(),
     done: (page, g) => expect(panelTitle(page)).toHaveText(`${g.issue.title} renamed`),
+  },
+  {
+    name: 'PostComment',
+    optimistic: true,
+    maxRequests: 2, // the POST; the bell's follow, which a comment turns on
+    arrange: async (page, g) => {
+      await page.goto(`/#/?filter=&issue=${g.issue.id}`);
+      await expect(panelTitle(page)).toHaveText(g.issue.title);
+      comment = `A comment, ${Date.now()}`;
+      await page.locator('.gb-panel').getByPlaceholder('Leave a comment').fill(comment);
+    },
+    act: (page) => page.locator('.gb-panel').getByRole('button', { name: 'Comment', exact: true }).click(),
+    done: (page) => expect(page.locator('.gb-panel').getByText(comment)).toBeVisible(),
   },
   {
     name: 'ApplyFilter',

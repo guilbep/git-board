@@ -219,7 +219,9 @@ func issueIDs(ctx context.Context, r idsReq) (idsRes, error) {
 // conditionalGets are the lists a page asks again on each change: built
 // from the board alone, so the board's stamp, the query, who @me is and
 // the day (@today, a sprint) name their reply.
-var conditionalGets = map[string]bool{"/api/issues": true, "/api/issues/batch": true, "/api/labels": true, "/api/issues/ids": true}
+// The inbox and the Work page aren't: they read more than the board's
+// version says (one's read marks, the other's pull requests and branches).
+var conditionalGets = map[string]bool{"/api/issues": true, "/api/issues/batch": true, "/api/labels": true, "/api/issues/ids": true, "/api/insights": true}
 
 // withConditional answers a page that holds a list's reply 304, its ETag
 // the reply's name, before any list is built.

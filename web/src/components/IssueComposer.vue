@@ -51,9 +51,13 @@ const forgeNames = computed(() => {
   return names.length ? names.join(' and ') : 'the forges';
 });
 
+// the box empties at once, as the comment shows (issue.ts); refused, it
+// comes back with what was typed
 async function post(status?: 'open' | 'closed') {
   if (uploading.value || (!status && !text.value.trim())) return;
-  if (await props.comment(text.value, status)) text.value = '';
+  const typed = text.value;
+  text.value = '';
+  if (!(await props.comment(typed, status)) && !text.value) text.value = typed;
 }
 </script>
 

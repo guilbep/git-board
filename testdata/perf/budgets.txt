@@ -81,3 +81,5 @@
 5k/web/InteractionRenameIssueWorst    100ms   (40 ms)
 5k/web/InteractionOpenIssueDesk       60ms    a card clicked to its panel, every read at once (40 ms)
 5k/web/InteractionOpenIssueWorst      200ms   (152 ms: one round trip; read ahead on hover, less)
+5k/web/InteractionPostCommentDesk     50ms    a comment posted, as shown before its answer (40 ms)
+5k/web/InteractionPostCommentWorst    100ms   (72 ms)

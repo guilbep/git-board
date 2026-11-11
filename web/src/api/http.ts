@@ -128,6 +128,18 @@ function sharedGet(path: string, c: Call): Promise<Raw> {
   return p;
 }
 
+// the last answer of each GET that came with an ETag, by URL: asked again,
+// it goes with If-None-Match, and a 304 answers what was kept (a page that
+// reloads on a change event pays the change, not the list). Kept across
+// events: the server says whether it moved.
+// ponytail: the last 100 URLs; an LRU by size if answers grow
+const tagged = new Map<string, Raw>();
+function remember(key: string, r: Raw) {
+  tagged.delete(key);
+  tagged.set(key, r);
+  if (tagged.size > 100) tagged.delete(tagged.keys().next().value!);
+}
+
 export async function call<T>(method: string, path: string, c: Call = {}): Promise<Answer<T>> {
   if (method !== 'GET') {
     forgetPending();
@@ -135,7 +147,13 @@ export async function call<T>(method: string, path: string, c: Call = {}): Promi
   }
   const key = c.keep && method === 'GET' && !c.ifNoneMatch ? url(path, c.query) : '';
   const held = key ? kept.get(key) : undefined;
-  const r = held && performance.now() - held.at < c.keep! ? held.raw : await (method === 'GET' && !c.signal ? sharedGet(path, c) : fetchRaw(method, path, c));
+  // a GET the page asked before, with its ETag: asked again If-None-Match
+  const tag = method === 'GET' && !c.ifNoneMatch ? url(path, c.query) : '';
+  const known = tag ? tagged.get(tag) : undefined;
+  const ask = known ? { ...c, ifNoneMatch: known.version } : c;
+  let r = held && performance.now() - held.at < c.keep! ? held.raw : await (method === 'GET' && !c.signal ? sharedGet(path, ask) : fetchRaw(method, path, ask));
+  if (known && r.status === 304) r = known; // as it was
+  else if (tag && r.ok && r.version) remember(tag, r);
   if (key && r !== held?.raw && r.ok) kept.set(key, { at: performance.now(), raw: r });
   const answer = { status: r.status, version: r.version, location: r.location };
   if (r.status === 204 || r.status === 304) return { ...answer, data: undefined as T };

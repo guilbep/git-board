@@ -7,10 +7,10 @@
 import { ref, watch, type Ref } from 'vue';
 import {
   addComment, ApiError, changesHeard, editComment, getCycle, getFollow, getThread, getThreadSince, isStale, message, patchIssue,
-  type IssueChange, type Thread,
+  type IssueChange, type IssueEvent, type Thread,
 } from '@/api';
 import { latestOnly } from '@/latest';
-import { cycleOn } from '@/me';
+import { cycleOn, me } from '@/me';
 import { loadUploadStatus } from '@/uploads';
 import { apply as applyKept } from '@/local/store';
 
@@ -131,7 +131,10 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
   async function shown(p: Partial<Thread>, run: () => Promise<boolean>): Promise<boolean> {
     const before = thread.value;
     if (before) thread.value = { ...before, ...p };
-    const undo = applyKept(id.value, p);
+    // the board's card: what a list shows (a comment, its count), never the thread's events
+    const { events, ...card } = p;
+    if (events) card.comments = (before?.comments ?? 0) + 1;
+    const undo = applyKept(id.value, card);
     const ok = await run();
     if (!ok) {
       if (before && thread.value?.version === before.version) thread.value = before;
@@ -139,6 +142,12 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     }
     return ok;
   }
+  const withComment = (body: string, status?: 'open' | 'closed'): Partial<Thread> => {
+    const who = me.value?.me ?? { id: '', name: 'You' };
+    const html = `<p>${body.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!).replace(/\n/g, '<br>')}</p>`;
+    const pending: IssueEvent = { kind: 'comment', id: `pending-${Date.now()}`, author: who, at: new Date().toISOString(), body, html };
+    return { events: [...(thread.value?.events ?? []), pending], ...(status ? { status } : {}) };
+  };
   const relabeled = (add: string[], remove: string[]): Partial<Thread> => {
     const now = (thread.value?.labels ?? []).filter((l) => !remove.includes(l));
     return { labels: [...now, ...add.filter((l) => !now.includes(l))] };
@@ -162,8 +171,10 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     // Overwrite after a 412: the write again, over whatever it is now
     overwrite: () => conflict.value?.() ?? Promise.resolve(false),
     // a comment, or a status with one: "Close with comment"
+    // shown at once, as a comment of yours waiting for its answer (its
+    // text as typed: the server renders it); gone if the server refuses it
     comment: (body: string, status?: 'open' | 'closed') =>
-      status ? patch({ status, comment: body }) : write((v) => addComment(id.value, v, body)),
+      shown(withComment(body, status), () => (status ? patch({ status, comment: body }) : write((v) => addComment(id.value, v, body)))),
     // throws: the comment card shows why (ApiError code "changed")
     edit: (commentId: string, body: string, base: string) => write((v) => editComment(id.value, v, commentId, body, base), true),
     rename: (title: string) => shown({ title, shown_title: title }, () => patch({ title })),
