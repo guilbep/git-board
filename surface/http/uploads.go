@@ -1,11 +1,13 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/guilbep/git-board/app"
 )
@@ -49,18 +51,29 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 }
 
 // media is route 42: a forge's picture of issue text, through this
-// server, which has the forge's token (app.Media).
+// server, which has the forge's token (app.Media). Its ETag answers a
+// browser's If-None-Match with 304; an address that names one picture
+// for good is kept a year, any other a day, then asked again. private:
+// a shared cache keeps none.
+// ponytail: an <img> sends no Authorization: a server several people
+// reach needs a cookie or a signed ?sig= before it serves a private
+// repository's pictures; this one serves its own user's, with their token.
 func media(w http.ResponseWriter, r *http.Request) {
-	contentType, data, err := board(r.Context()).Media(r.Context(), r.URL.Query().Get("url"))
+	p, err := board(r.Context()).Media(r.Context(), r.URL.Query().Get("url"))
 	if err != nil {
 		writeError(w, r, logOf(r.Context()), on("url", err))
 		return
 	}
 	h := w.Header()
-	h.Set("Content-Type", contentType)
-	h.Set("Cache-Control", "private, max-age=86400")
+	h.Set("Content-Type", p.Type)
+	h.Set("ETag", p.ETag)
+	if p.Immutable {
+		h.Set("Cache-Control", "private, max-age=31536000, immutable")
+	} else {
+		h.Set("Cache-Control", "private, max-age=86400")
+	}
 	h.Set("X-Content-Type-Options", "nosniff")
 	// an SVG opened on its own can't run its scripts
 	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
-	_, _ = w.Write(data)
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(p.Data))
 }

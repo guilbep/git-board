@@ -124,6 +124,17 @@ func TestMedia(t *testing.T) {
 	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "image/png" || string(body) != "\x89PNG" || res.Header.Get("Content-Security-Policy") == "" {
 		t.Fatalf("GET %s: %d %s %q", proxied, res.StatusCode, res.Header.Get("Content-Type"), body)
 	}
+	// an attachment's address names one picture for good: the browser
+	// keeps it a year, and asks again with its ETag, answered 304, no body
+	etag := res.Header.Get("ETag")
+	if etag == "" || !strings.Contains(res.Header.Get("Cache-Control"), "immutable") || !strings.HasPrefix(res.Header.Get("Cache-Control"), "private") {
+		t.Fatalf("GET %s: ETag %q, Cache-Control %q", proxied, etag, res.Header.Get("Cache-Control"))
+	}
+	res = a.do("GET", proxied, nil, "If-None-Match", etag)
+	body, _ = io.ReadAll(res.Body)
+	if res.StatusCode != http.StatusNotModified || len(body) != 0 {
+		t.Fatalf("GET %s again, If-None-Match: %d, %d bytes", proxied, res.StatusCode, len(body))
+	}
 	if e := want[apiError](t, a.do("GET", "/api/media?url="+url.QueryEscape("https://example.com/a.png"), nil), 400); e.Field != "url" {
 		t.Fatalf("a picture not a forge's = %+v", e)
 	}

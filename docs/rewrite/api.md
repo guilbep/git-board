@@ -469,7 +469,7 @@ many.
 | 39 | `POST /api/markdown` | `{body}` | `{html}` |
 | 40 | `GET /api/uploads` | | `{enabled, where, max_bytes}` (built) |
 | 41 | `POST /api/uploads` | multipart, `X-Git-Board-Upload: 1`, the file in `file` | `{url, name, type, markdown}` (built); `missing` without a bucket |
-| 42 | `GET /api/media` | `url` | the picture, through this server (built): a forge's alone, with its token, kept in the board's folder |
+| 42 | `GET /api/media` | `url` | the picture, through this server (built): a forge's alone, with its token (looked up once a host, kept a minute in memory), kept in the board's folder; its `ETag` answers `If-None-Match` with 304; an attachment's or upload's address is `private, max-age=31536000, immutable`, any other `private, max-age=86400` and fetched again after a day |
 
 `POST /api/markdown` previews a text as the thread renders it, cleaned.
 Uploads are `[uploads]`'s, a tool's (`tools/uploads`, v1's, ADR

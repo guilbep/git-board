@@ -173,6 +173,12 @@ type forgeCache struct {
 	// kind host url login -> what tokenFound found: kept by time, not a
 	// stamp: a credential helper's store says nothing of when it changed
 	tokens map[string]tokenSeen
+	// the GitLab forges pictures may come from (gitlabForges), and each
+	// host's token for its pictures (mediaToken), its own lock held
+	// across a lookup
+	gitlab  kept[[]forge.Table]
+	mediaMu sync.Mutex
+	media   map[string]mediaToken
 }
 
 // foundIn is what finding the forges in the remotes found, and skipped.
