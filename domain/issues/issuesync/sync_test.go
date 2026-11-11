@@ -357,7 +357,7 @@ func TestLocalDidAndRecords(t *testing.T) {
 	var heard []string
 	opt := Options{
 		Local: func(m map[string]string) bool { return m["review:path"] != "" },
-		Did:   func(forge, what, id string, ops int) { heard = append(heard, forge+" "+what) },
+		Did:   func(forge, what, id, _ string, ops int) { heard = append(heard, forge+" "+what) },
 	}
 	if _, err := Sync(t.Context(), s, opt, f); err != nil {
 		t.Fatal(err)

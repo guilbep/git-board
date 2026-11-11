@@ -366,7 +366,30 @@ type ForgeRun struct {
 	// every write to a forge counted and answered without being made.
 	// Nothing changes, here or on a forge.
 	DryRun bool
-	See    func(SyncEvent) // nil hears nothing
+	// Only are the parts the run writes (Parts), nil every one: a part
+	// left out is left for the next run.
+	Only []Part
+	See  func(SyncEvent) // nil hears nothing
+}
+
+// Part is one part of what a forge run writes: pull-changes, pull-new,
+// create or send (docs/prd/config-fit.md, Part 2).
+type Part = issuesync.Part
+
+// Parts are the parts, in a run's order.
+var Parts = issuesync.Parts
+
+// ParseParts reads a list of parts, as sync --only takes it: "pull-new,send".
+func ParseParts(list []string) ([]Part, error) {
+	var out []Part
+	for _, s := range list {
+		p := Part(strings.TrimSpace(s))
+		if !slices.Contains(Parts, p) {
+			return nil, usage(fmt.Errorf("part %q: pull-changes, pull-new, create or send", s))
+		}
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 // MaxCreate is how many creations on one forge, in one run, need consent:
@@ -375,14 +398,14 @@ const MaxCreate = 50
 
 // SyncEvent is one thing a run did on one forge. Way is pull or push.
 // What is created, updated, linked, posted or pushed, with Issue the
-// issue's id; warning, waiting or left, with Line; held: the Ops
+// issue's id and Name its forge number and title; warning, waiting or left, with Line; held: the Ops
 // creations waiting for consent, Line saying why; progress: Done of
 // Total.
 type SyncEvent struct {
-	Forge, Way, What, Issue string
-	Ops                     int
-	Line                    string
-	Done, Total             int
+	Forge, Way, What, Issue, Name string
+	Ops                           int
+	Line                          string
+	Done, Total                   int
 }
 
 // Text says the event in words, its issue by name ("would create CO2-3
@@ -421,6 +444,11 @@ func (e SyncEvent) Text(dry bool, name string) string {
 	}
 	return l
 }
+
+// Part is the part an event counts in: an issue pulled that changed
+// (pull-changes), a new one pulled (pull-new), one created (create), one
+// sent its changes (send); "" for any other.
+func (e SyncEvent) Part() Part { return issuesync.PartOf(e.What) }
 
 // ErrNotSwitched: the repository's issues are still the git-bug fork's.
 var ErrNotSwitched = errors.New("this repository still holds git-bug data, in refs/bugs: migrate it with git-board v0.11 (`git board switch`), then use v0.12")
@@ -528,12 +556,13 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 			}
 			see(ev)
 		},
-		Did: func(key, what, id string, ops int) {
+		Only: run.Only,
+		Did: func(key, what, id, name string, ops int) {
 			w := "pull"
 			if what == "posted" || what == "pushed" || what == "restored" {
 				w = "push"
 			}
-			see(SyncEvent{Forge: names[key], Way: w, What: what, Issue: id, Ops: ops})
+			see(SyncEvent{Forge: names[key], Way: w, What: what, Issue: id, Name: name, Ops: ops})
 		},
 		Progress: func(key, way string, done, total int, name string) {
 			see(SyncEvent{Forge: names[key], Way: way, What: "progress", Done: done, Total: total, Line: name})
