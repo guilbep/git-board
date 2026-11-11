@@ -6,12 +6,34 @@
 // without a version, the last writer wins, field by field).
 import { ref, watch, type Ref } from 'vue';
 import {
-  addComment, ApiError, editComment, getThread, isStale, message, patchIssue,
+  addComment, ApiError, editComment, getThread, getThreadSince, isStale, message, patchIssue,
   type IssueChange, type Thread,
 } from '@/api';
 import { latestOnly } from '@/latest';
+import { apply as applyKept } from '@/local/store';
 
 export { message };
+
+// the threads last read, by issue: an issue opened again shows at once,
+// then asks whether it moved (If-None-Match: a 304 when it didn't); a
+// card hovered reads its thread before the click (prefetchThread)
+// ponytail: the last 200 kept; an LRU if people open thousands a visit
+const threads = new Map<string, Thread>();
+function keepThread(t: Thread) {
+  threads.delete(t.id);
+  threads.set(t.id, t);
+  if (threads.size > 200) threads.delete(threads.keys().next().value!);
+}
+
+// prefetchThread reads an issue's thread before it is opened
+export async function prefetchThread(id: string): Promise<void> {
+  if (threads.has(id)) return;
+  try {
+    keepThread(await getThread(id));
+  } catch {
+    // opened, it reads it again and says why
+  }
+}
 
 export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => {}) {
   const thread = ref<Thread | null>(null);
@@ -28,9 +50,15 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     const current = loads.start();
     loading.value = true;
     error.value = '';
+    const kept = threads.get(id.value);
+    if (kept && thread.value?.id !== kept.id) {
+      thread.value = kept; // shown at once, then asked whether it moved
+      loading.value = false;
+    }
     try {
-      const t = await getThread(id.value);
-      if (current()) thread.value = t;
+      const t = kept ? await getThreadSince(id.value, kept.version) : await getThread(id.value);
+      if (t) keepThread(t);
+      if (current()) thread.value = t ?? kept ?? thread.value;
     } catch (e) {
       if (current()) error.value = message(e);
     } finally {
@@ -41,6 +69,7 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
   // a write's answer: the thread after it, fresher than a load asked
   // before it answered, which is dropped
   function written(t: Thread) {
+    keepThread(t);
     loads.skip();
     loading.value = false;
     error.value = '';
@@ -75,6 +104,24 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
 
   const patch = (change: IssueChange) => write((v) => patchIssue(id.value, v, change));
 
+  // shown: a write the page shows at once, here and on the board's card
+  // (the board kept, ADR 0023), back as it was if the server refuses it
+  async function shown(p: Partial<Thread>, run: () => Promise<boolean>): Promise<boolean> {
+    const before = thread.value;
+    if (before) thread.value = { ...before, ...p };
+    const undo = applyKept(id.value, p);
+    const ok = await run();
+    if (!ok) {
+      if (before && thread.value?.version === before.version) thread.value = before;
+      undo();
+    }
+    return ok;
+  }
+  const relabeled = (add: string[], remove: string[]): Partial<Thread> => {
+    const now = (thread.value?.labels ?? []).filter((l) => !remove.includes(l));
+    return { labels: [...now, ...add.filter((l) => !now.includes(l))] };
+  };
+
   return {
     thread,
     loading,
@@ -97,9 +144,9 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
       status ? patch({ status, comment: body }) : write((v) => addComment(id.value, v, body)),
     // throws: the comment card shows why (ApiError code "changed")
     edit: (commentId: string, body: string, base: string) => write((v) => editComment(id.value, v, commentId, body, base), true),
-    rename: (title: string) => patch({ title }),
-    setStatus: (status: 'open' | 'closed') => patch({ status }),
-    labels: (add: string[], remove: string[]) => patch({ labels: { add, remove } }),
+    rename: (title: string) => shown({ title, shown_title: title }, () => patch({ title })),
+    setStatus: (status: 'open' | 'closed') => shown({ status }, () => patch({ status })),
+    labels: (add: string[], remove: string[]) => shown(relabeled(add, remove), () => patch({ labels: { add, remove } })),
     // field=value, field=-value removing one, field= clearing it
     set: (assignments: string[]) => patch({ set: assignments }),
   };

@@ -59,6 +59,12 @@ export function getThread(id: string, at?: string): Promise<Thread> {
   return get(path(id), { query: { at } });
 }
 
+// getThreadSince is the thread, unless it is still at version: null (304)
+export async function getThreadSince(id: string, version: string): Promise<Thread | null> {
+  const r = await call<Thread>('GET', path(id), { ifNoneMatch: version || undefined });
+  return r.status === 304 ? null : r.data;
+}
+
 // IssueChange is one PATCH: each field optional, applied in this order.
 export interface IssueChange {
   title?: string;

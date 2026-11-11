@@ -57,6 +57,9 @@
             @dragstart="onStart(issue, bucket.group, $event)"
             @dragend="onEnd"
             @click="onCard(issue, bucket, $event)"
+            @mouseenter="hover(issue.id)"
+            @focus="hover(issue.id)"
+            @mouseleave="unhover"
           >
             <span class="card-id"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" />{{ idLabel(issue, 8) }}</span>
             <span class="card-title">{{ issue.shown_title }}</span>
@@ -82,6 +85,7 @@
 
 <script setup lang="ts">
 import { bottomBarShown } from '@/keys';
+import { prefetchThread } from '@/issue';
 import ValueMark from '@/components/ValueMark.vue';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { idLabel } from '@/idlabel';
@@ -197,6 +201,15 @@ function meta(issue: Issue) {
     .map((name) => ({ name, values: fieldValues(issue.labels, name) }))
     .filter((m) => m.values.length);
 }
+
+// a card rested on 80 ms reads its issue's thread: the click opens it at once
+let hovering: ReturnType<typeof setTimeout> | undefined;
+function hover(id: string) {
+  clearTimeout(hovering);
+  hovering = setTimeout(() => void prefetchThread(id), 80);
+}
+const unhover = () => clearTimeout(hovering);
+onBeforeUnmount(unhover);
 </script>
 
 <style scoped>

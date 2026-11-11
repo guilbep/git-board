@@ -7,9 +7,9 @@
 // request. The values come from GET /api/labels for the filter, which
 // also counts the filters panel (facets.ts facetsOf). A newer load aborts
 // the older one's requests.
-import { ref, shallowRef, type Ref } from 'vue';
+import { ref, shallowRef, watch, type Ref } from 'vue';
 import { batchIssues, getLabels, issueIDs, type Issue, type LabelCount } from '@/api';
-import { current, get } from '@/local/store';
+import { current, get, issues as kept } from '@/local/store';
 import type { Bucket } from '@/bucket';
 import { configModel } from '@/configmodel';
 import { facetsOf, type Counted, type Facet } from '@/facets';
@@ -156,6 +156,24 @@ export function useBoardLists(fields: Ref<Fields>) {
       : b,
     );
   }
+
+  // an issue changed in the board kept here (an event, a write of this
+  // page's): its card shows it at once; the lists' ids follow with the
+  // load the event asks (a lane moved, a filter no longer matched)
+  watch(kept, (m) => {
+    const bs = buckets.value;
+    if (!bs) return;
+    let changed = false;
+    const next = bs.map((b) => {
+      const issues = b.issues.map((i) => {
+        const now = m.get(i.id);
+        if (now && now !== i) changed = true;
+        return now ?? i;
+      });
+      return changed ? { ...b, issues } : b;
+    });
+    if (changed) buckets.value = next;
+  });
 
   return { buckets, total, loading, error, facets, load, more, moved, reload: () => load(params) };
 }
