@@ -110,6 +110,11 @@ func (b *Board) FoundForges(ctx context.Context, say func(string)) ([]forge.Tabl
 		var f foundIn
 		var err error
 		f.forges, err = b.foundForges(ctx, func(s string) { f.skips = append(f.skips, s); say("skipped " + s) })
+		if err == nil {
+			// a request gone mid-read read no URL: kept, its empty list
+			// hid the forges until git's config changed
+			err = ctx.Err()
+		}
 		return f, err
 	})
 	if !fresh { // kept: its skips said again, as a read would say them

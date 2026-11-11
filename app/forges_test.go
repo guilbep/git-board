@@ -94,6 +94,33 @@ func TestForgesFromRemotes(t *testing.T) {
 	}
 }
 
+// A request gone while the forges are read from the remotes keeps no
+// empty list: the next request finds them.
+func TestFoundForgesCancelledKeepsNothing(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "git@github.com:o/r.git"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if _, err := b.Remotes(t.Context()); err != nil { // kept, as a request before left them
+		t.Fatal(err)
+	}
+	gone, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, _ = b.FoundForges(gone, func(string) {})
+	fs, err := b.FoundForges(t.Context(), func(string) {})
+	if err != nil || len(fs) != 1 {
+		t.Fatalf("after a request gone mid-read: forges %+v, %v, want o/r", fs, err)
+	}
+}
+
 // A forge origin fetches from syncs; one that only a push URL names (a
 // mirror the code is pushed to) is found with its sync off: the file alone
 // turns it on (ADR 0008). FoundForges asks no forge.
