@@ -243,11 +243,13 @@ func (c *completes) Complete(ctx context.Context, is forge.Issue) (forge.Issue, 
 	return c.Forge.Complete(ctx, is)
 }
 
-func (c *completes) then() []string {
+// then is the reads since the last, which it forgets, with the next to
+// fail.
+func (c *completes) then(failOn string) []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	got := c.read
-	c.read = nil
+	c.read, c.failOn = nil, failOn
 	return got
 }
 
@@ -285,8 +287,7 @@ func TestASyncAfterACheckReadsWhatChanged(t *testing.T) {
 	lock := filepath.Join(b.Kernel.Store().Folder(), "sync.lock")
 	journal := func() string { data, _ := os.ReadFile(lock); return string(data) }
 
-	f.then()
-	f.failOn = "i3"
+	f.then("i3")
 	before := journal()
 	check := run
 	check.DryRun = true
@@ -296,18 +297,18 @@ func TestASyncAfterACheckReadsWhatChanged(t *testing.T) {
 	if journal() != before {
 		t.Fatalf("a failed check handed on:\n%s", journal())
 	}
-	f.failOn = ""
-	f.then()
+	f.then("")
 	if _, err := b.SyncForges(t.Context(), WaySync, check); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.then(); len(got) != 5 {
+	// a set: a read the failed check started ahead may land late
+	if got := slices.Compact(slices.Sorted(slices.Values(f.then("")))); !slices.Equal(got, []string{"i0", "i1", "i2, renamed", "i3", "i4"}) {
 		t.Fatalf("the check read %q, want the five", got)
 	}
 	if _, err := b.SyncForges(t.Context(), WaySync, run); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.then(); !slices.Equal(got, []string{"i2, renamed"}) {
+	if got := f.then(""); !slices.Equal(got, []string{"i2, renamed"}) {
 		t.Fatalf("the sync after the check read %q, want what changed alone", got)
 	}
 	list, err := b.Issues.List(t.Context(), issues.ListReq{})
