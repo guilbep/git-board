@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,10 +10,9 @@ import (
 	"testing"
 
 	"github.com/guilbep/git-board/app"
-	"github.com/guilbep/git-board/domain/issues/issuesync"
+	"github.com/guilbep/git-board/domain/people"
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/forge/fake"
-	"github.com/guilbep/git-board/forge/github"
 	"github.com/guilbep/git-board/tools/ghproject"
 	"github.com/guilbep/git-board/tools/ghproject/projectfake"
 )
@@ -24,7 +22,7 @@ import (
 // Categories and three dated iterations starts from the default file.
 // The check proposes twelve changes; fit writes them once the six
 // questions are answered; nothing the file had is gone; the next check
-// warns of nothing. It swaps app.OpenProjectV2 and chdirs: serial.
+// warns of nothing. It swaps app.GitHubAPI, sets GITHUB_TOKEN and chdirs: serial.
 func TestTheCo2Fit(t *testing.T) {
 	ctx := t.Context()
 	dir := t.TempDir()
@@ -45,7 +43,7 @@ func TestTheCo2Fit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	me, err := issuesync.CreatePerson(ctx, b.Kernel, issuesync.NewPerson("", "me", ""))
+	me, err := people.Kind.Create(ctx, b.Kernel, "", op("create", 1700000000, "", `{"name":"me","email":""}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,11 +96,10 @@ func TestTheCo2Fit(t *testing.T) {
 	add(map[string]string{"Status": "Tests Metier"})
 	add(map[string]string{"Status": "Comité Spécialisé"})
 	srv := p.Server(t)
-	was := app.OpenProjectV2
-	app.OpenProjectV2 = func(ctx context.Context, _, _, owner string, number int) (ghproject.Project, error) {
-		return github.OpenProject(ctx, github.Options{API: srv.URL, Token: func(context.Context, forge.Account) (string, error) { return "t", nil }}, owner, number)
-	}
-	t.Cleanup(func() { app.OpenProjectV2 = was })
+	was := app.GitHubAPI
+	app.GitHubAPI = srv.URL
+	t.Cleanup(func() { app.GitHubAPI = was })
+	t.Setenv("GITHUB_TOKEN", "t")
 
 	// the check: 82 warnings, and the line that names the fit
 	out, errs, code := run(t, "-C", dir, "project", "sync", "--check")
