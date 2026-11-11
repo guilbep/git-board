@@ -199,8 +199,11 @@ onMounted(() => {
   if (!syncStatus.value) void loadSync();
   if (!me.value) void loadMe();
   // the inbox's count after what the page shows first (it reads every
-  // issue you follow)
-  if (!inbox.value) setTimeout(() => void loadInbox(), 600);
+  // issue you follow), unless the page (the inbox, an issue's panel) read
+  // it meanwhile
+  setTimeout(() => {
+    if (!inbox.value) void loadInbox();
+  }, 600);
   if (!state.value) reloadState();
   stopLive = onLive((e) => {
     const own = e.by === clientId;
