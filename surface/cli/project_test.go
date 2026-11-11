@@ -40,7 +40,7 @@ func TestProjectConfigure(t *testing.T) {
 func TestPrintReport(t *testing.T) {
 	t.Parallel()
 	r := ghproject.Report{Applied: true, Skipped: 1, Plan: ghproject.Plan{
-		Changes:   []ghproject.Change{{IssueID: "a", Number: 7, Title: "Seven", Added: []string{"status:qa"}, Removed: []string{"status:ready"}, Warnings: []string{"w"}}},
+		Changes:   []ghproject.Change{{IssueID: "a", Number: 7, Title: "Seven", Added: []string{"status:qa"}, Removed: []string{"status:ready"}, Warnings: []ghproject.Warning{{Text: "w"}}}},
 		Edits:     []ghproject.Edit{{IssueID: "a", Field: "prio", Value: "p1"}, {IssueID: "a", Field: "assignee", Kind: ghproject.EditAssignees, Add: []string{"bob"}}},
 		Conflicts: []ghproject.Conflict{{IssueID: "a", Field: "est", Local: "2", Project: ""}},
 		Unmatched: []ghproject.Unmatched{{Number: 9, Title: "Nine", Reason: "a draft"}},

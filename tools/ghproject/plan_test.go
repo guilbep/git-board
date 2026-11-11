@@ -513,7 +513,7 @@ func TestSyncAssigneesSkipWhoCantBeAssigned(t *testing.T) {
 	if e, ok := assigneeEdit(p); !ok || !slices.Equal(e.Add, []string{"bob"}) {
 		t.Errorf("edit %+v, want only bob added", e)
 	}
-	if len(p.Changes[0].Warnings) != 1 || !strings.Contains(p.Changes[0].Warnings[0], "dave") {
+	if len(p.Changes[0].Warnings) != 1 || !strings.Contains(p.Changes[0].Warnings[0].Text, "dave") {
 		t.Errorf("warnings %v, want one about dave", p.Changes[0].Warnings)
 	}
 	if got := p.Bases["bug1"]["assignee"]; got != "alice,bob" {

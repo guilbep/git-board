@@ -165,6 +165,10 @@ func Decide(project, local, base string, hasBase bool) Decision {
 	}
 }
 
+// CategoryField names the Project's Category where a field is named: a
+// warning's, a proposal's, [github-project.unmapped]'s.
+const CategoryField = "category"
+
 // Item is one row of the Project.
 type Item = github.ProjectItem
 
@@ -282,9 +286,35 @@ type Change struct {
 	Number   int
 	Title    string
 	Fields   []FieldResult
-	Added    []string // every field's Added
-	Removed  []string // every field's Removed
-	Warnings []string // a value with no option, several labels of a field…
+	Added    []string  // every field's Added
+	Removed  []string  // every field's Removed
+	Warnings []Warning // a value with no option, several labels of a field…
+}
+
+// The kinds of a Warning.
+const (
+	WarnNoOption      = "no-option"      // the Project's value matches no option of the file
+	WarnNotAKind      = "not-a-kind"     // the Category is none of [branches] kinds
+	WarnSeveral       = "several"        // several labels of a single field
+	WarnNotOnProject  = "not-on-project" // git-board's value has no option on the Project
+	WarnNotAssignable = "not-assignable" // a login GitHub can't assign
+)
+
+// Warning is what a sync left alone on one issue: its kind, the field
+// and the value it is about, and the line a surface prints.
+type Warning struct {
+	Kind, Field, Value, Text string
+}
+
+func (w Warning) String() string { return w.Text }
+
+// Texts are the warnings' lines.
+func Texts(ws []Warning) []string {
+	out := make([]string, 0, len(ws))
+	for _, w := range ws {
+		out = append(out, w.Text)
+	}
+	return out
 }
 
 // Unmatched is an item that couldn't be matched: not an issue (a pull
@@ -464,12 +494,12 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 		raw := f.value(it)
 		p, ok := c.toLabel(pf, f.name, raw)
 		if !ok {
-			change.Warnings = append(change.Warnings, fmt.Sprintf("%s value %q from the Project has no matching option, field left alone", f.name, raw))
+			change.Warnings = append(change.Warnings, Warning{WarnNoOption, f.name, raw, fmt.Sprintf("%s value %q from the Project has no matching option, field left alone", f.name, raw)})
 			continue
 		}
 		l, ok := localValue(is.Labels, f.name)
 		if !ok {
-			change.Warnings = append(change.Warnings, fmt.Sprintf("several %s labels, field left alone", f.name))
+			change.Warnings = append(change.Warnings, Warning{WarnSeveral, f.name, "", fmt.Sprintf("several %s labels, field left alone", f.name)})
 			continue
 		}
 		base, hasBase := bases[f.name]
@@ -487,7 +517,7 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 		case TakeLocal:
 			kind, arg, ok := c.toProject(pf, f.name, l)
 			if !ok {
-				change.Warnings = append(change.Warnings, fmt.Sprintf("%s value %q has no option on the Project, not written", f.name, l))
+				change.Warnings = append(change.Warnings, Warning{WarnNotOnProject, f.name, l, fmt.Sprintf("%s value %q has no option on the Project, not written", f.name, l)})
 				continue
 			}
 			plan.Edits = append(plan.Edits, Edit{IssueID: is.ID, ItemID: it.ID, Number: it.Number,
@@ -515,7 +545,7 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 				return true
 			})
 			for _, login := range refused {
-				change.Warnings = append(change.Warnings, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(it.URL)))
+				change.Warnings = append(change.Warnings, Warning{WarnNotAssignable, "assignee", login, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(it.URL))})
 				a.base = strings.Join(slices.DeleteFunc(strings.Split(a.base, ","), func(s string) bool { return s == login }), ",")
 			}
 		}
@@ -533,7 +563,7 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 
 	res, warning := c.planKind(is.Labels, it.Labels, valueOf(it, "Category"))
 	if warning != "" {
-		change.Warnings = append(change.Warnings, warning)
+		change.Warnings = append(change.Warnings, Warning{WarnNotAKind, CategoryField, valueOf(it, "Category"), warning})
 	}
 	if res.Field != "" {
 		change.Fields = append(change.Fields, res)

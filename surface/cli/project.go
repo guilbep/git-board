@@ -201,7 +201,7 @@ func printReport(out io.Writer, r ghproject.Report) {
 			fmt.Fprintf(out, "  ! conflict on %s: git-board %s, Project %s (%s)\n", k.Field, show(k.Local), show(k.Project), agreed)
 		}
 		for _, w := range c.Warnings {
-			fmt.Fprintf(out, "  ! %s\n", w)
+			fmt.Fprintf(out, "  ! %s\n", w.Text)
 		}
 	}
 	for _, u := range plan.Unmatched {

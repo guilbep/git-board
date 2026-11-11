@@ -103,7 +103,7 @@ func lastOf(r *ghproject.Report) *lastRes {
 			continue
 		}
 		l.Changes = append(l.Changes, changeRes{Issue: c.IssueID, Number: c.Number, URL: c.URL, Title: c.Title,
-			Added: nonNil(c.Added), Removed: nonNil(c.Removed), Writes: nonNil(writes[c.IssueID]), Warnings: nonNil(c.Warnings)})
+			Added: nonNil(c.Added), Removed: nonNil(c.Removed), Writes: nonNil(writes[c.IssueID]), Warnings: ghproject.Texts(c.Warnings)})
 	}
 	return l
 }
