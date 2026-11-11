@@ -253,7 +253,7 @@ export interface SyncRun {
   dry_run: boolean;
   started_at: string;
   ended_at?: string;
-  state: 'running' | 'done' | 'failed';
+  state: 'running' | 'done' | 'failed' | 'stopped';
   steps: SyncStep[]; // what a person reads whole: notes, holds, waits, a whole sync's steps
   tallies: SyncTally[];
   current?: SyncStep; // the page's own: the last count heard

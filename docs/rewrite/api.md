@@ -348,6 +348,7 @@ page and the Start page download it.
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
 | 60 | `GET /api/state` | | the board's state, as `git board state --json` |
 | 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
+| 67 | `DELETE /api/sync` | | 202; 409 `busy` when no run of this server's runs |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
 | 57 | `POST /api/remotes/{name}` | `{url}`; loopback only | 204 |
 | 33 | `POST /api/forges` | `{kind, url, name, login, token, sync, way}`; loopback only | 201, `{name}` |
@@ -386,8 +387,13 @@ limits it to those named; `remote` is the whole sync's git remote
 whole sync goes both ways and has none. One issue's run (v1's
 `/api/issues/{id}/sync`, an `issue` here) waits for the sync engine to
 take one issue (*later*). A run while another runs answers 409 `busy`.
+**Stopping one (67)** cuts this server's run at its next step: it ends
+`stopped`, with no error. What a sync wrote stays, and its journal lets
+the next run go on from there; a check wrote nothing, and its scratch
+copy goes. A run the CLI or another server started is theirs to stop.
 A run is `{id, scope, way, dry_run, started_at, ended_at, state, steps,
-tallies, report, error}`: `state` is `running`, `done` or `failed`; a
+tallies, report, error}`: `state` is `running`, `done`, `failed` or
+`stopped`; a
 step is a whole sync's (`{name, state, line}`: `pull`, `forges`,
 `project`, `push`) or a forge's event a person reads whole (`{forge,
 way, what, line}`, `what` one of `waiting`, `left`, `held`, `note`).

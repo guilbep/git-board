@@ -30,12 +30,14 @@ type Run struct {
 	DryRun    bool      `json:"dry_run"`
 	StartedAt time.Time `json:"started_at"`
 	EndedAt   time.Time `json:"ended_at,omitzero"`
-	State     string    `json:"state"` // running, done, failed
+	State     string    `json:"state"` // running, done, failed, stopped
 	Steps     []Step    `json:"steps"`
 	Tallies   []Tally   `json:"tallies"`
 	Report    *report   `json:"report,omitempty"`
 	Error     string    `json:"error,omitempty"`
 	told      time.Time // the last count told
+	stop      context.CancelFunc
+	stopped   bool // asked to stop (DELETE /api/sync)
 }
 
 // Step is one thing a run did: a whole sync's step (pull, forges,
@@ -199,6 +201,21 @@ type syncReq struct {
 
 // startSync starts a run, which goes on after the request: it holds a
 // board of its own until it ends.
+// stopSync is DELETE /api/sync: this server's run stops at its next
+// step. What a sync wrote stays, and the next run goes on from its journal;
+// a check wrote nothing. A run of the CLI's or another server's is not
+// this server's to stop.
+func (s *Server) stopSync(ctx context.Context, _ none) (Reply, error) {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	if s.run == nil || s.run.State != "running" {
+		return Reply{}, &app.Error{Class: app.Busy, Err: errors.New("no sync of this server runs: one the CLI or another server started stops there")}
+	}
+	s.run.stopped = true
+	s.run.stop()
+	return Reply{Status: http.StatusAccepted}, nil
+}
+
 func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	if r.Scope == "" {
 		r.Scope = "forges"
@@ -224,7 +241,10 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	}
 
 	s.runs++
-	run := &Run{ID: strconv.Itoa(s.runs), Scope: r.Scope, Way: r.Way, DryRun: r.DryRun, StartedAt: time.Now(), State: "running", Steps: []Step{}, Tallies: []Tally{}}
+	// the run's context: the server's, not the request's (it answered), cut
+	// by DELETE /api/sync
+	runCtx, stop := context.WithCancel(context.WithValue(s.base, logKey{}, s.log))
+	run := &Run{ID: strconv.Itoa(s.runs), Scope: r.Scope, Way: r.Way, DryRun: r.DryRun, StartedAt: time.Now(), State: "running", Steps: []Step{}, Tallies: []Tally{}, stop: stop}
 	s.run = run
 	started := *run // the reply's: the run's own goes on changing as it runs
 	s.runMu.Unlock()
@@ -234,8 +254,8 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	asked := ctx // its trace: the run's spans are the request's, after it answered
 	go func() {
 		defer s.boards.release(h)
-		ctx := context.WithValue(s.base, logKey{}, s.log)
-		ctx = context.WithValue(ctx, clientKey{}, by)
+		defer stop()
+		ctx := context.WithValue(runCtx, clientKey{}, by)
 		ctx, end := obs.Start(obs.Carry(ctx, asked), "sync run", obs.String("scope", run.Scope), obs.String("way", run.Way), obs.Bool("dry_run", run.DryRun))
 		s.log.Info("sync started", "run", run.ID, "scope", run.Scope, "way", run.Way, "dry_run", run.DryRun)
 		rep, err := s.runSync(ctx, h.b, run, r)
@@ -245,12 +265,18 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 		if rep != nil {
 			run.Report = rep
 		}
-		if err != nil {
+		stopped := run.stopped && err != nil && errors.Is(err, context.Canceled)
+		switch {
+		case stopped:
+			run.State = "stopped"
+		case err != nil:
 			run.State, run.Error = "failed", app.NoCredentials(err.Error())
 		}
 		s.runMu.Unlock()
 		s.pulls.Stale() // the branches and the forge moved: each PR is read again
-		if err != nil {
+		if stopped {
+			s.log.Info("sync stopped", "run", run.ID, "took", run.EndedAt.Sub(run.StartedAt).Round(time.Millisecond))
+		} else if err != nil {
 			s.log.Error("sync failed", "run", run.ID, "code", app.Code(err), "error", run.Error)
 		} else {
 			s.log.Info("sync ended", "run", run.ID, "took", run.EndedAt.Sub(run.StartedAt).Round(time.Millisecond))

@@ -80,6 +80,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	Route(mux, "GET /api/sync", s.syncStatus)
 	Route(mux, "POST /api/sync", s.startSync)
+	Route(mux, "DELETE /api/sync", s.stopSync)
 	Route(mux, "POST /api/remotes/{name}/{action}", remote)
 	Route(mux, "POST /api/numbers", numbers)
 	Route(mux, "PATCH /api/forges/{name}", s.patchForge)

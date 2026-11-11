@@ -97,6 +97,7 @@
     <div class="sy-run">
       <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="starting || running || !forges.length" @click="start({ scope: 'forges', dry_run: true, allow_create: allowCreate })">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
       <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting || running" @click="confirming = true">{{ running && !run?.dry_run ? 'Syncing…' : 'Sync' }}</button>
+      <button v-if="running" type="button" class="epfl-btn epfl-btn-secondary" :disabled="stopping" @click="stop">{{ stopping ? 'Stopping…' : 'Stop' }}</button>
       <span class="sy-note">Check says what Sync would do with the forges, as counts, and writes nothing. Sync pulls, syncs the forges, and pushes.</span>
     </div>
     <label class="sy-check"><input v-model="allowCreate" type="checkbox" /> Create issues on a forge never synced with, or 50 or more at once (a forge may email everyone watching it, once per issue)</label>
@@ -110,6 +111,7 @@
       </div>
       <SyncProgress v-if="running" :run="run" />
       <p v-if="run.state === 'failed'" class="epfl-alert epfl-alert-danger" role="alert"><b>{{ run.dry_run ? 'The check' : 'The sync' }} stopped.</b> {{ run.error }}</p>
+      <p v-else-if="run.state === 'stopped'" class="gb-hint" role="status">{{ run.dry_run ? 'Stopped. Nothing was written.' : 'Stopped. What it wrote stays; the next sync goes on from there.' }}</p>
       <p v-else-if="run.report" class="gb-hint">{{ reportWords(run.report) }}</p>
       <div v-for="g in groups" :key="g.forge" class="sy-forge">
         <h4 class="h6">{{ g.forge || 'The run' }}</h4>
@@ -177,7 +179,7 @@ import { keptIn, needsGit } from '@/datastore';
 import { placesSummary } from '@/fieldplaces';
 import { datastore, loadDatastore } from '@/kept';
 import { onLive } from '@/live';
-import { setForgeWay, addRemote, type ForgeWay } from '@/api/sync';
+import { setForgeWay, addRemote, stopSync, type ForgeWay } from '@/api/sync';
 import { loadSync, syncStatus } from '@/sync';
 import { reportWords, remoteWords, stepWords, tallyGroups, tallyWords } from '@/ways';
 import { boardState } from '@/me';
@@ -261,7 +263,7 @@ const reportTitle = computed(() => {
   const r = run.value!;
   const what = r.scope === 'all' ? 'The sync' : r.dry_run ? 'The check' : 'The forges’ sync';
   if (r.state === 'running') return `${what}: so far`;
-  return `${what} ${r.state === 'failed' ? 'stopped' : 'finished'} ${new Date(r.ended_at ?? r.started_at).toLocaleString()}`;
+  return `${what} ${r.state === 'failed' ? 'failed' : r.state === 'stopped' ? 'stopped' : 'finished'} ${new Date(r.ended_at ?? r.started_at).toLocaleString()}`;
 });
 
 // where each field of a forge lives, from the file's model
@@ -336,6 +338,19 @@ async function start(r: SyncRequest) {
     startError.value = message(e);
   } finally {
     starting.value = false;
+  }
+}
+// stop: the run ends at its next step; its end comes as an event
+const stopping = ref(false);
+async function stop() {
+  stopping.value = true;
+  startError.value = '';
+  try {
+    await stopSync();
+  } catch (e) {
+    startError.value = message(e);
+  } finally {
+    stopping.value = false;
   }
 }
 async function runReal() {

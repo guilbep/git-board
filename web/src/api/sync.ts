@@ -1,6 +1,6 @@
 // Where the board is kept, and its sync (docs/rewrite/api.md, routes 27 to
 // 38).
-import { enc, get, send } from './http.ts';
+import { call, enc, get, send } from './http.ts';
 import type { Copied, Datastore, Numbered, RemoteResult, SyncRun, SyncStatus } from './types.ts';
 
 export function getDatastore(): Promise<Datastore> {
@@ -23,6 +23,12 @@ export interface SyncRequest {
   remote?: string;
   dry_run?: boolean;
   allow_create?: boolean;
+}
+
+// stopSync stops this server's run at its next step (DELETE /api/sync):
+// a sync keeps what it wrote and goes on from there next time
+export async function stopSync(): Promise<void> {
+  await call('DELETE', '/api/sync');
 }
 
 // a run in the background: its steps come as progress events
