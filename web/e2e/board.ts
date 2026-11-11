@@ -9,6 +9,9 @@ import { join } from 'node:path';
 // playwright.config.ts serves on, one default for every spec
 export const markdownBoard = `http://127.0.0.1:${Number(process.env.E2E_PORT ?? '18421') + 5}`;
 
+// longBoard is serve.mjs's boardgen board (3,000 issues), on E2E_PORT + 7
+export const longBoard = `http://127.0.0.1:${Number(process.env.E2E_PORT ?? '18421') + 7}`;
+
 export const boardFile = (): string => readFileSync(join(process.env.E2E_DIR ?? '', 'repo', '.git-board.toml'), 'utf8');
 
 // errors collects the page's uncaught errors: a page that throws is broken

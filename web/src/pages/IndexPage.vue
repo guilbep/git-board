@@ -167,7 +167,7 @@
           :columns="columns"
           @open="openIssue"
           @sort="sortBy"
-          @changed="load"
+          @changed="load()"
           @more="lists.more"
           @update:columns="(c) => (columns = c)"
         />
@@ -200,7 +200,7 @@
       @close="detailOpen = false"
       @prev="step(-1)"
       @next="step(1)"
-      @changed="load"
+      @changed="load()"
       @open="openId"
     />
   </GbDialog>
@@ -321,7 +321,7 @@ const facetList = lists.facets;
 const sel = computed(() => Object.fromEntries(facetList.value.map((f) => [f.key, f.selected])));
 function setFacet(key: string, values: string[]) {
   const f = facetList.value.find((x) => x.key === key);
-  if (f) void setFilter(withFacet(f, values)).then(load);
+  if (f) void setFilter(withFacet(f, values)).then(() => load());
 }
 
 // the filters panel hidden to a rail (commands.ts: the palette toggles it
@@ -539,9 +539,9 @@ async function resetAll() {
 
 let loaded = ''; // the filter last asked for
 let colorsAsked = false;
-async function load() {
+async function load(keep = false) {
   loaded = applied.value;
-  await lists.load({ filter: applied.value, group: groupField.value, sort: apiSort(sort.value) });
+  await lists.load({ filter: applied.value, group: groupField.value, sort: apiSort(sort.value) }, keep);
   if (!colorsAsked && fieldsRead) {
     colorsAsked = true;
     void fieldsRead.then(loadColors, () => {});
@@ -686,8 +686,9 @@ watch([total, modified, () => lists.buckets.value === null], async ([n, changed,
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 // live updates (live.ts): another page or a sync changed the issues or the
-// configuration; reload once a burst is over (the board keeps its scroll)
-const reloadLive = debounced(() => void Promise.all([load(), loadColors(fields.value)]));
+// configuration; reload once a burst is over, the rows loaded kept (the
+// board keeps its scroll)
+const reloadLive = debounced(() => void Promise.all([load(true), loadColors(fields.value)]));
 const reloadConfig = debounced(async () => {
   await loadConfig();
   void load();

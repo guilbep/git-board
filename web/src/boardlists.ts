@@ -58,7 +58,9 @@ export function useBoardLists(fields: Ref<Fields>) {
   // the file's (the page's fields come beside the first list)
   const optionsOf = (g: string): string[] => (g === STATE ? ['open', 'closed'] : (fields.value[g]?.options ?? configModel.value?.fields[g]?.options ?? []));
 
-  async function load(p: ListParams): Promise<void> {
+  // load lists p; keep (a live reload): as many rows as each list shows
+  // now, not back to its first page under the reader's scroll
+  async function load(p: ListParams, keep = false): Promise<void> {
     params = p;
     abort?.abort();
     const ctl = (abort = new AbortController());
@@ -76,14 +78,16 @@ export function useBoardLists(fields: Ref<Fields>) {
       void loadFacets(p.filter, labels, signal, listedP);
       let next: Bucket[];
       const sort = p.sort || undefined;
-      const limit = pageSize();
+      // ponytail: one limit for every lane, the longest's; per lane if a
+      // board's lanes page very unevenly
+      const limit = keep ? Math.max(pageSize(), ...(buckets.value ?? []).map((b) => b.ids?.length ?? b.issues.length)) : pageSize();
       const local = answeredHere(p, limit);
       if (local) {
         // answered from the board kept here, at once; the server's word in
         // the background, which wins where they differ
         next = local.buckets;
         total.value = local.total;
-        void check(p, local.filters, local.buckets, signal);
+        void check(p, local.filters, local.buckets, signal, limit);
       } else if (!p.group) {
         const r = await issueIDs({ f: [p.filter], sort, limit }, signal);
         next = [bucketOf('', r.lists[0] ?? [], r.totals[0] ?? 0)];
@@ -144,9 +148,9 @@ export function useBoardLists(fields: Ref<Fields>) {
   // check asks the server the lists the page answered, in the background:
   // where its answer differs, it wins, and the console says so (a filter's
   // rule the page got wrong: local/query.ts)
-  async function check(p: ListParams, filters: string[], mine: Bucket[], signal: AbortSignal) {
+  async function check(p: ListParams, filters: string[], mine: Bucket[], signal: AbortSignal, limit: number) {
     try {
-      const r = await issueIDs({ f: filters, sort: p.sort || undefined, limit: pageSize() }, signal, true);
+      const r = await issueIDs({ f: filters, sort: p.sort || undefined, limit }, signal, true);
       if (signal.aborted || buckets.value !== mine) return;
       const same = (i: number, ids: string[], total: number) => ids.join() === (r.lists[i] ?? []).join() && total === (r.totals[i] ?? 0);
       const off = mine.map((b, i) => !same(i, b.ids ?? [], b.total ?? 0));
@@ -158,7 +162,7 @@ export function useBoardLists(fields: Ref<Fields>) {
       const all = [...kept.value.values()];
       off.forEach((o, i) => {
         if (!o) return;
-        const again = localIDs(all, filters[i]!, p.sort || '', pageSize());
+        const again = localIDs(all, filters[i]!, p.sort || '', limit);
         if (again && !same(i, again.ids, again.total)) console.warn(`git-board: the page's answer for ${filters[i]} differs from the server's; the server's shows`);
       });
       if (signal.aborted || buckets.value !== mine) return;
@@ -209,19 +213,39 @@ export function useBoardLists(fields: Ref<Fields>) {
   }
 
   // more shows a bucket's next page: its ids asked, its issues kept here
-  async function more(b: Bucket): Promise<void> {
-    if (!b.next || b.loading) return;
-    b.loading = true;
-    const from = Number(b.next);
+  // more loads a list's next page. One load a list at a time (a click and
+  // the end coming near ask together); the list is found by its group,
+  // not by the object asked with (an event may have replaced it since);
+  // an id already shown is not shown twice (the list moved between pages:
+  // a duplicate key breaks the table's rendering).
+  const asking = new Set<string>();
+  async function more(asked: Bucket): Promise<void> {
+    const group = asked.group;
+    if (!asked.next || asking.has(group)) return;
+    asking.add(group);
+    const at = (bs: Bucket[] | null | undefined) => bs?.find((x) => x.group === group);
     try {
+      const b = at(buckets.value);
+      if (!b?.next) return;
+      b.loading = true;
+      const from = Number(b.next);
       const r = await issueIDs({ f: [filterOf(b)], sort: params.sort || undefined, limit: pageSize(), offset: from });
-      const ids = [...(b.ids ?? []).slice(0, from), ...(r.lists[0] ?? [])];
+      const now = at(buckets.value);
+      if (!now || now.next !== b.next) return; // reloaded meanwhile: its own pages
+      const page = r.lists[0] ?? [];
+      const head = (now.ids ?? []).slice(0, from);
+      const seen = new Set(head);
+      const ids = [...head, ...page.filter((id) => !seen.has(id) && seen.add(id))];
       const total = r.totals[0] ?? ids.length;
-      const fresh: Bucket = { ...b, ids, issues: shown(ids), total, next: total > ids.length ? String(ids.length) : undefined, loading: false };
-      buckets.value = (buckets.value ?? []).map((x) => (x === b ? fresh : x));
+      const after = from + page.length; // the server's offset, whatever was dropped
+      const fresh: Bucket = { ...now, ids, issues: shown(ids), total, next: page.length && total > after ? String(after) : undefined, loading: false };
+      buckets.value = (buckets.value ?? []).map((x) => (x.group === group ? fresh : x));
     } catch (e) {
-      b.loading = false;
       error.value = e instanceof Error ? e.message : String(e);
+    } finally {
+      asking.delete(group);
+      const c = at(buckets.value);
+      if (c?.loading) c.loading = false;
     }
   }
 
@@ -252,5 +276,5 @@ export function useBoardLists(fields: Ref<Fields>) {
     if (changed) buckets.value = next;
   });
 
-  return { buckets, total, loading, error, facets, load, more, moved, reload: () => load(params) };
+  return { buckets, total, loading, error, facets, load, more, moved, reload: () => load(params, true) };
 }

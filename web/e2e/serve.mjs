@@ -176,8 +176,12 @@ await serve(join(work, 'clone'), port + 3);
 mkdirSync(join(work, 'new'));
 sh('git', ['init', '-q', '-b', 'main'], join(work, 'new'));
 await serve(join(work, 'new'), port + 6);
+// the long board (storm.spec.ts): boardgen's 3,000 issues, a third
+// closed, so is:closed pages past the table's windowing
+sh('go', ['run', './cmd/boardgen', '-n', '3000', '-seed', '1', join(work, 'long')], root, process.env);
+await serve(join(work, 'long'), port + 7);
 await serve(join(work, 'repo'), port);
-console.log(`e2e board: ${join(work, 'repo')} on :${port}, GitHub at ${api}; clone board on :${port + 3}; Markdown board on :${port + 5}; new board on :${port + 6}`);
+console.log(`e2e board: ${join(work, 'repo')} on :${port}, GitHub at ${api}; clone board on :${port + 3}; Markdown board on :${port + 5}; new board on :${port + 6}; long board on :${port + 7}`);
 // one board gone, or a signal: both go
 process.on('exit', () => boards.forEach((b) => b.kill()));
 for (const b of boards) b.on('exit', (code) => process.exit(code ?? 1));
