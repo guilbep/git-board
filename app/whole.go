@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/guilbep/git-board/domain/issues/issuesync"
 	"github.com/guilbep/git-board/tools/ghproject"
 
 	"github.com/guilbep/git-board/obs"
@@ -18,9 +19,9 @@ import (
 // a failed forge step is told, and the push still runs.
 // The GitHub Project's step runs the bridge both ways when
 // [github-project] names one (ghproject).
-// ponytail: the whole sync's dry run (sync --check: a fetch, the forges'
-// check over the fetched copies) is v1's still; forge … --check and
-// project … --check run.
+// The check (sync --check) is a fetch and compare, the forges' dry run on
+// a copy of the refs, and the Project's check: one report of what the
+// sync does, part by part (docs/prd/config-fit.md, Part 2).
 
 // The steps.
 const (
@@ -41,7 +42,13 @@ type Whole struct {
 	Forges func(context.Context) error
 	// NoProject skips the GitHub Project's step (sync --git).
 	NoProject bool
-	Step      func(name, state, note string)
+	// Only are the parts the sync writes, nil every one; the caller's
+	// Forges take them too. The Project pulls with a pull part, and is
+	// written to with a create or send part (projectSide).
+	Only []Part
+	// Project hears the Project step's report, nil none.
+	Project func(ghproject.Report)
+	Step    func(name, state, note string)
 }
 
 // hasRemote says the repository has the remote.
@@ -83,7 +90,10 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 	}
 	if gp, _ := b.Config.Tools.GithubProject.Get(); gp.Owner != "" && gp.Number != 0 && !w.NoProject {
 		steps[2].do = func(ctx context.Context) (string, error) {
-			r, err := b.ProjectRun(ctx, ghproject.Both, !w.DryRun, 0)
+			r, err := b.ProjectRun(ctx, projectSide(w.Only), !w.DryRun, 0)
+			if w.Project != nil && err == nil {
+				w.Project(r)
+			}
 			return ProjectNote(r), err
 		}
 	}
@@ -122,6 +132,20 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// projectSide is the Project's side for the parts a sync writes: its
+// labels with a pull part, the Project with a create or send part.
+func projectSide(only []Part) ghproject.Side {
+	pulls := only == nil || slices.Contains(only, issuesync.PullChanges) || slices.Contains(only, issuesync.PullNew)
+	pushes := only == nil || slices.Contains(only, issuesync.Create) || slices.Contains(only, issuesync.Send)
+	switch {
+	case pulls && !pushes:
+		return ghproject.Labels
+	case pushes && !pulls:
+		return ghproject.OnGH
+	}
+	return ghproject.Both
 }
 
 var credentials = regexp.MustCompile(`://[^/\s@]+@`)
