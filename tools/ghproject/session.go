@@ -205,6 +205,9 @@ func Apply(ctx context.Context, b Board, p Project, plan Plan, c *Config, meta M
 	}
 	prefix := c.BasePrefix()
 	for _, ch := range plan.Changes {
+		if err := ctx.Err(); err != nil {
+			return skipped, err // stopped: the issues before it agree, and the next run records them
+		}
 		record := plan.Bases[ch.IssueID]
 		for _, e := range edits[ch.IssueID] {
 			if !c.Write {
