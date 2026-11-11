@@ -62,3 +62,13 @@
 5k/web/IssueLCP           3.5s    an issue's page, its panel over the board (target 2.5 s; 3.0 s on a laptop)
 5k/web/IssueFCP           2.3s    an issue's first paint (target 1.8 s)
 5k/web/IssueTBT           200ms   an issue's main thread blocked
+
+# What a person does on a page (web/e2e/interactions.ts), from the act to
+# what they see, the CPU 4x slower (as the mobile run), on 5,000 issues;
+# a laptop's medians on 2026-11-11, the targets named: 100 ms for what the
+# page answers alone, 200 ms for what asks the server.
+5k/web/InteractionOpenPalette   200ms   the command palette (149 ms; target 100 ms: its list of commands rendered)
+5k/web/InteractionOpenShortcuts 180ms   every shortcut (135 ms; target 100 ms)
+5k/web/InteractionOpenIssue     160ms   a card clicked to its panel (116 ms; target 200 ms)
+5k/web/InteractionRenameIssue   80ms    a title saved, shown before the answer (53 ms; target 100 ms)
+5k/web/InteractionApplyFilter   50ms    a filter entered (15 ms; target 200 ms)

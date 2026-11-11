@@ -144,8 +144,9 @@ send. The per-issue sync touches only that issue.
   A crash fix lands on its own, the day it is found, not with the branch
   it was found on.
 - A new act a person does on a page (open, save, move, sort) adds its
-  entry to `web/e2e/interactions.ts`: its budget, whether it shows before
-  the server answers, how many requests it may make ([ADR
+  entry to `web/e2e/interactions.ts` (whether it shows before the server
+  answers, how many requests it may make) and its budget line,
+  `5k/web/Interaction<Name>`, to `testdata/perf/budgets.txt` ([ADR
   0023](docs/adr/0023-v3-local-first-traced.md)).
 - A slow request is asked of its trace before it is read in the code:
   `make obs-up`, serve with `OTEL_EXPORTER_OTLP_ENDPOINT`, and query Tempo

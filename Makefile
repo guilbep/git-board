@@ -1,4 +1,4 @@
-.PHONY: help build test flow test-pg perf perf-web obs-up obs-down web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test race flow test-pg perf perf-web obs-up obs-down web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -9,6 +9,9 @@ build: ## Build every package
 
 test: ## Run the Go tests
 	go test ./...
+
+race: ## Run the Go tests with the race detector (make ci's)
+	go test -race ./...
 
 test-pg: ## Run the PostgreSQL tests: the datastore, the view and the golden board on it (needs GIT_BOARD_TEST_POSTGRES)
 	@test -n "$$GIT_BOARD_TEST_POSTGRES" || { echo "GIT_BOARD_TEST_POSTGRES: a DSN whose user may create databases"; exit 1; }
@@ -32,7 +35,7 @@ licences: ## Check every licence, Go modules and the web app's packages
 # Everything CI's test job runs: .github/workflows/ci.yml only sets up Go and
 # Node, then runs this (its e2e job runs web-e2e). The web checks and build come first, in prerequisite order,
 # because the binary embeds web/dist.
-ci: web-check web-build build vet test compat proved ## Everything CI runs
+ci: web-check web-build build vet race compat proved ## Everything CI runs, the tests with the race detector
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
 
 # git-board-agents (contrib/board-agents): v1's agents and wtx, out of the
@@ -112,13 +115,17 @@ perf: ## Time the CLI and the server on 5k and 20k issues against testdata/perf/
 
 # The pages' timings, run by make perf: Lighthouse's mobile run on the 5k
 # board's page and an issue's (web/perf/lighthouse.mjs), PERF_WEB_RUNS
-# each, as benchmark lines in $(PERF_OUT)/web-5k.txt. Needs a Chrome.
+# each, then each interaction of web/e2e/interactions.ts, timed
+# PERF_INTERACTION_RUNS times (web/perf/interactions.perf.ts), as benchmark
+# lines in $(PERF_OUT)/web-5k.txt. Needs a Chrome.
 PERF_WEB_RUNS ?= 3
+PERF_INTERACTION_RUNS ?= 5
 perf-web: web-build ## Time the board's and an issue's page on the 5k board (Lighthouse, mobile)
 	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; board="$(PERF_CACHE)/boardgen-n5000-seed$(PERF_SEED)"; \
 	test -d "$$board" || go run ./cmd/boardgen -n 5000 -seed $(PERF_SEED) "$$board"; \
 	w=$$(mktemp -d); trap 'rm -rf "$$w"' EXIT; cp -r "$$board" "$$w/board"; go build -o "$$w/git-board" ./cmd/git-board; \
-	cd web && node perf/lighthouse.mjs "$$w/git-board" "$$w/board" $(PERF_WEB_RUNS) | tee "$(abspath $(PERF_OUT))/web-5k.txt"
+	cd web && node perf/lighthouse.mjs "$$w/git-board" "$$w/board" $(PERF_WEB_RUNS) | tee "$(abspath $(PERF_OUT))/web-5k.txt"; \
+	PERF_BIN="$$w/git-board" PERF_DIR="$$w/board" PERF_OUT="$(abspath $(PERF_OUT))/web-5k.txt" PERF_RUNS=$(PERF_INTERACTION_RUNS) npx playwright test --config perf/playwright.config.ts
 
 # Records the golden outputs again (docs/rewrite/compat.md): make
 # compat's on the golden boards, and the cross tests' transcripts in

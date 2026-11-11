@@ -281,8 +281,15 @@ async function startRename() {
   await nextTick();
   titleInput.value?.focus();
 }
+// the title shows at once (issue.ts rename); a refusal brings the form
+// back with what was typed, a conflict its own question (412)
 async function saveTitle() {
-  if (await rename(newTitle.value.trim())) renaming.value = false;
+  const title = newTitle.value.trim();
+  renaming.value = false;
+  if (!(await rename(title)) && !conflict.value) {
+    newTitle.value = title;
+    renaming.value = true;
+  }
 }
 
 // the bar's Fit and Fill: the head and the conversation at a reading width, or the panel's

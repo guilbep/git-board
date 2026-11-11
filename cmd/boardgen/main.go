@@ -23,6 +23,7 @@ func main() {
 	n := flag.Int("n", 5000, "issues")
 	people := flag.Int("people", 25, "people")
 	seed := flag.Uint64("seed", 1, "the random choices' seed: the same seed, the same board")
+	withForge := flag.Bool("forge", false, "an origin on GitHub, found in the remotes as on a team's clone (never fetched)")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: boardgen [-n issues] [-people n] [-seed s] <new repository path>")
 		flag.PrintDefaults()
@@ -38,7 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 	start := time.Now()
-	b, err := boardgen.Git(context.Background(), dir, boardgen.Options{Issues: *n, People: *people, Seed: *seed})
+	b, err := boardgen.Git(context.Background(), dir, boardgen.Options{Issues: *n, People: *people, Seed: *seed, Forge: *withForge})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "boardgen:", err)
 		os.Exit(1)

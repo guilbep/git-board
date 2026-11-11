@@ -26,6 +26,11 @@ type Options struct {
 	Issues int
 	People int    // 25 when 0
 	Seed   uint64 // the same seed, the same board
+	// Forge gives the board an origin on GitHub (acme/board, never asked:
+	// the remote isn't fetched): its forge is found in the remotes, and
+	// each read of the board's state looks for its token, as on a team's
+	// clone. Without it, no forge path runs.
+	Forge bool
 }
 
 // Config is the board's .git-board.toml, the cycle on.
@@ -152,10 +157,14 @@ func Git(ctx context.Context, dir string, o Options) (*Board, error) {
 	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte(Config), 0o644); err != nil {
 		return nil, err
 	}
-	for _, args := range [][]string{
+	setup := [][]string{
 		{"init", "-q"},
 		{"config", "board.me", string(b.People[0])},
-	} {
+	}
+	if o.Forge {
+		setup = append(setup, []string{"remote", "add", "origin", "git@github.com:acme/board.git"})
+	}
+	for _, args := range setup {
 		if err := run(ctx, dir, nil, args...); err != nil {
 			return nil, err
 		}

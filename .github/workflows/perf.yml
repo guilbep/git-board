@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  issues: write # the nightly's issue (.github/scripts/nightly-issue.sh)
 
 concurrency:
   group: perf-${{ github.ref }}
@@ -52,6 +53,9 @@ jobs:
           path: ~/.cache/git-board/perf
           key: perf-boards-v2-${{ runner.os }}-${{ hashFiles('cmd/boardgen/**', 'tools/boardgen/**') }}
 
+      # the interactions' timings (web/perf/interactions.perf.ts): Playwright's Chromium
+      - run: cd web && npm ci && npx playwright install --with-deps chromium
+
       - run: make perf
 
       - if: always()
@@ -63,3 +67,9 @@ jobs:
 
       - if: always()
         run: test -f perf-results/report.md && cat perf-results/report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      # a red nightly opens an issue, a green one closes it
+      - if: always() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/nightly-issue.sh perf ${{ job.status }}

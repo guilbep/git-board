@@ -21,6 +21,9 @@ go run ./cmd/boardgen -n 20000 -seed 7 /tmp/board20k
   bodies, comments, edits and status moves, some closed. Each change is
   its own pack, as a command writes it. The same seed makes the same
   board.
+- `-forge` gives it an origin on GitHub, never fetched: its forge is
+  found in the remotes and its token looked for, as on a team's clone
+  (the paths a board without one never runs).
 - For a board in PostgreSQL, copy it there: set `board.datastore` and run
   `git board datastore copy` ([Where the board is kept](datastores.md)).
 
