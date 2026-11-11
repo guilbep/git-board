@@ -109,7 +109,7 @@ func takeLock(f *os.File) error {
 // line, or "?".
 func holder(path string) string {
 	data, _ := os.ReadFile(path)
-	if head, _, _ := readJournal(data); head.PID > 0 {
+	if head := readJournal(data).head; head.PID > 0 {
 		return strconv.Itoa(head.PID)
 	}
 	return "?"

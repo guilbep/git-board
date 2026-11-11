@@ -31,6 +31,10 @@ type Options struct {
 	PublishPrivate bool
 	// Issue, when set, syncs that issue alone.
 	Issue string
+	// Check is a run on a copy of the board (a check): it records no run
+	// in the copy, so its journal keeps the issues its pull found the
+	// board holding as listed, for bsync.Adopt to hand to the board's.
+	Check bool
 	// Warn hears each refusal once, when it is recorded. Nil drops them.
 	Warn func(string)
 	// Local keeps a comment in git-board: one whose metadata it says true
@@ -258,11 +262,9 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 			}
 		}
 		for _, x := range r.later {
-			reached, err := r.pullOne(x.p, x.fi, true)
-			if err != nil {
+			if err := r.pullReached(x.p, x.fi, true); err != nil {
 				return r.report, err
 			}
-			r.reached(x.p, x.fi, reached)
 		}
 	}
 	if push {
@@ -289,7 +291,16 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 	defer func() { j.Drop(recorded) }() // listed from this run's start next time: what the journal says of them is older
 	for _, p := range r.projects {
 		if !p.st.wrote {
-			continue // a quiet run records nothing, and the entity doesn't grow
+			// a quiet run doesn't grow the entity: the journal says when it
+			// was, and the next lists from then. Not a first pull, which may
+			// have held back what it read: the next reads it all again.
+			if p.st.exists && p.pull {
+				j.Quiet(p.key, r.now)
+			}
+			continue
+		}
+		if r.opt.Check {
+			continue // a copy's run: its journal is what the check hands on
 		}
 		who, err := r.au.person(ctx, p.f.Server(), p.me)
 		if err != nil {
@@ -481,8 +492,12 @@ func (r *run) listing(p *project) ([]forge.Issue, error) {
 	if r.opt.Issue != "" {
 		return r.alone(p)
 	}
-	return p.f.Issues(r.ctx, p.st.lastRun)
+	return p.f.Issues(r.ctx, r.since(p))
 }
+
+// since is when p's last run was: the last recorded in its sync entity,
+// or a later one that left it quiet (Journal.Quiet).
+func (r *run) since(p *project) int64 { return max(p.st.lastRun, r.j.QuietSince(p.key)) }
 
 // pullFrom reads p's issues and pulls each, as sync.md's pull says. Each
 // is completed first, the one place a listed issue is: what follows, and
@@ -528,11 +543,9 @@ func (r *run) pullFrom(p *project) error {
 			return fmt.Errorf("syncer: forge issue %s: bad status %q", fi.ID, fi.Status)
 		}
 		p.listed[fi.ID] = fi
-		reached, err := r.pullOne(p, fi, r.opt.Issue != "")
-		if err != nil {
+		if err := r.pullReached(p, fi, r.opt.Issue != ""); err != nil {
 			return err
 		}
-		r.reached(p, fi, reached)
 	}
 	if r.opt.Issue == "" {
 		r.j.Finished(p.key) // walked to its end: not cut, though some issues weren't reached
@@ -625,53 +638,61 @@ func (ra *readAhead) take(i int) (forge.Issue, error) {
 // stop drops the reads not taken: the pull ended, or failed.
 func (ra *readAhead) stop() { ra.cancel() }
 
-// reached journals a forge issue the pull finished, for a run that goes
-// on after this one is cut.
-func (r *run) reached(p *project, fi forge.Issue, reached bool) {
-	if reached && r.opt.Issue == "" {
-		r.j.Reached(p.key, fi.ID, r.now)
+// pullReached pulls a listed forge issue (pullOne) and journals it once
+// pulled, for a run that goes on after this one is cut; same, when the
+// pull wrote nothing, neither to the issue nor to the sync entity: the
+// board held it as listed (bsync.Adopt hands those of a check on).
+func (r *run) pullReached(p *project, fi forge.Issue, final bool) error {
+	writes := p.st.writes
+	reached, wrote, err := r.pullOne(p, fi, final)
+	if err != nil {
+		return err
 	}
+	if reached && r.opt.Issue == "" {
+		r.j.Reached(p.key, fi.ID, r.now, !wrote && p.st.writes == writes)
+	}
+	return nil
 }
 
 // pullOne pulls a listed forge issue. A mirror the fork posted waits for
 // every original to be pulled, unless final. reached says it is pulled: not
-// waiting, nor skipped.
-func (r *run) pullOne(p *project, fi forge.Issue, final bool) (reached bool, _ error) {
+// waiting, nor skipped; wrote, that the issue was written.
+func (r *run) pullOne(p *project, fi forge.Issue, final bool) (reached, wrote bool, _ error) {
 	id, err := r.match(p, fi, final)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	if r.opt.Issue != "" && id != r.opt.Issue {
 		r.report.Unchanged++
-		return false, nil
+		return false, false, nil
 	}
 	switch id {
 	case "":
 		r.report.Unchanged++
-		return false, nil
+		return false, false, nil
 	case "later":
 		r.later = append(r.later, listed{p, fi})
-		return false, nil
+		return false, false, nil
 	case "new":
 		id, err := r.pullNew(p, fi)
 		if err != nil {
-			return false, err
+			return false, false, err
 		}
 		if w := bsync.Unwrap(fi.Body); w.ForkID != "" && r.isSync(p, fi.Author) {
 			r.forkIDs[w.ForkID] = id
 		}
 		r.report.Created++
-		return true, nil
+		return true, true, nil
 	}
 	if r.issues[id].Deleted {
 		// deleted here: its forge issue stays linked to it, so that no pull
 		// brings it back, and nothing goes either way (docs/adr/0019)
 		r.report.Unchanged++
-		return true, nil
+		return true, false, nil
 	}
 	wrote, _, pulled, err := r.reconcile(p, id, fi, true, false)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	if wrote {
 		r.report.Updated++
@@ -679,7 +700,7 @@ func (r *run) pullOne(p *project, fi forge.Issue, final bool) (reached bool, _ e
 	} else {
 		r.report.Unchanged++
 	}
-	return true, nil
+	return true, wrote, nil
 }
 
 // progress tells Progress where a way is, the issue named by its number
@@ -707,7 +728,7 @@ func (r *run) alone(p *project) ([]forge.Issue, error) {
 		}
 		return []forge.Issue{fi}, err
 	}
-	list, err := p.f.Issues(r.ctx, p.st.lastRun)
+	list, err := p.f.Issues(r.ctx, r.since(p))
 	if err != nil {
 		return nil, err
 	}

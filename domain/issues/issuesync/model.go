@@ -277,6 +277,7 @@ type state struct {
 	bsync.State
 	exists bool
 	wrote  bool
+	writes int // how many writes this run made to it
 	// the fold's fields, as the run names them
 	links    map[string]string
 	link     map[string]bsync.LinkData
@@ -333,6 +334,7 @@ func (st *state) write(ctx context.Context, b *kernel.Board, key string, ops []k
 	}
 	st.set(e.State)
 	st.exists, st.wrote = true, true
+	st.writes++
 	return nil
 }
 

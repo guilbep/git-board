@@ -441,16 +441,21 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 		return issuesync.Report{}, err
 	}
 	kb := b.Kernel
+	adopt := func() {}
 	switch g, ok := kb.Store().(*git.Store); {
 	case run.DryRun && !ok:
 		return issuesync.Report{}, missing("a check needs a board kept in git; this board is kept in " + b.DatastoreName())
 	case run.DryRun:
-		scratch, done, err := b.scratch(ctx, g)
+		scratch, done, was, err := b.scratch(ctx, g)
 		if err != nil {
 			return issuesync.Report{}, err
 		}
 		defer done()
 		kb = scratch
+		// what the check found the board holding, the sync after it
+		// doesn't read again; a journal is a shortcut: failing, it costs
+		// reads, nothing more
+		adopt = func() { _ = bsync.Adopt(g, scratch.Store(), was) }
 	case b.Files != nil:
 		// a Markdown folder's hand edits are read in first, and its files
 		// follow what the sync wrote, each under the folder's lock; not
@@ -483,6 +488,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	cfg := b.Config
 	opt := issuesync.Options{
 		Ways:           ways,
+		Check:          run.DryRun,
 		ForgeOnly:      forgeOnly,
 		PublishPrivate: cfg.Forges.PublishPrivate,
 		Local: func(meta map[string]string) bool {
@@ -552,6 +558,9 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 		ms = append(ms, onForges{rm, raw})
 	}
 	err := bsync.Run(ctx, kb, bsync.Way(way), fs, ms...)
+	if err == nil {
+		adopt()
+	}
 	return im.Report, err
 }
 
