@@ -294,20 +294,7 @@ func (b *Board) OpenForges(ctx context.Context, tables []forge.Table) ([]NamedFo
 		if !f.Sync {
 			continue
 		}
-		var x forge.Forge
-		var err error
-		switch f.Kind {
-		case "github":
-			api := ""
-			if f.Host == "github.com" {
-				api = GitHubAPI
-			}
-			x, err = github.New(ctx, github.Options{Project: f.Project, Host: f.Host, Login: f.Login, API: api})
-		case "gitlab":
-			x, err = gitlab.New(ctx, baseURL(f), f.Project, f.Login)
-		default:
-			err = fmt.Errorf("kind %q: github or gitlab", f.Kind)
-		}
+		x, err := OpenForge(ctx, f)
 		if err != nil {
 			return nil, fmt.Errorf("forge %s: %w", f.Name, err)
 		}
@@ -317,6 +304,23 @@ func (b *Board) OpenForges(ctx context.Context, tables []forge.Table) ([]NamedFo
 		return nil, errors.New("no forge has its sync on")
 	}
 	return out, nil
+}
+
+// OpenForge opens a forge project's issues through its adapter, with the
+// table's posting account's token, as OpenLabeler does. Tests replace it
+// with a fake.
+var OpenForge = func(ctx context.Context, f forge.Table) (forge.Forge, error) {
+	switch f.Kind {
+	case "github":
+		api := ""
+		if f.Host == "github.com" {
+			api = GitHubAPI
+		}
+		return github.New(ctx, github.Options{Project: f.Project, Host: f.Host, Login: f.Login, API: api})
+	case "gitlab":
+		return gitlab.New(ctx, baseURL(f), f.Project, f.Login)
+	}
+	return nil, fmt.Errorf("kind %q: github or gitlab", f.Kind)
 }
 
 // SyncsAssignees says whether the assignees live natively on the forge of
