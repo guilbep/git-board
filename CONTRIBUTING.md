@@ -148,6 +148,9 @@ send. The per-issue sync touches only that issue.
   answers, how many requests it may make) and its budget line,
   `5k/web/Interaction<Name>`, to `testdata/perf/budgets.txt` ([ADR
   0023](docs/adr/0023-v3-local-first-traced.md)).
+- A new cache of the server's keeps its value while a stamp holds, with
+  `app/kept.go`'s `kept`, or says in its comment why not (kept by time,
+  kept by entry).
 - A slow request is asked of its trace before it is read in the code:
   `make obs-up`, serve with `OTEL_EXPORTER_OTLP_ENDPOINT`, and query Tempo
   ([Traces](docs/guide/performance.md#traces)).

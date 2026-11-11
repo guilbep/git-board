@@ -104,25 +104,20 @@ func (b *Board) FoundForges(ctx context.Context, say func(string)) ([]forge.Tabl
 		return b.Config.Forges.List, nil
 	}
 	c := &b.forges
-	stamp := c.stamp(ctx, b.Dir)
-	c.mu.Lock()
-	if c.foundAt == stamp && stamp != "" {
-		found, skips := slices.Clone(c.found), c.skips
-		c.mu.Unlock()
-		for _, s := range skips {
+	fresh := false
+	f, err := c.found.get(c.stamp(ctx, b.Dir), func() (foundIn, error) {
+		fresh = true
+		var f foundIn
+		var err error
+		f.forges, err = b.foundForges(ctx, func(s string) { f.skips = append(f.skips, s); say("skipped " + s) })
+		return f, err
+	})
+	if !fresh { // kept: its skips said again, as a read would say them
+		for _, s := range f.skips {
 			say("skipped " + s)
 		}
-		return found, nil
 	}
-	c.mu.Unlock()
-	var skips []string
-	found, err := b.foundForges(ctx, func(s string) { skips = append(skips, s); say("skipped " + s) })
-	if err == nil {
-		c.mu.Lock()
-		c.foundAt, c.found, c.skips = stamp, slices.Clone(found), skips
-		c.mu.Unlock()
-	}
-	return found, err
+	return slices.Clone(f.forges), err
 }
 
 // foundForges is FoundForges, read from git: skipped hears each URL
@@ -170,15 +165,21 @@ func sameProject(a, b forge.Table) bool {
 // project renamed on its forge shows on the board opened next (a config
 // change, a restart).
 type forgeCache struct {
-	mu        sync.Mutex
-	common    string // the repository's git directory, its worktrees' common one
-	remotesAt string
-	remotes   []string
-	foundAt   string
-	found     []forge.Table
-	skips     []string
-	projects  map[string]string    // kind host path -> project
-	tokens    map[string]time.Time // kind host url login -> when a token was found (tokenFound)
+	mu       sync.Mutex
+	common   string // the repository's git directory, its worktrees' common one
+	remotes  kept[[]string]
+	found    kept[foundIn]
+	projects map[string]string // kind host path -> project: kept for the board's life, a forge's answer
+	// kind host url login -> when a token was found (tokenFound): kept by
+	// time, not a stamp: a credential helper's store says nothing of when
+	// it changed
+	tokens map[string]time.Time
+}
+
+// foundIn is what finding the forges in the remotes found, and skipped.
+type foundIn struct {
+	forges []forge.Table
+	skips  []string
 }
 
 // stamp names the state of git's config files, the repository's and

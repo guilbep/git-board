@@ -356,22 +356,11 @@ func (b *Board) SetDatastore(ctx context.Context, value string) error {
 // config is unchanged (forgeCache).
 func (b *Board) Remotes(ctx context.Context) ([]string, error) {
 	c := &b.forges
-	stamp := c.stamp(ctx, b.Dir)
-	c.mu.Lock()
-	if c.remotesAt == stamp && stamp != "" {
-		defer c.mu.Unlock()
-		return slices.Clone(c.remotes), nil
-	}
-	c.mu.Unlock()
-	out, err := gitRun(ctx, b.Dir, "remote")
-	if err != nil {
-		return nil, err
-	}
-	rs := strings.Fields(out)
-	c.mu.Lock()
-	c.remotesAt, c.remotes = stamp, rs
-	c.mu.Unlock()
-	return slices.Clone(rs), nil
+	rs, err := c.remotes.get(c.stamp(ctx, b.Dir), func() ([]string, error) {
+		out, err := gitRun(ctx, b.Dir, "remote")
+		return strings.Fields(out), err
+	})
+	return slices.Clone(rs), err
 }
 
 // IndexTexts builds the issues' free-text index now: a server does it in

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/guilbep/git-board/domain/cycle"
 	"github.com/guilbep/git-board/domain/issues"
@@ -31,11 +30,7 @@ func (b *Board) Evidence(ctx context.Context, th issues.Thread, me string, pulls
 // requests while the branches stay where they are (refsStamp): the
 // branches, origin's HEAD, the plan files grepped, the base's history.
 // Opening an issue started 4 gits for them, ~60 ms.
-type codeKept struct {
-	mu  sync.Mutex
-	at  string
-	anc *branches.Ancestry
-}
+type codeKept = kept[*branches.Ancestry]
 
 // keptCode is the board's kept Ancestry, started over when a ref moved.
 func (b *Board) keptCode(ctx context.Context) *branches.Ancestry {
@@ -43,15 +38,12 @@ func (b *Board) keptCode(ctx context.Context) *branches.Ancestry {
 	if common := b.forges.commonDir(ctx, b.Dir); common != "" {
 		stamp = refsStamp(common)
 	}
-	c := &b.code
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.anc == nil || stamp == "" || stamp != c.at {
+	anc, _ := b.code.get(stamp, func() (*branches.Ancestry, error) {
 		r := b.Code()
 		r.Kept = code.NewKept()
-		c.anc, c.at = branches.NewAncestry(r), stamp
-	}
-	return c.anc
+		return branches.NewAncestry(r), nil
+	})
+	return anc
 }
 
 // refsStamp names where the branches are, from the files git keeps them
