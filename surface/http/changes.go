@@ -166,25 +166,39 @@ func (s *Server) changesSince(ctx context.Context, r changesReq) (changesRes, er
 }
 
 type idsReq struct {
-	Filter string `query:"filter"`
+	Filters []string `query:"f"`
+	Sort    string   `query:"sort"`
 }
 
 type idsRes struct {
-	Stamp string   `json:"stamp"`
-	IDs   []string `json:"ids"`
+	Stamp string     `json:"stamp"`
+	Lists [][]string `json:"lists"`
 }
 
-// issueIDs is GET /api/issues/ids?filter=: the ids a filter matches, for a
-// term the page can't answer from its own copy (free text, involves:,
-// follows:).
+// issueIDs is GET /api/issues/ids?f=…&f=…&sort=: the ids each filter
+// matches, in the sort, in the order asked, from one snapshot of the
+// board: a page that keeps the board asks its lanes and counts so, the
+// filter grammar the server's alone, and shows its own copies.
 func issueIDs(ctx context.Context, r idsReq) (idsRes, error) {
-	found, err := board(ctx).Issues.List(ctx, issues.ListReq{Filter: r.Filter})
-	if err != nil {
-		return idsRes{}, on("filter", err)
+	if n := len(r.Filters); n == 0 || n > maxBatch {
+		return idsRes{}, invalid("f", fmt.Errorf("%d lists: from 1 to %d", n, maxBatch))
 	}
-	res := idsRes{Stamp: stamp(ctx), IDs: make([]string, len(found))}
-	for i, is := range found {
-		res.IDs[i] = is.ID
+	b := board(ctx)
+	ctx = issues.ReadOnce(ctx)
+	res := idsRes{Stamp: stamp(ctx), Lists: make([][]string, 0, len(r.Filters))}
+	for _, f := range r.Filters {
+		found, err := b.Issues.List(ctx, issues.ListReq{Filter: f})
+		if err != nil {
+			return idsRes{}, on("f", err)
+		}
+		if err := b.Issues.Schema.Sort(found, r.Sort); err != nil {
+			return idsRes{}, on("sort", err)
+		}
+		ids := make([]string, len(found))
+		for i, is := range found {
+			ids[i] = is.ID
+		}
+		res.Lists = append(res.Lists, ids)
 	}
 	return res, nil
 }

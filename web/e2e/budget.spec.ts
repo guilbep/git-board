@@ -45,7 +45,7 @@ const MAX_KB = 200;
 
 // page, its API requests at most
 const budgets: [string, number][] = [
-  ['/#/', 12], // 8 every page asks (board, config, fields, me, people, state, sync, inbox), the list, the filters' 2 label counts, the closed count
+  ['/#/', 13], // 8 every page asks (board, config, fields, me, people, state, sync, inbox), the board kept (the snapshot: a 304 once kept, ADR 0023), the list's ids, the filters' 2 label counts, the closed count
   ['/#/issues/{id}', 13], // the issue, its cycle, follow, the uploads' settings
   ['/#/inbox', 8],
   ['/#/work?who=team', 9],

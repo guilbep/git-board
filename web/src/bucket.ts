@@ -1,6 +1,7 @@
 // A group of the board: a lane, or a table's section. Each is its own
-// paged list (GET /api/issues with the lane's term): issues are the pages
-// loaded, total how many the list holds, next the cursor of the page after.
+// list (its ids, GET /api/issues/ids with the lane's term; ADR 0023):
+// issues are those shown, from the board the page keeps, total how many
+// the list holds, next where the next page starts in ids.
 import type { Issue } from './api/types.ts';
 
 export interface Bucket {
@@ -9,4 +10,5 @@ export interface Bucket {
   total?: number | undefined;
   next?: string | undefined;
   loading?: boolean | undefined;
+  ids?: string[] | undefined; // every id the list holds, in its order
 }

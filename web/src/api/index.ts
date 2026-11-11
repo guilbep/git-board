@@ -13,3 +13,4 @@ export * from './insights.ts';
 export * from './releases.ts';
 export * from './cycle.ts';
 export * from './state.ts';
+export * from './local.ts';

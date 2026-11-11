@@ -47,8 +47,8 @@ func TestSnapshotAndChanges(t *testing.T) {
 		t.Errorf("list held: %d, want 304", again.StatusCode)
 	}
 
-	ids := want[idsRes](t, a.do("GET", "/api/issues/ids?filter=Made", nil), 200)
-	if !slices.Equal(ids.IDs, []string{made.ID}) {
-		t.Errorf("ids of free text: %v, want %s", ids.IDs, made.ID)
+	ids := want[idsRes](t, a.do("GET", "/api/issues/ids?f=Made&f=is:open&sort=title+asc", nil), 200)
+	if len(ids.Lists) != 2 || !slices.Equal(ids.Lists[0], []string{made.ID}) || len(ids.Lists[1]) < 2 {
+		t.Errorf("ids of free text, then of every open issue: %v", ids.Lists)
 	}
 }

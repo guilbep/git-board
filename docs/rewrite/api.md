@@ -168,11 +168,13 @@ event for each issue pulled.
 | 14 | `PUT /api/issues/{id}/follow` | `{follow: true, false or null}` | the same |
 | 64 | `GET /api/snapshot` | `If-None-Match` | `{stamp, cursor, issues}`: every issue, open and closed, as a list shows it; `ETag` its stamp, 304 when held |
 | 65 | `GET /api/changes` | `since`: a cursor | `{cursor, put, dropped}`: the issues changed since, as they are now, and those gone; 410 `gone` when the cursor is older than the server holds |
-| 66 | `GET /api/issues/ids` | `filter` | `{stamp, ids}`: the ids a filter matches, for a term a page can't answer from its copy |
+| 66 | `GET /api/issues/ids` | `f` (up to 64), `sort` | `{stamp, lists}`: the ids each filter matches, sorted, in the order asked |
 
 **The board a page keeps (64 to 66; ADR 0023).** A page takes the
 snapshot once, then the changes since its cursor, as the change events
-say when (an `issue` event carries the cursor after it). The server
+say when (an `issue` event carries the cursor after it), and asks which
+ids its lists hold (66): the filter grammar stays the server's, and the
+page shows its own copies. The server
 remembers its last 4,096 issue changes; a cursor older, or of a server
 started since, answers 410, and the page takes the snapshot again (a
 304 when nothing changed). A stamp is the board's version: its issues',

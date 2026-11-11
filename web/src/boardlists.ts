@@ -1,13 +1,15 @@
-// The board page's issues, as v2's API pages them (docs/rewrite/api.md,
-// List): never every issue at once. Ungrouped, one list; grouped, a list
+// The board page's issues (ADR 0023): the page keeps every issue
+// (local/store.ts); a list is the ids the server says it holds (GET
+// /api/issues/ids: the filter grammar stays the server's), shown from the
+// board kept here, a page at a time. Ungrouped, one list; grouped, a list
 // per value of the field (the lane's term added to the filter, "no:field"
-// for the issues without one), each loading its first page and the next
-// on demand; the lanes, and the filters panel's counts, each in one
-// request (GET /api/issues/batch). The values come from GET /api/labels for the filter, which
+// for the issues without one), every lane and the list's total in one
+// request. The values come from GET /api/labels for the filter, which
 // also counts the filters panel (facets.ts facetsOf). A newer load aborts
 // the older one's requests.
 import { ref, shallowRef, type Ref } from 'vue';
-import { batchIssues, getLabels, listIssues, type Issue, type LabelCount, type Page } from '@/api';
+import { batchIssues, getLabels, issueIDs, type Issue, type LabelCount } from '@/api';
+import { current, get } from '@/local/store';
 import type { Bucket } from '@/bucket';
 import { configModel } from '@/configmodel';
 import { facetsOf, type Counted, type Facet } from '@/facets';
@@ -42,8 +44,12 @@ export function useBoardLists(fields: Ref<Fields>) {
   let params: ListParams = { filter: '', group: '', sort: '' };
   let abort: AbortController | null = null;
 
-  const page = (filter: string, signal: AbortSignal, cursor?: string) =>
-    listIssues({ filter, sort: params.sort || undefined, limit: params.group ? LANE_PAGE : PAGE, cursor }, signal);
+  // a bucket of ids, its first page shown from the board kept here
+  const bucketOf = (group: string, ids: string[]): Bucket => {
+    const n = params.group ? LANE_PAGE : PAGE;
+    return { group, ids, issues: shown(ids.slice(0, n)), total: ids.length, next: ids.length > n ? String(n) : undefined };
+  };
+  const shown = (ids: string[]): Issue[] => ids.map(get).filter((i): i is Issue => !!i);
 
   // the group field's options, known before any count: the fields', else
   // the file's (the page's fields come beside the first list)
@@ -57,30 +63,29 @@ export function useBoardLists(fields: Ref<Fields>) {
     loading.value = true;
     error.value = '';
     try {
-      // ungrouped, the list goes first, alone: the counts after it
+      await current(); // the board kept here, caught up with the events heard
       let labels: Promise<LabelCount[]> | undefined;
       let next: Bucket[];
+      const sort = p.sort || undefined;
       if (!p.group) {
-        const first = await page(p.filter, signal);
-        next = [{ group: '', issues: first.items, total: first.total, next: first.next }];
-        total.value = first.total;
+        const [ids = []] = (await issueIDs({ f: [p.filter], sort }, signal)).lists;
+        next = [bucketOf('', ids)];
+        total.value = ids.length;
       } else {
-        // the options' lanes and the list's total in one request, the
+        // the options' lanes and the list itself in one request, the
         // labels beside it; then, in one more, a lane for each value in
         // use that no option names
-        const lanes = (vs: string[], withTotal: boolean) =>
-          batchIssues({ pages: vs.map((v) => laneFilter(p.filter, p.group, v)), counts: withTotal ? [p.filter] : [], sort: p.sort || undefined, limit: LANE_PAGE }, signal);
-        const bucket = (v: string, pg: Page<Issue> | undefined): Bucket => ({ group: v, issues: pg?.items ?? [], total: pg?.total ?? 0, next: pg?.next });
         const options = [...optionsOf(p.group), NONE];
         labels = getLabels(p.filter, signal);
-        const known = lanes(options, true);
+        const known = issueIDs({ f: [p.filter, ...options.map((v) => laneFilter(p.filter, p.group, v))], sort }, signal);
         // awaited below, after labels: a new load aborting it meanwhile
         // is this load's to catch, not an unhandled rejection of the page's
         known.catch(() => {});
         const extra = [...new Set((await labels).filter((l) => l.field === p.group && !options.includes(l.value)).map((l) => l.value))];
-        const [k, x] = await Promise.all([known, lanes(extra, false)]);
-        next = [...options.map((v, i) => bucket(v, k.pages[i])), ...extra.map((v, i) => bucket(v, x.pages[i]))];
-        total.value = k.totals[0] ?? 0;
+        const [k, x] = await Promise.all([known, extra.length ? issueIDs({ f: extra.map((v) => laneFilter(p.filter, p.group, v)), sort }, signal) : Promise.resolve({ lists: [] as string[][] })]);
+        const [all = [], ...lanes] = k.lists;
+        next = [...options.map((v, i) => bucketOf(v, lanes[i] ?? [])), ...extra.map((v, i) => bucketOf(v, x.lists[i] ?? []))];
+        total.value = all.length;
       }
       if (signal.aborted) return;
       buckets.value = next;
@@ -133,27 +138,21 @@ export function useBoardLists(fields: Ref<Fields>) {
     }
   }
 
-  // more loads a bucket's next page
+  // more shows a bucket's next page: its ids are held, its issues kept here
   async function more(b: Bucket): Promise<void> {
-    if (!b.next || b.loading) return;
-    b.loading = true;
-    const filter = params.group ? laneFilter(params.filter, params.group, b.group) : params.filter;
-    try {
-      const pg = await listIssues({ filter, sort: params.sort || undefined, limit: params.group ? LANE_PAGE : PAGE, cursor: b.next });
-      const seen = new Set(b.issues.map((i) => i.id));
-      const fresh: Bucket = { ...b, issues: [...b.issues, ...pg.items.filter((i) => !seen.has(i.id))], total: pg.total, next: pg.next, loading: false };
-      buckets.value = (buckets.value ?? []).map((x) => (x === b ? fresh : x));
-    } catch (e) {
-      b.loading = false;
-      error.value = e instanceof Error ? e.message : String(e);
-    }
+    if (!b.next || !b.ids) return;
+    const from = Number(b.next);
+    const n = params.group ? LANE_PAGE : PAGE;
+    const to = Math.min(b.ids.length, from + n);
+    const fresh: Bucket = { ...b, issues: [...b.issues, ...shown(b.ids.slice(from, to))], next: to < b.ids.length ? String(to) : undefined };
+    buckets.value = (buckets.value ?? []).map((x) => (x === b ? fresh : x));
   }
 
   // moved: a card's lane changed here before the server said so
   function moved(issue: Issue, from: string, to: string) {
     buckets.value = (buckets.value ?? []).map((b) =>
-      b.group === from ? { ...b, issues: b.issues.filter((i) => i.id !== issue.id), total: (b.total ?? 1) - 1 }
-      : b.group === to ? { ...b, issues: [issue, ...b.issues], total: (b.total ?? 0) + 1 }
+      b.group === from ? { ...b, issues: b.issues.filter((i) => i.id !== issue.id), ids: b.ids?.filter((id) => id !== issue.id), total: (b.total ?? 1) - 1 }
+      : b.group === to ? { ...b, issues: [issue, ...b.issues], ids: b.ids && [issue.id, ...b.ids.filter((id) => id !== issue.id)], total: (b.total ?? 0) + 1 }
       : b,
     );
   }
