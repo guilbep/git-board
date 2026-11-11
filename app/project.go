@@ -107,7 +107,9 @@ func (b *Board) ProjectRun(ctx context.Context, side ghproject.Side, apply bool,
 	if err != nil {
 		return ghproject.Report{}, err
 	}
-	return ghproject.Run(ctx, p, ghproject.Service{S: b.Issues}, c, cmp.Or(limit, ghproject.DefaultLimit), side, apply)
+	r, err := ghproject.Run(ctx, p, ghproject.Service{S: b.Issues}, c, cmp.Or(limit, ghproject.DefaultLimit), side, apply)
+	r.ConfigVersion = TextVersion(b.Config.File.Source())
+	return r, err
 }
 
 // ProjectResolve keeps one side of a conflict: git-board's value written
@@ -211,6 +213,10 @@ func ProjectNote(r ghproject.Report) string {
 	}
 	if r.Truncated {
 		parts = append(parts, fmt.Sprintf("only the first %d items read", r.Items))
+	}
+	// a check says what the file lacks for the Project
+	if l := r.FitLine(); l != "" && !r.Applied {
+		parts = append(parts, l)
 	}
 	return strings.Join(parts, ", ")
 }

@@ -49,7 +49,7 @@ changes: a field changed on the Project waits for git board project pull.`),
 		newProjectWay("sync", ghproject.Both, "Take the Project's changes, and write git-board's",
 			`Both ways, as git board sync's Project step: the Project's changes reach
 the labels, git-board's reach the Project.`),
-		newProjectResolve(), newProjectConfigure(),
+		newProjectResolve(), newProjectConfigure(), newProjectFit(),
 	)
 	return cmd
 }
@@ -220,6 +220,9 @@ func printReport(out io.Writer, r ghproject.Report) {
 		fmt.Fprintln(out, "Writing to the Project also needs write = true under [github-project] in .git-board.toml.")
 	}
 	if !r.Applied {
+		if l := r.FitLine(); l != "" {
+			fmt.Fprintln(out, l)
+		}
 		return
 	}
 	fmt.Fprintln(out, "\napplied.")
