@@ -403,9 +403,14 @@ const MaxCreate = 50
 // Total.
 type SyncEvent struct {
 	Forge, Way, What, Issue, Name string
-	Ops                           int
-	Line                          string
-	Done, Total                   int
+	// Part is the part the event counts in: an issue pulled that changed
+	// (pull-changes), a new one pulled (pull-new), one created (create),
+	// one sent its changes (send); "" for any other. An issue created
+	// counts in create alone, the changes sent after it with it.
+	Part        Part
+	Ops         int
+	Line        string
+	Done, Total int
 }
 
 // Text says the event in words, its issue by name ("would create CO2-3
@@ -444,11 +449,6 @@ func (e SyncEvent) Text(dry bool, name string) string {
 	}
 	return l
 }
-
-// Part is the part an event counts in: an issue pulled that changed
-// (pull-changes), a new one pulled (pull-new), one created (create), one
-// sent its changes (send); "" for any other.
-func (e SyncEvent) Part() Part { return issuesync.PartOf(e.What) }
 
 // ErrNotSwitched: the repository's issues are still the git-bug fork's.
 var ErrNotSwitched = errors.New("this repository still holds git-bug data, in refs/bugs: migrate it with git-board v0.11 (`git board switch`), then use v0.12")
@@ -522,6 +522,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	names := map[string]string{}   // forge key -> name
 	ways := map[string]bsync.Way{} // forge key -> its table's way
 	ids := new(int)
+	posted := map[[2]string]bool{} // forge key, issue: created this run
 	var fs []forge.Forge
 	for _, f := range run.Forges {
 		names[f.Key()], ways[f.Key()] = f.Name, forgeWayOf(f.Way)
@@ -562,7 +563,14 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 			if what == "posted" || what == "pushed" || what == "restored" {
 				w = "push"
 			}
-			see(SyncEvent{Forge: names[key], Way: w, What: what, Issue: id, Name: name, Ops: ops})
+			part := issuesync.PartOf(what)
+			if what == "posted" {
+				posted[[2]string{key, id}] = true
+			}
+			if what == "pushed" && posted[[2]string{key, id}] {
+				part = ""
+			}
+			see(SyncEvent{Forge: names[key], Way: w, What: what, Issue: id, Name: name, Ops: ops, Part: part})
 		},
 		Progress: func(key, way string, done, total int, name string) {
 			see(SyncEvent{Forge: names[key], Way: way, What: "progress", Done: done, Total: total, Line: name})

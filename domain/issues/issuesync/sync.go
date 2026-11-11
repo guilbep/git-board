@@ -998,9 +998,7 @@ func (r *run) pushTo(p *project) error {
 			todo = append(todo, is)
 		}
 	}
-	if !r.opt.runs(Send) {
-		ids = nil // the linked issues' changes are left for the next run
-	}
+	created := map[string]bool{} // what follows a creation is the create's
 	done, total := 0, len(ids)
 	if len(todo) > 0 && (r.opt.Create == nil || r.opt.Create(p.key, len(todo), p.first)) {
 		total += len(todo)
@@ -1010,9 +1008,13 @@ func (r *run) pushTo(p *project) error {
 			if err := r.create(p, is); err != nil {
 				return err
 			}
+			created[is.ID] = true
 		}
 	}
 	for _, id := range ids {
+		if !r.opt.runs(Send) && !created[id] {
+			continue // the linked issues' changes are left for the next run
+		}
 		done++
 		if is, ok := r.issues[id]; ok {
 			r.progress(p.key, "push", done, total, p.st.link[id].Number, is.Title)

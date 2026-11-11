@@ -128,7 +128,7 @@ func syncOne(cmd *cobra.Command, out io.Writer, path, remote string, run app.For
 				return err
 			}
 			run.Forges = fs
-			return forgeWay(cmd, b, app.WaySync, run, say, func(e app.SyncEvent) { parts[e.Part()]++ })
+			return forgeWay(cmd, b, app.WaySync, run, say, func(e app.SyncEvent) { parts[e.Part]++ })
 		}
 	}
 	if err := b.SyncWhole(ctx, w); err != nil {
