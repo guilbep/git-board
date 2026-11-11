@@ -646,6 +646,29 @@ git board project sync
 git board project resolve 2605 status --theirs   # or --ours
 ```
 
+`git board project fit` is for a team whose Project came first. It checks
+the Project and says what `.git-board.toml` lacks for it: a status the
+Project has and the file doesn't, the kind a Category names, a sprint's
+dates. It writes nothing without `--apply`.
+
+```bash
+git board project fit                    # the diff, and the questions
+git board project fit --apply            # write what needs no answer
+git board project fit --apply --map 'status:QA Validation=qa' --map category:TASK=feat
+git board project fit --apply --add-kind category:DATA --unmapped category:SPECS
+```
+
+A change git-board derives with no guess is in the diff. Another is a
+question, printed with the flag that settles it: `--map <field>:<the
+Project's name>=<value>`, `--add-kind category:<name>` (the Category is a
+new kind), or `--unmapped <field>:<name>` (the sync skips that value, and
+warns of nothing). With a terminal, `--apply` asks each open question. A
+question left open writes nothing. A change only adds: no option, kind,
+sprint or comment of the file is removed, and the order stays. If the
+file changed after the check, nothing is written. While the file lacks
+something, `project sync --check` and `sync --check` end with `config: 12
+changes clear 82 warnings: git board project fit`.
+
 ## `lint`: drift between the issues and the file
 
 `git board lint` is read-only: it reports, and writes nothing. It checks

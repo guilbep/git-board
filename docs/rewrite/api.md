@@ -503,6 +503,7 @@ Until then they answer 404 `not-found`.
 | 51 | `GET /api/insights` | `field`, `days`, `view`: flow, throughput, cycle time, burn-up, as `insights --json` (built); `sprint` (`@current` or a slug): `{sprint, title, markdown}`, its report |
 | 52 | `GET /api/github-project` | the GitHub Project bridge: its last check, and where each field lives (*built*) |
 | 53 | `POST /api/github-project/{action}` | `check`, `apply` (`side`), `resolve` (*built*) |
+| 68 | `POST /api/github-project/fit` | `{take, answers}`, `dry_run`: the last check's proposals (`last.fit`) written to `.git-board.toml`, those `take` names (absent: all), the questions settled by `answers` (`{id: "map=<value>" \| "add-kind" \| "unmapped"}`); answers as 52 with `fitted` (`{diff, changes, clears, open, written}`), the Project checked again once written; 412 `stale` when the file moved since the check, or none was made (*built*) |
 | 58 | `PUT /api/github-project` | `{owner, number}`: `[github-project]` written as `project configure` writes it, the fields it holds stated with it; owner `""` removes it; answers as 52 (*built*) |
 
 **The GitHub Project (52, 53)**, built with the bridge
