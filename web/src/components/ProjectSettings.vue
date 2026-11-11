@@ -46,6 +46,9 @@
         The board writes its values to the Project.
         <button type="button" class="gb-linkbtn" :disabled="saving" @click="setWrite(false)">Stop writing to it</button>
       </p>
+      <!-- what the file lacks for the Project: before Pull and Sync, open on the first check -->
+      <ProjectFit v-if="last && !last.applied && last.fit.length" :key="last.checked_at" :run="last" @fitted="status = $event" />
+      <p v-for="l in last?.unmapped_by_choice ?? []" :key="l" class="pj-muted">{{ l }}.</p>
       <div class="pj-actions">
         <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!!busy" @click="run(checkProject, 'Reading the Project…')">Check the Project</button>
         <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!!busy" @click="apply('labels')">Pull fields</button>
@@ -98,6 +101,7 @@ import { computed, onMounted, ref } from 'vue';
 import { applyProject, checkProject, configureProject, getConfig, getProject, message, patchConfig, resolveProject, type ProjectConflict, type ProjectStatus } from '@/api';
 import { safeHref } from '@/links';
 import { issueRef, plural, runWords, shown } from '@/projectview';
+import ProjectFit from '@/components/ProjectFit.vue';
 
 const status = ref<ProjectStatus | null>(null);
 const busy = ref('');

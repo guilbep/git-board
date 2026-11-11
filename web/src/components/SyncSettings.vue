@@ -102,6 +102,8 @@
     </div>
     <label class="sy-check"><input v-model="allowCreate" type="checkbox" /> Create issues on a forge never synced with, or 50 or more at once (a forge may email everyone watching it, once per issue)</label>
     <p v-if="startError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not started.</b> {{ startError }}</p>
+    <!-- the last Project check's fit: its panel is on the GitHub Project tab -->
+    <p v-if="projectFit" class="gb-hint" data-testid="sync-fit">{{ projectFit }} <router-link to="/settings/project">See the changes on the GitHub Project tab</router-link></p>
 
     <!-- the run in progress, or the last one: its steps as they came -->
     <section v-if="run" class="sy-report" aria-labelledby="sy-report">
@@ -173,7 +175,8 @@
 import GbDialog from '@/components/GbDialog.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { message, patchConfig, remoteAction, startSync, type SyncRequest, type SyncStatus } from '@/api';
+import { getProject, message, patchConfig, remoteAction, startSync, type SyncRequest, type SyncStatus } from '@/api';
+import { fitLine } from '@/projectview';
 import { configModel, loadConfigModel, takeFile } from '@/configmodel';
 import { keptIn, needsGit } from '@/datastore';
 import { placesSummary } from '@/fieldplaces';
@@ -364,6 +367,16 @@ const off = onLive((e) => {
 }, { own: true });
 onBeforeUnmount(off);
 onMounted(reload);
+
+// what the last Project check found the file lacks (docs/prd/config-fit.md):
+// a read of the check the server keeps, which asks GitHub nothing
+const projectFit = ref('');
+onMounted(() => {
+  getProject().then(
+    (p) => (projectFit.value = p.last && !p.last.applied ? fitLine(p.last) : ''),
+    () => undefined,
+  );
+});
 </script>
 
 <style scoped>

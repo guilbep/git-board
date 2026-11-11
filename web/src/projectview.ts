@@ -25,6 +25,21 @@ export function runWords(r: ProjectRun): string {
   return parts.join(', ');
 }
 
+// the fit, in one line: what the file lacks for the Project; "" when it fits
+export function fitLine(r: Pick<ProjectRun, 'fit'>): string {
+  if (!r.fit.length) return '';
+  const clears = r.fit.reduce((n, p) => n + p.clears, 0);
+  return `The file and the Project disagree: ${plural(r.fit.length, 'change')} clear ${plural(clears, 'warning')}.`;
+}
+
+// an answer of a question, as its menu says it
+export function answerWords(field: string, answer: string): string {
+  if (answer === 'add-kind') return 'Add it as a kind';
+  if (answer === 'unmapped') return 'Leave it unmapped';
+  const v = answer.replace(/^map=/, '');
+  return field === 'category' ? `It is the kind ${v}` : field === 'sprint' ? `Its label is sprint:${v}` : `Its value is ${v}`;
+}
+
 // a field's place in the Project, as the fields' list marks it: the
 // column, and a warning when the last run found no such column there. A
 // forge the server didn't name (one found in the remotes) is the
