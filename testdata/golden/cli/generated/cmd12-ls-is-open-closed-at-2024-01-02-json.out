@@ -14,7 +14,8 @@
     "shown_title": "Loads to query value request total travel (0)",
     "updated_at": "2024-01-01T09:58:00Z",
     "created_at": "2024-01-01T09:58:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 0"
   },
   {
     "id": "0107f196788a1a8dbdf321082759e1e15b9d75f8",
@@ -31,7 +32,8 @@
     "shown_title": "Dialog error slowly token response token index form (1)",
     "updated_at": "2024-01-02T23:20:01Z",
     "created_at": "2024-01-01T11:04:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 0"
   },
   {
     "id": "526050c6b9e21d587a0f533fe9e21afb13f19909",
@@ -48,7 +50,8 @@
     "shown_title": "Query returns upload we modal cache english (2)",
     "updated_at": "2024-01-02T19:15:40Z",
     "created_at": "2024-01-01T11:51:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 2"
   },
   {
     "id": "7b7ec1ecccdad70b9d68c0bf80b33fe8fa9a210d",
@@ -66,7 +69,8 @@
     "shown_title": "Role staging upload column after to validation save (3)",
     "updated_at": "2024-01-01T12:25:00Z",
     "created_at": "2024-01-01T12:25:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 0"
   },
   {
     "id": "148260ed2baedb4826397c3c714f79e91333ce84",
@@ -84,7 +88,8 @@
     "shown_title": "Fix french year value index has (4)",
     "updated_at": "2024-01-02T22:36:10Z",
     "created_at": "2024-01-01T13:25:00Z",
-    "comments": 1
+    "comments": 1,
+    "opened_by": "Developer 2"
   },
   {
     "id": "74712f7d588741052d79ff3da89ad01452f53099",
@@ -101,7 +106,8 @@
     "shown_title": "Date cache deploy when endpoint login user should (5)",
     "updated_at": "2024-01-01T14:30:00Z",
     "created_at": "2024-01-01T14:30:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 0"
   },
   {
     "id": "c3f415f2e41e1fadc763eefbf9ac656426d04b53",
@@ -118,7 +124,8 @@
     "shown_title": "Validation lines slowly unit token building unit query refactor (6)",
     "updated_at": "2024-01-01T15:09:00Z",
     "created_at": "2024-01-01T15:09:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 1"
   },
   {
     "id": "b3f04960100a7a01b0bfa2c1633473c0285717b3",
@@ -134,7 +141,8 @@
     "shown_title": "Form database could laboratory (7)",
     "updated_at": "2024-01-01T16:07:00Z",
     "created_at": "2024-01-01T16:07:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 1"
   },
   {
     "id": "56f15a415f78f30e7f864a6b0eaeb2eb5b93fd97",
@@ -150,7 +158,8 @@
     "shown_title": "Role table timeout has error dialog (8)",
     "updated_at": "2024-01-01T16:48:00Z",
     "created_at": "2024-01-01T16:48:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 0"
   },
   {
     "id": "5d51e7e7cdace4c67cfc51588818db705d7c2258",
@@ -168,7 +177,8 @@
     "shown_title": "Migration staging unit validation (9)",
     "updated_at": "2024-01-02T09:19:48Z",
     "created_at": "2024-01-01T17:24:00Z",
-    "comments": 1
+    "comments": 1,
+    "opened_by": "Developer 3"
   },
   {
     "id": "b3afbab6319050dfe48566bbeb25fc2985fd9ea2",
@@ -185,7 +195,8 @@
     "shown_title": "Value for calculation date production admin file (10)",
     "updated_at": "2024-01-01T19:36:07Z",
     "created_at": "2024-01-01T18:01:00Z",
-    "comments": 1
+    "comments": 1,
+    "opened_by": "Developer 1"
   },
   {
     "id": "36e726f1080730baa263bfc2521c4fac22ec3a34",
@@ -202,7 +213,8 @@
     "shown_title": "Message module spinner when could error total slowly when (11)",
     "updated_at": "2024-01-02T15:59:40Z",
     "created_at": "2024-01-01T18:43:00Z",
-    "comments": 1
+    "comments": 1,
+    "opened_by": "Developer 4"
   },
   {
     "id": "b356cc0eef844ecc34cf586e7b30bd9d1e2df87a",
@@ -218,7 +230,8 @@
     "shown_title": "Calculation migration form translation (12)",
     "updated_at": "2024-01-01T19:59:00Z",
     "created_at": "2024-01-01T19:59:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 2"
   },
   {
     "id": "0cb9eabc4ae6fe1450f6bbee0679dc42d6cc57ea",
@@ -234,7 +247,8 @@
     "shown_title": "Missing chart csv calculation endpoint energy the crashes (13)",
     "updated_at": "2024-01-01T21:02:00Z",
     "created_at": "2024-01-01T21:02:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 1"
   },
   {
     "id": "a46e35c405f05ff9434c27d938ebf37ff3680b15",
@@ -252,6 +266,7 @@
     "shown_title": "Total need total test (14)",
     "updated_at": "2024-01-01T21:41:00Z",
     "created_at": "2024-01-01T21:41:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 0"
   }
 ]

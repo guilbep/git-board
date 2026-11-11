@@ -1,1 +1,1 @@
-error: $ROOT/a/.git-board.toml already exists
+error: /private$ROOT/a/.git-board.toml already exists

@@ -16,6 +16,7 @@
       "status:done"
     ],
     "number": "GB-101",
+    "opened_by": "Bob",
     "status": "closed",
     "title": "Retitled by the cross test",
     "updated_at": "NOW"
@@ -32,6 +33,7 @@
     "labels": [
       "status:done"
     ],
+    "opened_by": "Chloé Dubois-Ångström",
     "status": "closed",
     "title": "Thread with a deleted comment",
     "updated_at": "NOW"
@@ -52,6 +54,7 @@
       "étiquette"
     ],
     "number": "GB-102",
+    "opened_by": "Chloé Dubois-Ångström",
     "status": "closed",
     "title": "Ünïcödé: 日本語のタイトル 🚀 — שלום \u0026 \u003cb\u003e (renamed)",
     "updated_at": "NOW"
@@ -72,6 +75,7 @@
       "status:done"
     ],
     "number": "GB-7",
+    "opened_by": "octocat",
     "status": "closed",
     "title": "Crash on empty report",
     "updated_at": "NOW"
@@ -88,6 +92,7 @@
     "labels": [
       "status:done"
     ],
+    "opened_by": "Ada King",
     "status": "closed",
     "title": "Bare",
     "updated_at": "NOW"
@@ -109,6 +114,7 @@
       "status:done"
     ],
     "number": "GB-103",
+    "opened_by": "Ada King",
     "status": "closed",
     "title": "Label churn",
     "updated_at": "NOW"
@@ -126,6 +132,7 @@
       "prio:p1",
       "status:done"
     ],
+    "opened_by": "Ada King",
     "status": "closed",
     "title": "Cross write one",
     "updated_at": "NOW"

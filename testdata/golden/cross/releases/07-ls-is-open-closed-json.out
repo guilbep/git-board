@@ -17,6 +17,7 @@
       "status:in-progress"
     ],
     "number": "GB-100",
+    "opened_by": "Ada King",
     "status": "open",
     "title": "Search hides closed issues by default",
     "updated_at": "2025-03-03T15:00:00Z"
@@ -37,6 +38,7 @@
       "status:done"
     ],
     "number": "GB-101",
+    "opened_by": "Bob",
     "status": "closed",
     "title": "Export CSV (#13)",
     "updated_at": "2025-03-03T17:01:00Z"
@@ -50,6 +52,7 @@
       "reviewer:chloe"
     ],
     "labels": [],
+    "opened_by": "Chloé Dubois-Ångström",
     "status": "open",
     "title": "Thread with a deleted comment",
     "updated_at": "2025-03-03T19:13:00Z"
@@ -69,6 +72,7 @@
       "étiquette"
     ],
     "number": "GB-102",
+    "opened_by": "Chloé Dubois-Ångström",
     "status": "open",
     "title": "Ünïcödé: 日本語のタイトル 🚀 — שלום \u0026 \u003cb\u003e (renamed)",
     "updated_at": "2025-03-03T21:00:00Z"
@@ -86,6 +90,7 @@
       "status:backlog"
     ],
     "number": "GB-7",
+    "opened_by": "octocat",
     "status": "open",
     "title": "Crash on empty report",
     "updated_at": "2025-03-03T22:10:00Z"
@@ -101,6 +106,7 @@
     "labels": [
       "prio:p3"
     ],
+    "opened_by": "Ada King",
     "status": "open",
     "title": "Lenient packs: the second title wins",
     "updated_at": "2025-03-03T23:15:00Z"
@@ -114,6 +120,7 @@
       "reviewer:chloe"
     ],
     "labels": [],
+    "opened_by": "Ada King",
     "status": "open",
     "title": "Bare",
     "updated_at": "2025-03-04T00:00:00Z"
@@ -135,6 +142,7 @@
       "status:in-review"
     ],
     "number": "GB-103",
+    "opened_by": "Ada King",
     "status": "open",
     "title": "Label churn",
     "updated_at": "2025-03-04T03:00:00Z"

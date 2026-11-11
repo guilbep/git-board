@@ -33,6 +33,7 @@
     "counted": true,
     "updated_at": "2025-03-03T15:00:00Z",
     "created_at": "2025-03-03T09:00:00Z",
-    "comments": 3
+    "comments": 3,
+    "opened_by": "Ada King"
   }
 ]

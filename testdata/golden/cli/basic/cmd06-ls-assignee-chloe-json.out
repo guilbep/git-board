@@ -23,7 +23,8 @@
     "counted": true,
     "updated_at": "2025-03-03T21:00:00Z",
     "created_at": "2025-03-03T20:00:00Z",
-    "comments": 1
+    "comments": 1,
+    "opened_by": "Chloé Dubois-Ångström"
   },
   {
     "id": "22c49b4cb2f9ebf5dc7e81d5b5476ec584fb5c71",
@@ -45,6 +46,7 @@
     "counted": true,
     "updated_at": "2025-03-04T03:00:00Z",
     "created_at": "2025-03-04T01:00:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Ada King"
   }
 ]

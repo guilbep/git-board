@@ -15,7 +15,8 @@
     "shown_title": "Total need total test (14)",
     "updated_at": "2024-01-14T18:58:27Z",
     "created_at": "2024-01-01T21:41:00Z",
-    "comments": 5
+    "comments": 5,
+    "opened_by": "Developer 0"
   },
   {
     "id": "7b7ec1ecccdad70b9d68c0bf80b33fe8fa9a210d",
@@ -33,7 +34,8 @@
     "shown_title": "Slowly would request spinner filter (3)",
     "updated_at": "2024-01-14T17:20:13Z",
     "created_at": "2024-01-01T12:25:00Z",
-    "comments": 6
+    "comments": 6,
+    "opened_by": "Developer 0"
   },
   {
     "id": "5d51e7e7cdace4c67cfc51588818db705d7c2258",
@@ -52,7 +54,8 @@
     "updated_at": "2024-01-13T12:55:31Z",
     "created_at": "2024-01-01T17:24:00Z",
     "closed_at": "2024-01-13T12:55:31Z",
-    "comments": 5
+    "comments": 5,
+    "opened_by": "Developer 3"
   },
   {
     "id": "0107f196788a1a8dbdf321082759e1e15b9d75f8",
@@ -69,6 +72,7 @@
     "shown_title": "Dialog error slowly token response token index form (1)",
     "updated_at": "2024-01-05T22:33:59Z",
     "created_at": "2024-01-01T11:04:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 0"
   }
 ]

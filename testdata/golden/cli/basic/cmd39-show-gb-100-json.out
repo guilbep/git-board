@@ -30,6 +30,7 @@
   "updated_at": "2025-03-03T15:00:00Z",
   "created_at": "2025-03-03T09:00:00Z",
   "comments": 3,
+  "opened_by": "Ada King",
   "author": {
     "id": "2070bfafe7adfed74d38940e023d8d0f756bb6db",
     "name": "Ada King",

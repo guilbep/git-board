@@ -14,7 +14,8 @@
     "shown_title": "Dialog error slowly token response token index form (1)",
     "updated_at": "2024-01-05T22:33:59Z",
     "created_at": "2024-01-01T11:04:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 0"
   },
   {
     "id": "526050c6b9e21d587a0f533fe9e21afb13f19909",
@@ -31,7 +32,8 @@
     "shown_title": "Query returns upload we modal cache english (2)",
     "updated_at": "2024-01-03T23:55:03Z",
     "created_at": "2024-01-01T11:51:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 2"
   },
   {
     "id": "c3f415f2e41e1fadc763eefbf9ac656426d04b53",
@@ -49,7 +51,8 @@
     "updated_at": "2024-01-09T00:35:13Z",
     "created_at": "2024-01-01T15:09:00Z",
     "closed_at": "2024-01-09T00:35:13Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 1"
   },
   {
     "id": "b3f04960100a7a01b0bfa2c1633473c0285717b3",
@@ -66,6 +69,7 @@
     "updated_at": "2024-01-04T17:10:49Z",
     "created_at": "2024-01-01T16:07:00Z",
     "closed_at": "2024-01-04T17:10:49Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Developer 1"
   }
 ]

@@ -13,6 +13,7 @@
   "updated_at": "2025-03-04T03:33:00Z",
   "created_at": "2025-03-03T09:00:00Z",
   "comments": 84,
+  "opened_by": "Developer 0",
   "author": {
     "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
     "name": "Developer 0",

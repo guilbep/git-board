@@ -22,7 +22,8 @@
     "shown_title": "Edited on two clones (title from b)",
     "updated_at": "2025-03-03T10:05:00Z",
     "created_at": "2025-03-03T09:00:00Z",
-    "comments": 2
+    "comments": 2,
+    "opened_by": "Ada King"
   },
   {
     "id": "c134519fc7135586952f39382889dfa85966bfcf",
@@ -35,7 +36,8 @@
     "shown_title": "Appended on the other clone",
     "updated_at": "2025-03-03T10:20:00Z",
     "created_at": "2025-03-03T09:10:00Z",
-    "comments": 1
+    "comments": 1,
+    "opened_by": "Ada King"
   },
   {
     "id": "6f03dc499fcb0452a97d6e24ced0267dfd068db0",
@@ -48,6 +50,7 @@
     "shown_title": "Made on b alone",
     "updated_at": "2025-03-03T10:30:00Z",
     "created_at": "2025-03-03T10:30:00Z",
-    "comments": 0
+    "comments": 0,
+    "opened_by": "Bob"
   }
 ]

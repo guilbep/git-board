@@ -14,6 +14,7 @@
   "updated_at": "2024-01-07T16:53:36Z",
   "created_at": "2024-01-01T14:30:00Z",
   "comments": 1,
+  "opened_by": "Developer 0",
   "author": {
     "id": "4b550974d0ad9105c63342f4a91258ba5cbf5f67",
     "name": "Developer 0",

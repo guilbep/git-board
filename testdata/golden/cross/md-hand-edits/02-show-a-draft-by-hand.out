@@ -57,6 +57,7 @@
     "plain",
     "prio:p2"
   ],
+  "opened_by": "Bob",
   "participants": [
     {
       "avatar_url": "https://avatars.githubusercontent.com/u/1003?s=88",

@@ -16,6 +16,7 @@
       "status:ready"
     ],
     "number": "MD-1",
+    "opened_by": "Ada King",
     "status": "open",
     "title": "Retitled by the cross test",
     "updated_at": "NOW"
@@ -32,6 +33,7 @@
       "prio:p1"
     ],
     "number": "MD-3",
+    "opened_by": "Ada King",
     "status": "open",
     "title": "Cross write on a folder",
     "updated_at": "NOW"

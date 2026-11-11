@@ -14,7 +14,8 @@
     "shown_title": "Date cache deploy when endpoint login user should (5)",
     "updated_at": "2024-01-07T16:53:36Z",
     "created_at": "2024-01-01T14:30:00Z",
-    "comments": 1
+    "comments": 1,
+    "opened_by": "Developer 0"
   },
   {
     "id": "36e726f1080730baa263bfc2521c4fac22ec3a34",
@@ -32,6 +33,7 @@
     "updated_at": "2024-01-05T00:55:04Z",
     "created_at": "2024-01-01T18:43:00Z",
     "closed_at": "2024-01-05T00:55:04Z",
-    "comments": 1
+    "comments": 1,
+    "opened_by": "Developer 4"
   }
 ]
