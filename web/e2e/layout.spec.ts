@@ -113,3 +113,20 @@ test('the expanded issue panel takes the window, its crumb shown', async ({ page
   expect((await page.locator('.gb-ptop-view').boundingBox())!.width).toBeGreaterThan(40);
   await page.evaluate(() => localStorage.setItem('gb-panel-mode', 'side'));
 });
+
+// Settings › Appearance sizes the issue panel: S at the side, or expanded
+test('the issue panel takes the size chosen in Settings', async ({ page, request }) => {
+  await identity(request);
+  const { id } = await issue(request, 'Size me');
+  await page.goto('/#/settings/you');
+  await page.getByRole('radiogroup', { name: 'The issue panel' }).getByText('S', { exact: true }).click();
+  await page.goto(`/#/?issue=${id}`);
+  const panel = page.locator('.gb-panel');
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(576);
+  await page.goto('/#/settings/you');
+  await page.getByRole('radiogroup', { name: 'The issue panel' }).getByText('Expanded', { exact: true }).click();
+  await page.goto(`/#/?issue=${id}`);
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBeGreaterThan(page.viewportSize()!.width - 100);
+  await page.goto('/#/settings/you');
+  await page.getByRole('radiogroup', { name: 'The issue panel' }).getByText('L', { exact: true }).click();
+});
