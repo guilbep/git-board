@@ -219,25 +219,42 @@ func issueIDs(ctx context.Context, r idsReq) (idsRes, error) {
 // conditionalGets are the lists a page asks again on each change: built
 // from the board alone, so the board's stamp, the query, who @me is and
 // the day (@today, a sprint) name their reply.
-// The inbox and the Work page aren't: they read more than the board's
-// version says (one's read marks, the other's pull requests and branches).
-var conditionalGets = map[string]bool{"/api/issues": true, "/api/issues/batch": true, "/api/labels": true, "/api/issues/ids": true, "/api/insights": true}
+// The inbox and the Work page read more than the board's version says:
+// their names add it (beside), or say it can't be told ("", false).
+var conditionalGets = map[string]func(context.Context) (string, bool){
+	"/api/issues": nothing, "/api/issues/batch": nothing, "/api/labels": nothing, "/api/issues/ids": nothing, "/api/insights": nothing,
+	// what who writes saw and follows: their inbox file
+	"/api/inbox": func(ctx context.Context) (string, bool) {
+		b := board(ctx)
+		s := issues.InboxStamp(b.Issues.Folder, b.Issues.Me)
+		return "inbox " + s, s != ""
+	},
+	// the branches and the PRs read; the hour, as a row says how long it waited
+	"/api/cycle": func(ctx context.Context) (string, bool) {
+		s := board(ctx).CodeStamp(ctx)
+		return "code " + s + "\n" + time.Now().Format("2006-01-02T15"), s != ""
+	},
+}
+
+func nothing(context.Context) (string, bool) { return "", true }
 
 // withConditional answers a page that holds a list's reply 304, its ETag
 // the reply's name, before any list is built.
 func withConditional(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || !conditionalGets[r.URL.Path] {
+		beside := conditionalGets[r.URL.Path]
+		if r.Method != http.MethodGet || beside == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
 		st := stamp(r.Context())
-		if st == "" {
+		more, ok := beside(r.Context())
+		if st == "" || !ok {
 			next.ServeHTTP(w, r)
 			return
 		}
 		b := board(r.Context())
-		h := sha256.Sum256(fmt.Appendf(nil, "%s\n%s\n%s\n%s\n%s", st, r.URL.Path, r.URL.RawQuery, b.Issues.MeName, time.Now().Format(time.DateOnly)))
+		h := sha256.Sum256(fmt.Appendf(nil, "%s\n%s\n%s\n%s\n%s\n%s\n%s", st, more, r.URL.Path, r.URL.RawQuery, b.Issues.MeName, b.Issues.Me, time.Now().Format(time.DateOnly)))
 		etag := hex.EncodeToString(h[:12])
 		w.Header().Set("ETag", strconv.Quote(etag))
 		if version(r.Header.Get("If-None-Match")) == etag {

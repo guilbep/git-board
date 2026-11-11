@@ -39,6 +39,23 @@ func inboxPath(folder string, id kernel.ID) string {
 	return filepath.Join(folder, "git-board", "inbox", string(id)+".json")
 }
 
+// InboxStamp names the state of id's inbox file (what they saw, what
+// they follow): its size and time, "none" when there is none; "" when it
+// can't be told.
+func InboxStamp(folder string, id kernel.ID) string {
+	if inboxID(id) != nil {
+		return ""
+	}
+	st, err := os.Stat(inboxPath(folder, id))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "none"
+	}
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d %d", st.Size(), st.ModTime().UnixNano())
+}
+
 // inboxID refuses an id that isn't 40 hex digits: it names a file.
 func inboxID(id kernel.ID) error {
 	if len(id) != 40 || strings.Trim(string(id), "0123456789abcdef") != "" {

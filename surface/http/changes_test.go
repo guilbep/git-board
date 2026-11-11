@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -54,5 +56,38 @@ func TestSnapshotAndChanges(t *testing.T) {
 	page := want[idsRes](t, a.do("GET", "/api/issues/ids?f=is:open&limit=1&offset=1&sort=title+asc", nil), 200)
 	if len(page.Lists[0]) != 1 || page.Totals[0] != len(ids.Lists[1]) || page.Lists[0][0] != ids.Lists[1][1] {
 		t.Errorf("the second id of the open issues, and their total: %+v, all %v", page, ids.Lists[1])
+	}
+}
+
+// The inbox and the Work page answer 304s too, their names counting what
+// they read beside the board: the inbox's read marks, the code's refs. A
+// mark of seen moves the inbox's.
+func TestInboxAndWorkConditional(t *testing.T) {
+	t.Parallel()
+	dir, ids := newBoard(t)
+	on := boardToml + "\n[experimental]\nfeatures = [\"cycle\"]\n"
+	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte(on), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := newAPI(t, dir)
+	held := func(path string) (string, int) {
+		res := a.do("GET", path, nil)
+		tag := res.Header.Get("ETag")
+		if res.StatusCode != 200 || tag == "" {
+			t.Fatalf("GET %s: %d, ETag %q", path, res.StatusCode, tag)
+		}
+		return tag, a.do("GET", path, nil, "If-None-Match", tag).StatusCode
+	}
+	for _, path := range []string{"/api/inbox", "/api/cycle?who=team"} {
+		if _, code := held(path); code != http.StatusNotModified {
+			t.Errorf("GET %s held: %d, want 304", path, code)
+		}
+	}
+	tag, _ := held("/api/inbox")
+	if res := a.do("POST", "/api/inbox/seen", map[string]any{"issues": []string{string(ids[0])}}); res.StatusCode >= 300 {
+		t.Fatalf("seen: %d", res.StatusCode)
+	}
+	if code := a.do("GET", "/api/inbox", nil, "If-None-Match", tag).StatusCode; code != http.StatusOK {
+		t.Errorf("the inbox after a mark of seen, its old ETag: %d, want 200", code)
 	}
 }

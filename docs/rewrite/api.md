@@ -179,9 +179,12 @@ remembers its last 4,096 issue changes; a cursor older, or of a server
 started since, answers 410, and the page takes the snapshot again (a
 304 when nothing changed). A stamp is the board's version: its issues',
 people's, forges' records' and counter's, and which open of the board it
-is. `GET /api/issues`, `/api/issues/batch`, `/api/labels` and
-`/api/issues/ids` answer an `ETag` too (the stamp, the query, who `@me`
-is and the day), and a 304 to a page that holds it, no list built.
+is. `GET /api/issues`, `/api/issues/batch`, `/api/labels`,
+`/api/issues/ids` and `/api/insights` answer an `ETag` too (the stamp,
+the query, who `@me` is and the day), and a 304 to a page that holds it,
+no list built; `/api/inbox` and `/api/cycle` (the Work page) too, their
+names adding what they read beside the board: the inbox's read marks
+(its file), the branches and the pull requests read (and the hour).
 
 **List (3).** `sort` is `ls --sort`'s: `created`, `updated`,
 `title` or a field, then `asc` or `desc` (`prio desc`); absent, oldest

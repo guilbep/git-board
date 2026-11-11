@@ -46,6 +46,21 @@ func (b *Board) keptCode(ctx context.Context) *branches.Ancestry {
 	return anc
 }
 
+// CodeStamp names where the branches are (refsStamp), and the PRs read
+// (PullCache's generation): what the Work page's rows read beside the
+// board; "" when it can't be told.
+func (b *Board) CodeStamp(ctx context.Context) string {
+	common := b.forges.commonDir(ctx, b.Dir)
+	if common == "" {
+		return ""
+	}
+	gen := uint64(0)
+	if b.PRs != nil {
+		gen = b.PRs.Gen()
+	}
+	return fmt.Sprintf("%s\nprs %d", refsStamp(common), gen)
+}
+
 // refsStamp names where the branches are, from the files git keeps them
 // in, without a git: packed-refs, the reftable folder, and each folder
 // under refs/heads and refs/remotes, whose time a ref written (a file
