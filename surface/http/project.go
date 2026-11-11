@@ -14,14 +14,29 @@ import (
 )
 
 // The GitHub Project bridge (docs/rewrite/api.md, routes 52 and 53): its
-// last check, a check, a run one side or both, a conflict resolved; and
-// where each field lives, on each forge. Only an action reads the
-// Project: a read answers the last one, which the server keeps.
+// last check or run, a conflict resolved, the file fitted to it; and
+// where each field lives, on each forge. The Project is checked and run
+// by the whole sync (POST /api/sync, scope all), which DELETE /api/sync
+// stops: a read answers the last one, which the server keeps.
 
 // projectState is the bridge's last run, kept by the server.
 type projectState struct {
-	mu   sync.Mutex // one action at a time
+	mu   sync.Mutex // one write of the file or the Project at a time
+	lmu  sync.Mutex // last
 	last *ghproject.Report
+}
+
+// keep is the whole sync's Project step's report, the last one.
+func (p *projectState) keep(r ghproject.Report) {
+	p.lmu.Lock()
+	defer p.lmu.Unlock()
+	p.last = &r
+}
+
+func (p *projectState) lastOne() *ghproject.Report {
+	p.lmu.Lock()
+	defer p.lmu.Unlock()
+	return p.last
 }
 
 type projectRes struct {
@@ -153,10 +168,7 @@ func places(b *app.Board, c *ghproject.Config, last *ghproject.Report) []placeRe
 // projectStatus is route 52: the bridge's configuration, its last run,
 // where each field lives.
 func (s *Server) projectStatus(ctx context.Context, _ none) (projectRes, error) {
-	s.project.mu.Lock()
-	last := s.project.last
-	s.project.mu.Unlock()
-	return s.projectAnswer(ctx, last), nil
+	return s.projectAnswer(ctx, s.project.lastOne()), nil
 }
 
 func (s *Server) projectAnswer(ctx context.Context, last *ghproject.Report) projectRes {
@@ -201,61 +213,52 @@ func (s *Server) configureProject(ctx context.Context, r configureReq) (projectR
 	return s.projectStatus(context.WithValue(ctx, boardKey{}, h.b), none{})
 }
 
-type projectReq struct {
-	Action string `path:"action"`
-	// apply: labels (pull), project (push), both (sync, the default)
-	Side ghproject.Side `json:"side"`
-	// resolve: the issue on GitHub (2605, owner/repo#2605, its URL), the
-	// field, and the side kept: git-board or project
+// resolveReq is route 53: a conflict resolved, the issue on GitHub
+// (2605, owner/repo#2605, its URL), the field, and the side kept:
+// git-board or project.
+type resolveReq struct {
 	Issue string `json:"issue"`
 	Field string `json:"field"`
 	Keep  string `json:"keep"`
-	Limit int    `json:"limit"`
 }
 
-// projectAction is route 53: check, apply or resolve.
-func (s *Server) projectAction(ctx context.Context, r projectReq) (projectRes, error) {
+// projectResolve writes the side kept on the other, and answers the last
+// check without that conflict: the next check reads both sides again.
+func (s *Server) projectResolve(ctx context.Context, r resolveReq) (projectRes, error) {
+	if r.Issue == "" || r.Field == "" {
+		return projectRes{}, invalid("issue", errors.New("resolve takes an issue, a field and the side kept"))
+	}
+	if r.Keep != "git-board" && r.Keep != "project" {
+		return projectRes{}, invalid("keep", fmt.Errorf("keep %q: git-board or project", r.Keep))
+	}
 	if !s.project.mu.TryLock() {
-		return projectRes{}, &app.Error{Class: app.Busy, Err: errors.New("the GitHub Project is being read: try again once it ends")}
+		return projectRes{}, &app.Error{Class: app.Busy, Err: errors.New("the GitHub Project is being written: try again once it ends")}
 	}
 	defer s.project.mu.Unlock()
-	b := board(ctx)
-	side := r.Side
-	switch side {
-	case "":
-		side = ghproject.Both
-	case ghproject.Labels, ghproject.OnGH, ghproject.Both:
-	default:
-		return projectRes{}, invalid("side", fmt.Errorf("side %q: labels, project or both", side))
-	}
-	var kept string
-	switch r.Action {
-	case "check", "apply":
-	case "resolve":
-		if r.Issue == "" || r.Field == "" {
-			return projectRes{}, invalid("issue", errors.New("resolve takes an issue, a field and the side kept"))
-		}
-		if r.Keep != "git-board" && r.Keep != "project" {
-			return projectRes{}, invalid("keep", fmt.Errorf("keep %q: git-board or project", r.Keep))
-		}
-		var err error
-		if kept, err = b.ProjectResolve(ctx, r.Issue, r.Field, r.Keep == "git-board"); err != nil {
-			return projectRes{}, err
-		}
-	default:
-		return projectRes{}, &app.Error{Class: app.NotFound, Err: fmt.Errorf("no action %q on the GitHub Project: check, apply or resolve", r.Action)}
-	}
-	// a resolve checks again: its page shows the conflicts left
-	rep, err := b.ProjectRun(ctx, side, r.Action == "apply", r.Limit)
+	kept, err := board(ctx).ProjectResolve(ctx, r.Issue, r.Field, r.Keep == "git-board")
 	if err != nil {
 		return projectRes{}, err
 	}
-	s.project.last = &rep
-	res := s.projectAnswer(ctx, &rep)
-	if r.Action == "resolve" {
-		res.Kept, res.ResolvedOn = kept, &resolvedRes{Issue: r.Issue, Field: r.Field, Keep: r.Keep}
+	s.project.lmu.Lock()
+	if l := s.project.last; l != nil {
+		rep := *l
+		rep.Plan.Conflicts = slices.DeleteFunc(slices.Clone(rep.Plan.Conflicts), func(c ghproject.Conflict) bool {
+			return c.Field == r.Field && resolves(r.Issue, c)
+		})
+		s.project.last = &rep
 	}
+	last := s.project.last
+	s.project.lmu.Unlock()
+	res := s.projectAnswer(ctx, last)
+	res.Kept, res.ResolvedOn = kept, &resolvedRes{Issue: r.Issue, Field: r.Field, Keep: r.Keep}
 	return res, nil
+}
+
+// resolves says the issue a resolve named (app.ParseIssueRef) is the
+// conflict's.
+func resolves(issue string, c ghproject.Conflict) bool {
+	repo, n, err := app.ParseIssueRef(issue)
+	return err == nil && n == c.Number && (repo == "" || strings.HasPrefix(c.URL, "https://github.com/"+repo+"/"))
 }
 
 // fitReq writes the last check's proposals to .git-board.toml
@@ -268,8 +271,8 @@ type fitReq struct {
 	Answers map[string]string `json:"answers"`
 }
 
-// fitRes is what the fit wrote, or would, and the Project as the check
-// after it reads it.
+// fitRes is what the fit wrote, or would. Written, the check it fitted
+// from is dropped: the file moved, and the next check reads it.
 type fitRes struct {
 	projectRes
 	Fitted app.Fitted `json:"fitted"`
@@ -277,14 +280,13 @@ type fitRes struct {
 
 // projectFit writes the fit from the check the server keeps: the file
 // must still be the one that check read (412 otherwise: check again).
-// Written, the Project is checked again.
 func (s *Server) projectFit(ctx context.Context, r fitReq) (fitRes, error) {
 	if !s.project.mu.TryLock() {
-		return fitRes{}, &app.Error{Class: app.Busy, Err: errors.New("the GitHub Project is being read: try again once it ends")}
+		return fitRes{}, &app.Error{Class: app.Busy, Err: errors.New("the GitHub Project is being written: try again once it ends")}
 	}
 	defer s.project.mu.Unlock()
 	b := board(ctx)
-	last := s.project.last
+	last := s.project.lastOne()
 	if c, err := b.Config.Project(); err != nil || last == nil || last.Project != c.Name() {
 		return fitRes{}, &app.Error{Class: app.Stale, Err: errors.New("no check of this Project to fit the file to: check the Project first")}
 	}
@@ -306,13 +308,10 @@ func (s *Server) projectFit(ctx context.Context, r fitReq) (fitRes, error) {
 	}); err != nil {
 		return fitRes{}, on("answers", err)
 	}
+	s.project.lmu.Lock()
+	s.project.last = nil
+	s.project.lmu.Unlock()
 	h := s.boards.get()
 	defer s.boards.release(h)
-	ctx = context.WithValue(ctx, boardKey{}, h.b)
-	rep, err := h.b.ProjectRun(ctx, ghproject.Both, false, 0)
-	if err != nil {
-		return fitRes{Fitted: f}, err
-	}
-	s.project.last = &rep
-	return fitRes{projectRes: s.projectAnswer(ctx, &rep), Fitted: f}, nil
+	return fitRes{projectRes: s.projectAnswer(context.WithValue(ctx, boardKey{}, h.b), nil), Fitted: f}, nil
 }
