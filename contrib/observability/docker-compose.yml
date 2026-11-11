@@ -1,0 +1,32 @@
+# Traces of a local git-board, to read in Grafana or ask Tempo's API
+# (docs/guide/performance.md, Traces). make obs-up starts it; then serve
+# with OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318. Adapted from
+# co2-calculator's docker-compose.observability.yml: no collector, as
+# git-board sends OTLP/JSON to Tempo itself.
+services:
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "127.0.0.1:4318:4318" # OTLP over HTTP: git-board's spans
+      - "127.0.0.1:3200:3200" # Tempo's API: search, a trace by id
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    environment:
+      # local only: one person reading traces, no login
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/tempo.yaml:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - tempo
+
+volumes:
+  tempo-data:

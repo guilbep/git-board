@@ -1,4 +1,4 @@
-.PHONY: help build test flow test-pg perf perf-web web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test flow test-pg perf perf-web obs-up obs-down web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -165,6 +165,15 @@ EPFL_SKILL ?= ../epfl-design-skill
 web-lint: ## Report the EPFL adherence linter's problems in web/src (needs EPFL_SKILL)
 	@test -f $(EPFL_SKILL)/adherence/.stylelintrc.json || (echo "web-lint: no $(EPFL_SKILL)/adherence/.stylelintrc.json; clone EPFL-ENAC/epfl-design-skill there or set EPFL_SKILL"; exit 1)
 	-npx --yes --package=stylelint@16 --package=postcss-html -- stylelint "web/src/**/*.{css,vue}" --ignore-pattern "web/src/css/tokens/**" --config $(EPFL_SKILL)/adherence/.stylelintrc.json
+
+# Traces (docs/guide/performance.md, Traces): Tempo on :4318 (OTLP) and
+# :3200 (its API), Grafana on :3001. Serve with
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318.
+obs-up: ## Start Tempo and Grafana, to read git-board's traces
+	docker compose -f contrib/observability/docker-compose.yml up -d
+
+obs-down: ## Stop Tempo and Grafana
+	docker compose -f contrib/observability/docker-compose.yml down
 
 # The browser tests: web/e2e/serve.mjs builds the web app and the binary,
 # then serves throwaway boards, git and Markdown (CONTRIBUTING.md, Workflow).

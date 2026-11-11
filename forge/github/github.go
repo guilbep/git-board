@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/forge"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 const (
@@ -131,7 +133,7 @@ func open(ctx context.Context, o Options) (*Forge, error) {
 	}
 	s := &shared{
 		host: host, api: api, graphql: graphql, tokenOf: tokenOf,
-		client: &http.Client{Timeout: time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
+		client: &http.Client{Timeout: time.Minute, Transport: obs.Transport(nil), CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse // a moved issue is gone; and Go would turn a PATCH into a GET
 		}},
 		now: time.Now, sleep: sleep, labels: map[string]bool{},

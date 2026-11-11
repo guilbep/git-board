@@ -27,6 +27,8 @@ import (
 	"github.com/guilbep/git-board/store/md"
 	"github.com/guilbep/git-board/store/pg"
 	"github.com/guilbep/git-board/view"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Board is an open board and its services.
@@ -259,7 +261,9 @@ func gitRun(ctx context.Context, dir string, args ...string) (string, error) {
 }
 
 // gitStdin runs git as gitRun does, stdin given.
-func gitStdin(ctx context.Context, dir string, stdin []byte, args ...string) (string, error) {
+func gitStdin(ctx context.Context, dir string, stdin []byte, args ...string) (_ string, err error) {
+	ctx, end := obs.Start(ctx, "git "+args[0])
+	defer func() { end(err) }()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)

@@ -12,6 +12,8 @@ import (
 
 	"github.com/guilbep/git-board/domain/people"
 	"github.com/guilbep/git-board/kernel"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Service is the issue domain on an open board.
@@ -96,7 +98,9 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 		s.notice("%s %s: %v", b.Kind, b.ID, b.Err)
 	}
 	rd := s.reading(ctx, s.notice, true)
+	_, built := obs.Start(ctx, "issues build", obs.Int("issues", int64(len(rows))))
 	list := make([]Issue, 0, len(rows))
+	defer func() { built(nil) }()
 	for _, l := range rows {
 		is := s.issue(l.ID, &l.Row, dir, rd)
 		is.Version = l.Version

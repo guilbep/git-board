@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/app"
+
+	"github.com/guilbep/git-board/store"
 )
 
 // Server serves one board.
@@ -135,7 +137,18 @@ func (s *Server) withBoard(next http.Handler) http.Handler {
 		}
 		h := s.boards.get()
 		defer s.boards.release(h)
-		ctx := context.WithValue(r.Context(), boardKey{}, h.b)
+		// what the request did: its Server-Timing, a slow request's log; a
+		// test's own counts when it brings them
+		ctx := r.Context()
+		counts := store.CountsOf(ctx)
+		if counts == nil {
+			counts = &store.Counts{}
+			ctx = store.WithCounts(ctx, counts)
+		}
+		if rec, ok := w.(*recorder); ok {
+			rec.counts = counts
+		}
+		ctx = context.WithValue(ctx, boardKey{}, h.b)
 		ctx = h.b.Kernel.Snapshot(ctx)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

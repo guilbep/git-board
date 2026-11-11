@@ -8,6 +8,8 @@ import (
 	"slices"
 
 	"github.com/guilbep/git-board/tools/ghproject"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // The whole sync (git board sync): a git pull from the remote, the forges'
@@ -103,7 +105,9 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 			continue
 		}
 		step(s.name, "running", "")
-		note, err := s.do(ctx)
+		sctx, end := obs.Start(ctx, "sync "+s.name)
+		note, err := s.do(sctx)
+		end(err)
 		if err == nil {
 			step(s.name, "done", note)
 			continue

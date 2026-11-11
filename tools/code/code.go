@@ -21,6 +21,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Repo is a repository's code, at its work tree.
@@ -336,7 +338,9 @@ func (r Repo) ReadFile(ctx context.Context, ref, path string) ([]byte, error) {
 }
 
 // git runs git in the repository.
-func (r Repo) git(ctx context.Context, args ...string) ([]byte, error) {
+func (r Repo) git(ctx context.Context, args ...string) (_ []byte, err error) {
+	ctx, end := obs.Start(ctx, "git "+args[0])
+	defer func() { end(err) }()
 	if n, _ := ctx.Value(countingKey{}).(*atomic.Int64); n != nil {
 		n.Add(1)
 	}

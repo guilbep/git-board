@@ -25,6 +25,8 @@ import (
 
 	"github.com/guilbep/git-board/kernel/pack"
 	"github.com/guilbep/git-board/store"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Store is a git repository's board.
@@ -477,7 +479,9 @@ func (s *Store) updateRef(ctx context.Context, name, next, prev string) error {
 // git runs git on the repository, in the C locale: updateRef reads its
 // refusals by their English text. A cancelled git gets SIGINT, on which it
 // removes its lock files.
-func (s *Store) git(ctx context.Context, stdin []byte, args ...string) ([]byte, error) {
+func (s *Store) git(ctx context.Context, stdin []byte, args ...string) (_ []byte, err error) {
+	ctx, end := obs.Start(ctx, "git "+args[0])
+	defer func() { end(err) }()
 	cmd := s.command(ctx, args...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)

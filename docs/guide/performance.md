@@ -40,6 +40,46 @@ Add `-cpuprofile cpu.out -memprofile mem.out` and read them with `go tool
 pprof -top -cum`. For the command line itself, build the binary outside
 the checkout and time it in the board.
 
+## Traces
+
+git-board records what each request, command and sync does as
+OpenTelemetry spans, and sends them to Grafana Tempo, when
+`OTEL_EXPORTER_OTLP_ENDPOINT` says where (`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`,
+whole, wins; `OTEL_SERVICE_NAME` names the service, `git-board` by
+default). Without it nothing is recorded. The spans are the OTLP/JSON
+format, sent by the `obs` package with no SDK (ADR 0014).
+
+```sh
+make obs-up        # Tempo on :4318 and :3200, Grafana on http://localhost:3001
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 git board serve
+```
+
+| Span | What |
+|---|---|
+| `GET /api/issues/{id}`… | a request, by its route; its status, its size |
+| `git <command>`, `git credential fill` | a git process: the store's, the app's, the code's |
+| `load` | entities read through `git cat-file`, how many |
+| `view rows`, `view heads`, `view write` | the view's queries, rows read |
+| `GET <host>` | a forge's request: method, path, status; its waits (rate limit, pace) as events |
+| `sync run`, `sync <stage>`, `sync issues` | a sync, in the trace of the request that started it |
+| `interaction <name>` | a page's act that took over 200 ms (`web/src/interaction.ts`): its requests are its children |
+| `git board <command>` | a command, its spans under it |
+
+Every reply says what it cost in a `Server-Timing` header (`app;dur`,
+the git processes, loads and view calls, the trace id), so a page's
+devtools show it, and a slow request's log line has its counts and trace.
+
+The questions to ask Tempo, from a terminal or an agent:
+
+```sh
+# every request or interaction over 200 ms, the last hour
+curl -sG localhost:3200/api/search --data-urlencode 'q={resource.service.name="git-board" && duration>200ms}' --data-urlencode limit=50
+# one trace, every span
+curl -s localhost:3200/api/traces/<trace id>
+# the git processes of slow requests
+curl -sG localhost:3200/api/search --data-urlencode 'q={resource.service.name="git-board" && name=~"git .*" && duration>50ms}'
+```
+
 ## Guarded, then timed
 
 git-board holds its speed two ways: guards that count work, in every

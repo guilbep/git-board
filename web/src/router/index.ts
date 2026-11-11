@@ -7,6 +7,7 @@ import {
 } from 'vue-router';
 
 import routes from './routes';
+import { begin, routeName } from '@/interaction';
 
 /*
  * If not building with SSR mode, you can
@@ -31,6 +32,11 @@ export default defineRouter((/* { store, ssrContext } */) => {
     // quasar.conf.js -> build -> vueRouterMode
     // quasar.conf.js -> build -> publicPath
     history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE)
+  });
+
+  // a page opened is an interaction: timed to the paint after its requests
+  Router.beforeEach((to, from) => {
+    if (to.path !== from.path) begin(`open ${routeName(to.path)}`);
   });
 
   return Router;

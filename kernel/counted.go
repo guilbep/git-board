@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/guilbep/git-board/store"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // counted is a View that counts its calls and rows into the Counts of
@@ -23,7 +25,9 @@ func (v counted) Mark(ctx context.Context, kind string) (Mark, error) {
 	return v.View.Mark(ctx, kind)
 }
 
-func (v counted) Heads(ctx context.Context, kind string) ([]Head, error) {
+func (v counted) Heads(ctx context.Context, kind string) (_ []Head, err error) {
+	ctx, end := obs.Start(ctx, "view heads", obs.String("kind", kind))
+	defer func() { end(err) }()
 	hs, err := v.View.Heads(ctx, kind)
 	if c := call(ctx); c != nil {
 		c.RowsRead.Add(int64(len(hs)))
@@ -31,15 +35,20 @@ func (v counted) Heads(ctx context.Context, kind string) ([]Head, error) {
 	return hs, err
 }
 
-func (v counted) Write(ctx context.Context, kind string, w Write) error {
+func (v counted) Write(ctx context.Context, kind string, w Write) (err error) {
+	ctx, end := obs.Start(ctx, "view write", obs.String("kind", kind), obs.Int("rows", int64(len(w.Put)+len(w.Drop))))
+	defer func() { end(err) }()
 	if c := call(ctx); c != nil {
 		c.RowsPut.Add(int64(len(w.Put) + len(w.Drop)))
 	}
 	return v.View.Write(ctx, kind, w)
 }
 
-func (v counted) Rows(ctx context.Context, kind string, q Query) ([]Row, error) {
+func (v counted) Rows(ctx context.Context, kind string, q Query) (_ []Row, err error) {
+	ctx, end := obs.Start(ctx, "view rows", obs.String("kind", kind))
+	defer func() { end(err) }()
 	rs, err := v.View.Rows(ctx, kind, q)
+	obs.Set(ctx, obs.Int("rows", int64(len(rs))))
 	if c := call(ctx); c != nil {
 		c.RowsRead.Add(int64(len(rs)))
 	}

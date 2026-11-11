@@ -12,6 +12,7 @@ export const API_BASE = import.meta.env.DEV ? 'http://localhost:8080' : '';
 export const clientId = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 import { ApiError, errorOf } from './error.ts';
+import { active, begin, finished, onSlow, routeName, started, traceparent } from '../interaction.ts';
 
 export { ApiError, errorOf, isNotFound, isStale, message, type ErrorCode } from './error.ts';
 
@@ -59,16 +60,33 @@ async function fetchRaw(method: string, path: string, c: Call): Promise<Raw> {
   }
   if (c.ifMatch) headers['If-Match'] = `"${c.ifMatch}"`;
   if (c.ifNoneMatch) headers['If-None-Match'] = `"${c.ifNoneMatch}"`;
+  headers['traceparent'] = traceparent(); // the interaction's trace: the server's spans line up under it
   const init: RequestInit = { method, headers };
   if (method !== 'GET' && method !== 'DELETE') init.body = JSON.stringify(c.body ?? {});
   if (c.signal) init.signal = c.signal;
-  const res = await fetch(url(path, c.query), init).catch((e: unknown) => {
-    if (e instanceof DOMException && e.name === 'AbortError') throw e;
-    throw new ApiError('The git-board server is not reachable.', 0, 'unreachable');
-  });
-  const text = res.status === 204 || res.status === 304 ? '' : await res.text();
-  return { status: res.status, ok: res.ok, version: unquote(res.headers.get('ETag')), location: res.headers.get('Location') ?? '', text };
+  started();
+  try {
+    const res = await fetch(url(path, c.query), init).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e;
+      throw new ApiError('The git-board server is not reachable.', 0, 'unreachable');
+    });
+    const text = res.status === 204 || res.status === 304 ? '' : await res.text();
+    return { status: res.status, ok: res.ok, version: unquote(res.headers.get('ETag')), location: res.headers.get('Location') ?? '', text };
+  } finally {
+    finished();
+  }
 }
+
+// a slow interaction, told to the server (POST /api/slow): outside every
+// interaction, and never one itself
+onSlow((i, ms) => {
+  void fetch(url('/api/slow'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Git-Board-Client': clientId },
+    body: JSON.stringify({ name: i.name, ms: Math.round(ms), trace: i.trace, span: i.span }),
+    keepalive: true,
+  }).catch(() => {});
+});
 
 // The GETs on their way, by URL: the parts of a page that ask the same
 // thing at once (a change event heard by five of them) share one request.
@@ -94,7 +112,10 @@ function sharedGet(path: string, c: Call): Promise<Raw> {
 }
 
 export async function call<T>(method: string, path: string, c: Call = {}): Promise<Answer<T>> {
-  if (method !== 'GET') forgetPending();
+  if (method !== 'GET') {
+    forgetPending();
+    if (!active()) begin(`${method} ${routeName(path)}`); // a write is an interaction, unless a named one goes on
+  }
   const r = await (method === 'GET' && !c.signal ? sharedGet(path, c) : fetchRaw(method, path, c));
   const answer = { status: r.status, version: r.version, location: r.location };
   if (r.status === 204 || r.status === 304) return { ...answer, data: undefined as T };

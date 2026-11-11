@@ -6,6 +6,8 @@ import (
 
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/kernel"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Way is a run's way: pull, push, or both (sync).
@@ -52,7 +54,10 @@ func Run(ctx context.Context, b *kernel.Board, way Way, forges []forge.Forge, ms
 		if len(fs) == 0 {
 			continue
 		}
-		if err := m.Run(ctx, b, way, fs); err != nil {
+		mctx, end := obs.Start(ctx, "sync "+m.Kind()+"s", obs.String("way", string(way)), obs.Int("forges", int64(len(fs))))
+		err := m.Run(mctx, b, way, fs)
+		end(err)
+		if err != nil {
 			if m.Kind() == "issue" {
 				return err // the issues' errors are said as v1 says them
 			}

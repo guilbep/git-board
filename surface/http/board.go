@@ -44,6 +44,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "GET /api/people", listPeople)
 	Route(mux, "GET /api/me", me)
 	Route(mux, "GET /api/state", s.state)
+	Route(mux, "POST /api/slow", s.slow)
 	Route(mux, "PUT /api/me", s.setMe)
 
 	Route(mux, "GET /api/inbox", inbox)

@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/forge"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 const (
@@ -105,7 +107,7 @@ func newProject(baseURL, path string) (*project, error) {
 	}
 	root := u.String() + "/api/v4"
 	p := &project{host: u.Host, path: path, scheme: u.Scheme, root: root, api: root + "/projects/" + url.PathEscape(path),
-		http: &http.Client{Timeout: time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
+		http: &http.Client{Timeout: time.Minute, Transport: obs.Transport(nil), CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse // Go would send PRIVATE-TOKEN along, to any host
 		}}, pace: pace, sleep: sleep}
 	p.cred = func(ctx context.Context, a forge.Account) (string, error) {

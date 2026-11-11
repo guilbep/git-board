@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // A route is a method: Route decodes its request, calls it, and encodes
@@ -35,6 +37,7 @@ const maxBody = 16 << 20
 func Route[Req, Res any](mux *http.ServeMux, pattern string, f func(context.Context, Req) (Res, error)) {
 	dec := decoderOf(reflect.TypeFor[Req]())
 	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		obs.Name(r.Context(), pattern)
 		var req Req
 		if err := dec.decode(r, reflect.ValueOf(&req).Elem()); err != nil {
 			writeError(w, r, logOf(r.Context()), err)

@@ -13,12 +13,16 @@ import (
 
 	"github.com/guilbep/git-board/kernel/pack"
 	"github.com/guilbep/git-board/store"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Load reads the refs' entities through `git cat-file`: one process for a
 // few, one per CPU for many, each walking its share. each is called from
 // those processes' goroutines, so it may run on several at once.
-func (s *Store) Load(ctx context.Context, refs []store.Ref, each func(store.Ref, [][]byte, error) error) error {
+func (s *Store) Load(ctx context.Context, refs []store.Ref, each func(store.Ref, [][]byte, error) error) (err error) {
+	ctx, end := obs.Start(ctx, "load", obs.Int("entities", int64(len(refs))))
+	defer func() { end(err) }()
 	if c := store.CountsOf(ctx); c != nil {
 		c.Loads.Add(1)
 		c.Entities.Add(int64(len(refs)))

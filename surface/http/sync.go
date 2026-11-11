@@ -15,6 +15,8 @@ import (
 
 	"github.com/guilbep/git-board/app"
 	"github.com/guilbep/git-board/forge"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Sync: the forges' runs, in the background, and the git remotes, at
@@ -229,12 +231,15 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 
 	h := s.boards.get()
 	by := clientOf(ctx)
+	asked := ctx // its trace: the run's spans are the request's, after it answered
 	go func() {
 		defer s.boards.release(h)
 		ctx := context.WithValue(s.base, logKey{}, s.log)
 		ctx = context.WithValue(ctx, clientKey{}, by)
+		ctx, end := obs.Start(obs.Carry(ctx, asked), "sync run", obs.String("scope", run.Scope), obs.String("way", run.Way), obs.Bool("dry_run", run.DryRun))
 		s.log.Info("sync started", "run", run.ID, "scope", run.Scope, "way", run.Way, "dry_run", run.DryRun)
 		rep, err := s.runSync(ctx, h.b, run, r)
+		end(err)
 		s.runMu.Lock()
 		run.EndedAt, run.State = time.Now(), "done"
 		if rep != nil {
