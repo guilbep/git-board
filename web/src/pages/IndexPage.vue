@@ -100,10 +100,6 @@
         </div>
       </div>
 
-      <!-- What differs from the saved view (ViewBar): saved into
-           .git-board.toml for everyone, or dropped. -->
-      <ViewBar :draft="draft" :view="view" :active-view="activeView" :view-layout="viewLayout" @saved="onViewSaved" @discard="resetAll" />
-
       <div v-if="buckets" class="status" role="status">
         <span><b>{{ count }}</b>{{ count === total ? '' : ` of ${total}` }} {{ total === 1 ? 'issue' : 'issues' }}</span>
         <template v-if="changed.size || onlyChanged">
@@ -113,6 +109,9 @@
           </button>
           <button v-if="changed.size" type="button" class="changed-seen" @click="markAllSeen">Mark all seen</button>
         </template>
+        <!-- What differs from the saved view (ViewBar), at the row's end:
+             saved into .git-board.toml for everyone, or dropped -->
+        <ViewBar :draft="draft" :view="view" :active-view="activeView" :view-layout="viewLayout" @saved="onViewSaved" @discard="resetAll" />
       </div>
       </div>
 
