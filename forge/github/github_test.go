@@ -498,3 +498,42 @@ func TestStringHidesTheToken(t *testing.T) {
 		t.Errorf("printed %q", got)
 	}
 }
+
+// A GET asked again goes If-None-Match, with the ETag of its last answer;
+// GitHub's 304 (no rate limit counted) answers what that answer said.
+func TestConditionalReads(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	var mu sync.Mutex
+	var sent []string // each GET's If-None-Match
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/repos/o/r/labels" {
+			return
+		}
+		mu.Lock()
+		sent = append(sent, r.Header.Get("If-None-Match"))
+		mu.Unlock()
+		if r.Header.Get("If-None-Match") == `"v1"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("ETag", `"v1"`)
+		_ = json.NewEncoder(w).Encode([]map[string]any{{"id": 1, "name": "bug", "color": "d73a4a"}})
+	}))
+	t.Cleanup(srv.Close)
+	a, err := New(ctx, Options{Project: "o/r", API: srv.URL, Token: func(context.Context, forge.Account) (string, error) { return "t", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		ls, err := a.Labels(ctx)
+		if err != nil || len(ls) != 1 || ls[0].Name != "bug" {
+			t.Fatalf("labels %+v, %v", ls, err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(sent) != 2 || sent[0] != "" || sent[1] != `"v1"` {
+		t.Errorf("If-None-Match sent: %q, want none then \"v1\"", sent)
+	}
+}
