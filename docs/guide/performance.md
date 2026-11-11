@@ -92,11 +92,14 @@ writes `perf-results/report.md`. It takes about seven minutes.
 |---|---|
 | `surface/cli` | `Ls`, `LsFields`, `LsText`, `LsFirst` (no view), `LsTextFirst` (no index), `Show`, `Comment`, `Set`, `New` |
 | `surface/http` | `ListOpen`, `ListColumn`, `ListAll`, `Facets`, `Thread`, `EventsFanOut` (a comment told to 50 pages), `WorkTeam`, `WorkTeamPage`, `WorkTeamFirst` |
+| `web` (`make perf-web`) | `BoardLCP`, `BoardFCP`, `BoardTBT`, `IssueLCP`, `IssueFCP`, `IssueTBT`: Lighthouse's mobile run on the 5k board's page and an issue's, `PERF_WEB_RUNS` (3) each |
 
 The `perf` workflow runs it nightly and on a pull request labelled
 `perf`, and keeps `perf-results/` as an artifact; not on every push,
-where a shared runner's noise would read as a regression. The web app's
-first paint is measured by hand (web.md), not here yet.
+where a shared runner's noise would read as a regression. What a page
+asks for, counted rather than timed, is held on every push by
+`web/e2e/budget.spec.ts`: each page's API requests, none asked twice,
+its files gzipped.
 
 **A budget** moves down when the code gets faster. It moves up only with
 the reason in its line (a feature that must cost more, a target found

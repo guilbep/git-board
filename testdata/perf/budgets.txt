@@ -49,3 +49,14 @@
 5k/http/WorkTeam          60ms    the Work page, unpaged
 5k/http/WorkTeamPage      60ms    the Work page's first page
 5k/http/WorkTeamFirst     1s      the Work page's first request
+
+# The pages on 5,000 issues (make perf-web): Lighthouse's mobile run, a
+# slow 4G and a 4x slower CPU simulated, so a page's requests in a row
+# cost ~150 ms each. The targets are Google's "good": LCP 2.5 s, FCP
+# 1.8 s, TBT 200 ms. A desktop run is 0.8 s LCP.
+5k/web/BoardLCP           3.2s    the board's page, its first issue's title painted (target 2.5 s; 2.8 s on a laptop, 2026-11-11)
+5k/web/BoardFCP           2.3s    the board's first paint (target 1.8 s: its CSS blocks it, 48 KB)
+5k/web/BoardTBT           200ms   the board's main thread blocked
+5k/web/IssueLCP           3.5s    an issue's page, its panel over the board (target 2.5 s; 3.0 s on a laptop)
+5k/web/IssueFCP           2.3s    an issue's first paint (target 1.8 s)
+5k/web/IssueTBT           200ms   an issue's main thread blocked

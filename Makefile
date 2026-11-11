@@ -1,4 +1,4 @@
-.PHONY: help build test flow test-pg perf web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test flow test-pg perf perf-web web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -107,7 +107,18 @@ perf: ## Time the CLI and the server on 5k and 20k issues against testdata/perf/
 		GIT_BOARD_BENCH_REPO="$$w/board" go test ./surface/cli ./surface/http -run - -bench . -benchtime 5x -count $(PERF_COUNT) -timeout 60m | tee "$(PERF_OUT)/bench-$$label.txt"; \
 		rm -rf "$$w"; args="$$args $$label=$(PERF_OUT)/bench-$$label.txt"; \
 	done; \
-	go run ./tools/perfcheck -budgets testdata/perf/budgets.txt -tolerance $(PERF_TOLERANCE) -report $(PERF_OUT)/report.md $$args
+	$(MAKE) --no-print-directory perf-web; \
+	go run ./tools/perfcheck -budgets testdata/perf/budgets.txt -tolerance $(PERF_TOLERANCE) -report $(PERF_OUT)/report.md $$args 5k=$(PERF_OUT)/web-5k.txt
+
+# The pages' timings, run by make perf: Lighthouse's mobile run on the 5k
+# board's page and an issue's (web/perf/lighthouse.mjs), PERF_WEB_RUNS
+# each, as benchmark lines in $(PERF_OUT)/web-5k.txt. Needs a Chrome.
+PERF_WEB_RUNS ?= 3
+perf-web: web-build ## Time the board's and an issue's page on the 5k board (Lighthouse, mobile)
+	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; board="$(PERF_CACHE)/boardgen-n5000-seed$(PERF_SEED)"; \
+	test -d "$$board" || go run ./cmd/boardgen -n 5000 -seed $(PERF_SEED) "$$board"; \
+	w=$$(mktemp -d); trap 'rm -rf "$$w"' EXIT; cp -r "$$board" "$$w/board"; go build -o "$$w/git-board" ./cmd/git-board; \
+	cd web && node perf/lighthouse.mjs "$$w/git-board" "$$w/board" $(PERF_WEB_RUNS) | tee "$(abspath $(PERF_OUT))/web-5k.txt"
 
 # Records the golden outputs again (docs/rewrite/compat.md): make
 # compat's on the golden boards, and the cross tests' transcripts in

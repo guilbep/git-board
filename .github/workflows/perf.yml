@@ -33,6 +33,14 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # the pages' timings (make perf-web): the web app built, and
+      # Lighthouse on the runner's Chrome
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Git identity for the boards
         run: |
           git config --global user.name ci
