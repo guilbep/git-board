@@ -72,23 +72,45 @@ Validation, SPECS, TASK, DATA and TEXT.
 
 ## Part 2: the first sync, chosen
 
-Scoped here, built after Part 1. **(user)** for the three needs, **(call)**
-for the shape.
+Built after Part 1. **(user)** for the three needs, **(call)** for the
+shape.
 
 - **One page.** The GitHub Project tab and the Sync tab are one page,
   Sync. Its Check reads the forges and the Project together, and shows
   the forges' changes, the Project's changes and the proposals in one
-  report. Today the two checks are on two tabs, and a whole sync has no
-  dry run (`surface/http/sync.go:142`).
+  report.
 - **Choose what the sync does.** The check's report counts what each
   part does: issues to pull that changed, new issues to pull, issues to
   create on the forge, changes to send. The person picks the parts the
   sync runs: pull the changes, pull the new issues, push nothing, or
   all. Each count opens its list of issues, so the choice is made on
-  what will happen. A part left out is left for the next sync.
+  what happens. A part left out is left for the next sync.
 - **Stop.** A Project check and a Project sync can be stopped, as a
-  forge sync can (`DELETE /api/sync`). Today `projectAction` holds its
-  lock to the end (`surface/http/project.go:215`).
+  forge sync can (`DELETE /api/sync`).
+
+### Decisions
+
+| Topic | Taken |
+| --- | --- |
+| The parts | `pull-changes`, `pull-new`, `create` and `send`. The sync engine skips a part left out: its issues are not written and not journaled. The run records no run, so the next sync lists them again. **(call)** |
+| A creation | What a sync sends after it creates an issue (its labels, its comments) is part of `create`. It counts there alone. When `send` is left out, it still goes with the creation. **(call)** |
+| The Project's side | The Project reads its labels with a pull part. It writes to the Project with `create` or `send`. Without `create` and `send`, the sync writes nothing to the Project. The git pull and push are not parts: they always run. **(call)** |
+| Command line | `git board sync --only pull-changes,pull-new`. One list flag, and no `--no-push`, because "push" already names the git push. `sync --check` ends with the count of each part. **(call)** |
+| The web page | Check is the whole sync's dry run. Once it ends, it shows a box for each part with its count, and the issues under it. Sync runs the parts ticked. The GitHub Project is a section of the Sync page, with the fit and the conflicts. **(call)** |
+| The Project's routes | The Project's own `check` and `apply` routes go. The whole sync checks and runs the Project, so Stop stops it. A resolve and a fit read the last check, and check nothing again. After a fit writes, the page asks for a new check. **(call)** |
+
+### What the code forced
+
+- **A new issue in a check has no number here.** The check runs on a
+  copy of the board, so its new issues are on the copy alone. Each
+  issue of a part is named by its forge number and title.
+- **A creation that waits for consent has no list.** On a first sync
+  without "Create issues", the forge holds the creations and sends one
+  count. The page shows that count under the parts, with no issues.
+- **The first check of a board with no issue matches nothing on the
+  Project.** The forges' check runs on a copy, and the Project's check
+  reads the board. Pull the new issues first, then check again: the
+  Project's changes show then.
 
 ## Not in this PRD
 
@@ -100,9 +122,14 @@ for the shape.
 - **A Category column with another name.** `Category` is a fixed name
   (`tools/ghproject/plan.go:534`).
 
-## The test
+## The tests
 
-One test, the co2 case end to end, through `projectfake`. The Project
+Part 2 has one test, `TestTheChosenSync`. It checks a board through the
+forge fake and `projectfake`, then syncs the new issues alone. A second
+check still counts the other parts. A Project check and a Project sync
+then stop, and nothing is written to the Project.
+
+Part 1 has one test, the co2 case end to end, through `projectfake`. The Project
 has the nine statuses, the six Categories and three dated iterations.
 The file is the default file. The test checks the twelve proposals, then
 applies them with the six questions answered, then asserts four things:

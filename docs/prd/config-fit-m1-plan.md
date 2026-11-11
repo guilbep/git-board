@@ -1,7 +1,8 @@
-# Onboard an existing GitHub project: plan, Part 1
+# Onboard an existing GitHub project: plan
 
-**Spec:** docs/prd/config-fit.md, Part 1. One branch, `feat/config-fit`,
-a commit per task. One test, `TestTheCo2Fit`. Part 2 is not built here.
+**Spec:** docs/prd/config-fit.md. One branch, `feat/config-fit`, a
+commit per task. Part 1 has one test, `TestTheCo2Fit`. Part 2 has one
+test, `TestTheChosenSync`, and its own section at the end.
 
 **Status:** built. Each task says what it changed.
 
@@ -184,9 +185,48 @@ The PRD now says them.
 
 - **The fit writes what lint flags.** A Project name in `[fields.<f>]
   project` is a `project-key` finding (`app/lint.go:348`).
-- **A Project check has no stop.** The fit's route waits on the same
-  lock. Part 2 covers the stop.
 - **An array over several lines.** The fit refuses it and writes
   nothing. The person adds the value by hand.
 - **A new kind's label.** `--add-kind` writes the kind. Its label on the
   forge is `lint --create-labels --apply`'s to make.
+
+## Part 2: the first sync, chosen
+
+**Status:** built.
+
+- **The engine.** `issuesync.Options.Only` holds the parts a run writes.
+  A part left out skips its issues. The run records no run, so the next
+  one lists them again. `Did` names each issue by its forge number and
+  title.
+- **The app.** `app.OpenForge` opens a forge, and a test gives it a
+  fake. `ForgeRun.Only`, `Whole.Only` and `app.ParseParts` carry the
+  parts. `Whole.Project` hears the Project's report. A Project apply
+  stops between two issues once its context ends.
+- **The command line.** `git board sync --only <parts>`. `sync --check`
+  ends with the count of each part.
+- **The API.** `POST /api/sync` takes `dry_run` with `scope: all`, and
+  `only`. `GET /api/sync` answers each part's issues in `run.parts`. The
+  Project's `check` and `apply` routes go. The resolve route stays. A
+  resolve and a fit check nothing again.
+- **The web.** `SyncSettings.vue` holds the whole page. `ProjectPanel.vue`
+  replaces `ProjectSettings.vue` as its section. `SyncParts.vue` shows
+  the parts with their issues. The `project` tab is gone, and its old
+  links open the Sync page.
+
+### The test
+
+`TestTheChosenSync`, in `surface/http/chosen_test.go`:
+
+1. A whole check counts 1 change to pull, 1 new issue, 2 creations and
+   1 change to send. It reads the Project, and writes nothing.
+2. A sync with `only: [pull-new]` pulls the new issue. It writes nothing
+   to the forge or to the Project.
+3. A second check still counts the change to pull, the creations and
+   the change to send.
+4. A Project check and a Project sync each stop on `DELETE /api/sync`.
+   Nothing is written to the Project.
+
+### Not exercised
+
+- The web page never ran in a browser. `web/e2e/project.spec.ts` was
+  changed for the new page, and `make web-e2e` was not run.
