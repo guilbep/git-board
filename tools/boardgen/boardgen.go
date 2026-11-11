@@ -9,6 +9,7 @@ package boardgen
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/guilbep/git-board/kernel"
 	"github.com/guilbep/git-board/kernel/pack"
-	bsync "github.com/guilbep/git-board/sync"
 )
 
 // Options size the board.
@@ -183,7 +183,10 @@ func Git(ctx context.Context, dir string, o Options) (*Board, error) {
 				op("seen", me, map[string]string{"issue": string(id), "field": "title", "value": seen[i][0]}),
 				op("seen", me, map[string]string{"issue": string(id), "field": "status", "value": seen[i][1]}))
 		}
-		if _, err := entity("sync", bsync.StateID(SyncedKey), [][]kernel.Op{ops}); err != nil {
+		// sync.StateID's id: the key's SHA-1, in hex (boardgen imports the
+		// kernel alone, layers_test.go)
+		id := kernel.ID(fmt.Sprintf("%x", sha1.Sum([]byte(SyncedKey))))
+		if _, err := entity("sync", id, [][]kernel.Op{ops}); err != nil {
 			return nil, err
 		}
 	}
