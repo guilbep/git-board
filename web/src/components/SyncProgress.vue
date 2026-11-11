@@ -14,7 +14,7 @@ import type { SyncRun } from '@/api';
 import { stepWords } from '@/ways';
 
 const props = defineProps<{ run: SyncRun }>();
-const last = computed(() => props.run.steps.at(-1));
+const last = computed(() => props.run.current ?? props.run.steps.at(-1));
 </script>
 
 <style scoped>

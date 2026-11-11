@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -198,5 +200,35 @@ func TestState(t *testing.T) {
 		if st := want[syncRes](t, a.do("GET", "/api/sync", nil), 200); st.Run != nil && st.Run.State != "running" {
 			break
 		}
+	}
+}
+
+// A run's writes and warnings are tallied, not kept as steps: a check of
+// 1,000 issues on a forge never synced is a few lines, each with a count
+// and its first examples. A warning's ids and quoted values are masked,
+// so one reason is one tally.
+func TestRunTallies(t *testing.T) {
+	t.Parallel()
+	s := &Server{log: slog.New(slog.DiscardHandler)}
+	run := &Run{ID: "1", Steps: []Step{}, Tallies: []Tally{}}
+	for i := range 1000 {
+		id := fmt.Sprintf("%040x", i)
+		s.step(t.Context(), run, Step{Forge: "gitlab", Way: "push", What: "comment", Issue: id, Line: "create-comment"})
+		s.step(t.Context(), run, Step{Forge: "gitlab", What: "warning", Line: fmt.Sprintf(`gitlab.example.org/1 refused assignees "+user%d" of issue %s: no account there`, i, id)})
+	}
+	s.step(t.Context(), run, Step{Forge: "gitlab", Way: "push", What: "held", Line: "the first sync with this forge"})
+	if len(run.Steps) != 1 {
+		t.Errorf("%d steps kept, want the hold alone", len(run.Steps))
+	}
+	if len(run.Tallies) != 2 {
+		t.Fatalf("tallies %+v, want the comments and one warning", run.Tallies)
+	}
+	for _, tl := range run.Tallies {
+		if tl.N != 1000 || len(tl.Examples) != maxExamples {
+			t.Errorf("tally %s: %d, %d examples", tl.What, tl.N, len(tl.Examples))
+		}
+	}
+	if w := run.Tallies[1].What; w != `warning: gitlab.example.org/1 refused assignees "…" of issue …: no account there` {
+		t.Errorf("warning tally %q", w)
 	}
 }

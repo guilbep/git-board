@@ -362,17 +362,23 @@ run (31) started while another process holds the lock answers 409.
 is `forges` (`forge sync`), or `all` (fetch, the forges, push: `sync`).
 `way` is `sync` (or `both`, the forge table's word), `pull` or `push` (`forge pull|push|sync`); `forges`
 limits it to those named; `remote` is the whole sync's git remote
-(`origin`); `dry_run` says what a forge run would do (`--check`); a
+(`origin`); `dry_run` says what a forge run would do (`--check`),
+`allow_create` included, as the run would; a
 whole sync goes both ways and has none. One issue's run (v1's
 `/api/issues/{id}/sync`, an `issue` here) waits for the sync engine to
 take one issue (*later*). A run while another runs answers 409 `busy`.
 A run is `{id, scope, way, dry_run, started_at, ended_at, state, steps,
-report, error}`: `state` is `running`, `done` or `failed`; a step is a
-whole sync's (`{name, state, line}`: `pull`, `forges`, `project`,
-`push`) or a forge's event (`{forge, way, what, issue, line}`, `what`
-one of `created`, `updated`, `linked`, `posted`, `pushed`, `warning`,
-`waiting`, `left`, `held`, `note`); `report` counts what the forges'
-run did, `{created, updated, unchanged, posted, pushed}`.
+tallies, report, error}`: `state` is `running`, `done` or `failed`; a
+step is a whole sync's (`{name, state, line}`: `pull`, `forges`,
+`project`, `push`) or a forge's event a person reads whole (`{forge,
+way, what, line}`, `what` one of `waiting`, `left`, `held`, `note`).
+What a run did to the issues is tallied, never a step each: a tally is
+`{forge, way, what, n, examples}`, `what` an issue's change (`created`,
+`updated`, `linked`, `posted`, `pushed`, `restored`, `release`), a
+write's operation (`create-comment`, `set-status`, `change-labels`…),
+or `warning: <reason>`, its ids and quoted values masked, with its first
+5 steps as `examples`. `report` counts what the forges' run did,
+`{created, updated, unchanged, posted, pushed}`.
 
 **Remotes (32)** run at once. A fetch answers what a pull would
 receive and a push would send, of `issues` and `people`
@@ -604,7 +610,7 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 | `me` | who writes, or `board.avatars`, changed | |
 | `inbox` | what you read or follow | |
 | `sync` | a run started or ended; a remote moved | the run |
-| `progress` | a run's step, in `step` | the run; `issue` when it is one issue's |
+| `progress` | a run's step, in `step`; at most every 250 ms, its `tallies` so far | the run; `issue` when it is one issue's |
 | `release` | a release job's step, its end, or a write on a record | the tag, when known |
 
 `by` is the `X-Git-Board-Client` of the request that wrote it, when one

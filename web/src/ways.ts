@@ -1,6 +1,6 @@
 // Sync's words: a run (POST /api/sync, its steps as progress events), a
 // remote's fetch, what each moved. Pure: node runs ways.test.ts on it.
-import type { Ahead, RemoteResult, SyncRun, SyncStep } from './api/types.ts';
+import type { Ahead, RemoteResult, SyncRun, SyncStep, SyncTally } from './api/types.ts';
 
 const n = (v: number) => v.toLocaleString();
 export const plural = (v: number, one: string, many = `${one}s`) => `${n(v)} ${v === 1 ? one : many}`;
@@ -49,4 +49,64 @@ export function runWords(run: SyncRun | null): string {
   const what = run.scope === 'all' ? 'synced' : run.dry_run ? 'checked the forges' : 'synced the forges';
   const counts = reportWords(run.report);
   return counts ? `${what}: ${counts}` : what;
+}
+
+// what each tally counts, in words: a write by its operation, an issue's
+// change by what happened to it
+const tallyNames: Record<string, [string, string]> = {
+  created: ['new issue to bring in', 'new issues to bring in'],
+  updated: ['issue with changes to take', 'issues with changes to take'],
+  linked: ['issue linked by its marker', 'issues linked by their marker'],
+  posted: ['issue created there', 'issues created there'],
+  pushed: ['issue sent its changes', 'issues sent their changes'],
+  restored: ['value put back on the backup', 'values put back on the backup'],
+  release: ['release published', 'releases published'],
+  'create-comment': ['comment posted', 'comments posted'],
+  'edit-comment': ['comment edited', 'comments edited'],
+  'set-title': ['title changed', 'titles changed'],
+  'set-body': ['description changed', 'descriptions changed'],
+  'set-status': ['issue opened or closed', 'issues opened or closed'],
+  'change-labels': ['label change', 'label changes'],
+  'set-assignees': ['assignee change', 'assignee changes'],
+};
+
+// a tally as a line: "12 comments posted", "212 times: refused assignees
+// "…" of issue …: no account there"
+export function tallyWords(t: SyncTally): string {
+  if (t.what.startsWith('warning: ')) return `${plural(t.n, 'time')}: ${t.what.slice('warning: '.length)}`;
+  const [one, many] = tallyNames[t.what] ?? [t.what, t.what];
+  return `${n(t.n)} ${t.n === 1 ? one : many}`;
+}
+
+export interface TallyGroup {
+  forge: string;
+  ways: { way: string; tallies: SyncTally[] }[];
+  warnings: SyncTally[];
+}
+
+// a run's tallies by forge, then by way (pull before push), each forge's
+// warnings apart, the most frequent first
+export function tallyGroups(ts: SyncTally[]): TallyGroup[] {
+  const groups: TallyGroup[] = [];
+  const byN = (a: SyncTally, b: SyncTally) => b.n - a.n;
+  for (const t of ts) {
+    const forge = t.forge || '';
+    let g = groups.find((x) => x.forge === forge);
+    if (!g) groups.push((g = { forge, ways: [], warnings: [] }));
+    if (t.what.startsWith('warning: ')) {
+      g.warnings.push(t);
+      continue;
+    }
+    const way = t.way || '';
+    let w = g.ways.find((x) => x.way === way);
+    if (!w) g.ways.push((w = { way, tallies: [] }));
+    w.tallies.push(t);
+  }
+  const order = (way: string) => ['pull', 'push'].indexOf(way) + 1 || 3;
+  for (const g of groups) {
+    g.ways.sort((a, b) => order(a.way) - order(b.way));
+    for (const w of g.ways) w.tallies.sort(byN);
+    g.warnings.sort(byN);
+  }
+  return groups;
 }

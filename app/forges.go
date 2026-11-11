@@ -59,7 +59,10 @@ func baseURL(f forge.Table) string {
 
 // Forges are the forges a sync runs with: the settings' [forges.<name>]
 // tables, or with none, those found in origin's URLs and push URLs, as
-// written and as git resolves them (insteadOf). Origin alone: a fork's
+// written and as git resolves them (insteadOf). A forge origin fetches
+// from syncs; one only a push URL names is listed with its sync off, as
+// the file alone says what syncs (ADR 0008), and a push mirror is no
+// place this team keeps its issues until it says so. Origin alone: a fork's
 // upstream isn't where this team's issues go. Without origin, none. A
 // local path is no forge, and isn't told; say hears each other URL that
 // names none, each forge found, and each left out, as v1 says them.
@@ -138,6 +141,7 @@ func (b *Board) foundForges(ctx context.Context, skipped func(string)) ([]forge.
 		}
 		return us
 	}
+	fetch := append(urls("remote", "get-url", "--all", NumbersRemote), urls("config", "--get-all", "remote."+NumbersRemote+".url")...)
 	resolved := append(urls("remote", "get-url", "--all", NumbersRemote), urls("remote", "get-url", "--push", "--all", NumbersRemote)...)
 	written := append(urls("config", "--get-all", "remote."+NumbersRemote+".url"), urls("config", "--get-all", "remote."+NumbersRemote+".pushurl")...)
 	_, skips := forge.Discover(resolved) // an alias as written isn't told: its resolved URL is
@@ -145,7 +149,16 @@ func (b *Board) foundForges(ctx context.Context, skipped func(string)) ([]forge.
 	for _, s := range skips {
 		skipped(s)
 	}
+	fetched, _ := forge.Discover(fetch)
+	for i, f := range found {
+		found[i].Sync = slices.ContainsFunc(fetched, func(g forge.Table) bool { return sameProject(f, g) })
+	}
 	return found, nil
+}
+
+// sameProject says two found forges name one project, a URL's case aside.
+func sameProject(a, b forge.Table) bool {
+	return a.Kind == b.Kind && strings.EqualFold(a.Host, b.Host) && strings.EqualFold(a.Project, b.Project)
 }
 
 // forgeCache keeps, for a board's life, what finding the forges asked
@@ -518,7 +531,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 				why = fmt.Sprintf("%d or more in one run", MaxCreate)
 			}
 			see(SyncEvent{Forge: names[key], Way: "push", What: "held", Ops: n, Line: why})
-			return run.DryRun // counted as with consent, which the run asks for
+			return false // a check holds them as a sync would: it says what Sync does
 		},
 	}
 	ctx = forge.WithWaits(ctx, func(w forge.Wait) {

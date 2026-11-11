@@ -235,6 +235,17 @@ export interface SyncStep {
   total?: number;
 }
 
+// how many of one thing a run did on one forge, one way: a write
+// (create-comment…), an issue pulled or pushed, or a warning of one
+// reason; its first few as examples
+export interface SyncTally {
+  forge?: string;
+  way?: string;
+  what: string;
+  n: number;
+  examples: SyncStep[];
+}
+
 export interface SyncRun {
   id: string;
   scope: 'forges' | 'all';
@@ -243,7 +254,9 @@ export interface SyncRun {
   started_at: string;
   ended_at?: string;
   state: 'running' | 'done' | 'failed';
-  steps: SyncStep[];
+  steps: SyncStep[]; // what a person reads whole: notes, holds, waits, a whole sync's steps
+  tallies: SyncTally[];
+  current?: SyncStep; // the page's own: the last count heard
   report?: { created: number; updated: number; unchanged: number; posted: number; pushed: number; restored?: number };
   error?: string;
 }
@@ -285,5 +298,6 @@ export interface ChangeEvent {
   version?: string;
   by?: string;
   step?: SyncStep;
+  tallies?: SyncTally[]; // progress: the run's tallies so far
   issue?: string;
 }

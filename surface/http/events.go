@@ -23,13 +23,14 @@ import (
 
 // Event is one change.
 type Event struct {
-	Kind    string `json:"kind"`
-	ID      string `json:"id,omitempty"`
-	Version string `json:"version,omitempty"`
-	By      string `json:"by,omitempty"`
-	Issue   string `json:"issue,omitempty"` // progress: the issue a step is about
-	Step    *Step  `json:"step,omitempty"`  // progress
-	Error   string `json:"error,omitempty"` // config-error: why the file edited by hand does not open
+	Kind    string  `json:"kind"`
+	ID      string  `json:"id,omitempty"`
+	Version string  `json:"version,omitempty"`
+	By      string  `json:"by,omitempty"`
+	Issue   string  `json:"issue,omitempty"`   // progress: the issue a step is about
+	Step    *Step   `json:"step,omitempty"`    // progress
+	Tallies []Tally `json:"tallies,omitempty"` // progress: the run's tallies so far
+	Error   string  `json:"error,omitempty"`   // config-error: why the file edited by hand does not open
 }
 
 // subBuffer is how many events a page may fall behind before it is
