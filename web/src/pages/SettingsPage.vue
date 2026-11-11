@@ -67,6 +67,13 @@
             </label>
           </div>
           <p class="gb-hint">Kept in this browser. Its edge also drags to any width, and <kbd>f</kbd> switches to expanded and back.</p>
+          <p id="set-fonts" class="set-sub">Fonts</p>
+          <div class="gb-opts" role="radiogroup" aria-labelledby="set-fonts">
+            <label v-for="o in fontOptions" :key="o.value" class="gb-opt" :class="{ on: fontsPref === o.value }">
+              <input v-model="fontsPref" type="radio" name="fonts" :value="o.value" />
+              <span><b>{{ o.label }}</b><br /><span class="gb-hint">{{ o.hint }}</span></span>
+            </label>
+          </div>
         </section>
 
         <section aria-labelledby="set-tips">
@@ -121,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { themePref } from '@/theme';
+import { fontsPref, themePref } from '@/theme';
 import { panelMode, panelSizes, panelWidth, setPanelSize, sizeOf } from '@/panelsize';
 import { onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -185,6 +192,10 @@ const themeOptions = [
   { value: 'system', label: 'System', hint: 'as the computer is set' },
   { value: 'light', label: 'Light', hint: 'always' },
   { value: 'dark', label: 'Dark', hint: 'always' },
+] as const;
+const fontOptions = [
+  { value: 'system', label: 'System', hint: 'the computer’s: nothing to load' },
+  { value: 'epfl', label: 'EPFL', hint: 'Suisse Int’l, on the EPFL network only (elsewhere, Arial)' },
 ] as const;
 // where pictures come from (docs/prd/avatars.md): each says what the browser asks, and whom
 const avatarOptions = [

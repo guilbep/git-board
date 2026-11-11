@@ -11,6 +11,13 @@
    elements before it went (ADR 0023); the EPFL tokens set the rest (the
    body's font, the headings' sizes). */
 html, body { margin: 0; box-sizing: border-box; }
+
+/* The fonts: the system's by default; EPFL's Suisse Int'l when chosen in
+   Settings › You › Appearance (theme.ts, public/theme.js). Its @font-face
+   (epfl-design/tokens/fonts.css) loads only when text uses it: from
+   enac-it-fonts.epfl.ch, which answers on the EPFL network alone. */
+:root { --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+html[data-fonts="epfl"] { --font-sans: "Suisse Int'l", Arial, "Helvetica Neue", Helvetica, sans-serif; }
 body { min-width: 100px; min-height: 100%; -webkit-text-size-adjust: 100%; }
 h1 { letter-spacing: -.01562em; }
 h2 { letter-spacing: -.00833em; }

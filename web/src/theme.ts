@@ -32,3 +32,33 @@ watch(themePref, (v) => {
 });
 media.addEventListener('change', apply);
 apply();
+
+// The fonts chosen in Settings: the system's, or EPFL's (Suisse Int'l,
+// from enac-it-fonts.epfl.ch, which answers on the EPFL network alone).
+// <html data-fonts=epfl> sets them (css/app.css); none asks that host.
+export type FontsPref = 'system' | 'epfl';
+
+function readFonts(): FontsPref {
+  try {
+    return localStorage.getItem('gb-fonts') === 'epfl' ? 'epfl' : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+export const fontsPref = ref<FontsPref>(readFonts());
+
+function applyFonts() {
+  if (fontsPref.value === 'epfl') document.documentElement.dataset.fonts = 'epfl';
+  else delete document.documentElement.dataset.fonts;
+}
+
+watch(fontsPref, (v) => {
+  try {
+    localStorage.setItem('gb-fonts', v);
+  } catch {
+    // private window: lasts until reload
+  }
+  applyFonts();
+});
+applyFonts();

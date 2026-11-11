@@ -27,10 +27,14 @@ downloads never see submodule content. To update, copy those paths again from a 
 commit above.
 
 Rules worth knowing before touching a style: tokens only (`var(--…)`, no
-raw hex, no `px`, use `rem`), Suisse Int'l only (it loads from
+raw hex, no `px`, use `rem`), the font through `--font-sans` only (the
+system's by default; Suisse Int'l when a person chooses EPFL in Settings ›
+You › Appearance, kept in their browser: it loads from
 `enac-it-fonts.epfl.ch`, for `*.epfl.ch` and, on the EPFL network or VPN,
-`localhost`; elsewhere text falls back to Arial, which is expected; never
-add font files), sentence case, no emoji, no gradients or card shadows,
+`localhost`, and elsewhere text falls back to Arial; `css/app.css` sets
+both, `web/epfl-design` stays as vendored; never add font files and never
+preconnect to that host: by default the page asks nothing of it,
+`e2e/fonts.spec.ts`), sentence case, no emoji, no gradients or card shadows,
 2px radii, hover changes color or border only, 2px focus outline with an
 offset. The skill's adherence linter checks the CSS:
 
