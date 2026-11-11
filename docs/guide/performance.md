@@ -83,6 +83,18 @@ curl -s localhost:3200/api/traces/<trace id>
 curl -sG localhost:3200/api/search --data-urlencode 'q={resource.service.name="git-board" && name=~"git .*" && duration>50ms}'
 ```
 
+## Tried, and left
+
+Measured with Lighthouse's mobile run on the 5,000-issue board, each
+worse, and reverted; not to try again without a new reason:
+
+- fetching `/api/config` beside the board page's code: largest paint
+  2.79 s to 3.08 s (3 runs);
+- preloading the opened page's chunks from `index.html` (a generated
+  `route-preload.js`): the board's largest paint 2.47 s to 2.68 s, an
+  issue's 2.76 s to 2.91 s (3 runs, 2026-11-11). On slow 4G they take
+  the bandwidth the first paint needs.
+
 ## Guarded, then timed
 
 git-board holds its speed two ways: guards that count work, in every
