@@ -99,13 +99,20 @@ func TestStateOfAForge(t *testing.T) { // swaps FindToken: serial
 		t.Errorf("next %q", ids)
 	}
 
-	// a token not found is asked each time: one added shows at once
+	// a token not found is remembered a moment: each state read asked
+	// git's credential helper again
 	n := asked
 	state()
-	if asked == n {
-		t.Errorf("no token: not asked again")
+	if asked != n {
+		t.Errorf("no token: asked %d more times", asked-n)
 	}
-	token = "t"
+	// one stored here (StoreToken) shows at once
+	wasApprove := ApproveToken
+	ApproveToken = func(context.Context, string, string, string) error { token = "t"; return nil }
+	t.Cleanup(func() { ApproveToken = wasApprove })
+	if err := StoreToken(t.Context(), forge.Table{Kind: "github", Host: "github.com"}, "ann", "t"); err != nil {
+		t.Fatal(err)
+	}
 	if s := state(); s.Forges[0].State != "first" || s.Forges[0].Token == "" {
 		t.Fatalf("forge %+v", s.Forges[0])
 	} else if i := slices.Index(actionIDs(s), "sync:gh"); i < 0 || s.Next[i].Say != "Run the first sync with gh (o/r)." {

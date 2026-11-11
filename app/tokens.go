@@ -16,6 +16,8 @@ import (
 	"github.com/guilbep/git-board/forge/github"
 	"github.com/guilbep/git-board/forge/gitlab"
 	"github.com/guilbep/git-board/kernel"
+
+	"sync/atomic"
 )
 
 // The forges' tokens (ADR 0010): from the environment, else git's
@@ -112,31 +114,48 @@ func (b *Board) ForgeStatuses(ctx context.Context, check bool) ([]ForgeStatus, e
 	return out, nil
 }
 
-// tokenFound says whether a token is found for login on f. A token found
-// is remembered for a minute, never the token: each GET /api/state asked
-// git's credential helper again (~40 ms). One not found is asked each
-// time, so a token just added shows at once.
-// ponytail: a token removed still shows found for up to a minute.
+// tokenFound says whether a token is found for login on f, remembered,
+// never the token: each GET /api/state asked git's credential helper again
+// (~40 ms a forge and login; three on a board whose forge has none, every
+// state read). Found, for a minute; not found, for 10 s, or until a token
+// is stored here (StoreToken, tokensStored), so one just added shows at
+// once.
+// ponytail: a token removed still shows found for up to a minute; one
+// added outside git-board (git credential approve) shows within 10 s.
 func (b *Board) tokenFound(ctx context.Context, f forge.Table, login string) bool {
 	c := &b.forges
 	key := f.Kind + " " + f.Host + " " + baseURL(f) + " " + login
+	stored := tokensStored.Load()
 	c.mu.Lock()
-	at, ok := c.tokens[key]
+	k, ok := c.tokens[key]
 	c.mu.Unlock()
-	if ok && time.Since(at) < time.Minute {
+	switch {
+	case ok && k.found && time.Since(k.at) < time.Minute:
 		return true
-	}
-	if t, err := FindToken(ctx, f, login); err != nil || t == "" {
+	case ok && !k.found && k.stored == stored && time.Since(k.at) < 10*time.Second:
 		return false
 	}
+	t, err := FindToken(ctx, f, login)
+	found := err == nil && t != ""
 	c.mu.Lock()
 	if c.tokens == nil {
-		c.tokens = map[string]time.Time{}
+		c.tokens = map[string]tokenSeen{}
 	}
-	c.tokens[key] = time.Now()
+	c.tokens[key] = tokenSeen{at: time.Now(), found: found, stored: stored}
 	c.mu.Unlock()
-	return true
+	return found
 }
+
+// tokenSeen is what tokenFound last asked of git's credential helper.
+type tokenSeen struct {
+	at     time.Time
+	found  bool
+	stored int64 // tokensStored then: a token stored since, it's asked again
+}
+
+// tokensStored counts the tokens StoreToken kept: a token not found is
+// asked again once one was.
+var tokensStored atomic.Int64
 
 // LoginFor is whose token forge name takes by default: login when given,
 // else yours on its host, else its posting account. It answers the forge.
@@ -178,6 +197,7 @@ func StoreToken(ctx context.Context, f forge.Table, login, token string) error {
 	if err := ApproveToken(ctx, tokenURL(f), login, token); err != nil {
 		return fmt.Errorf("storing the token with git credential approve: %w", err)
 	}
+	tokensStored.Add(1)
 	return nil
 }
 

@@ -100,14 +100,13 @@ PERF_COUNT ?= 5
 PERF_TOLERANCE ?= 0.15
 PERF_SEED ?= 1
 PERF_BOARDS ?= 5k:5000 20k:20000
-# The perf boards are boardgen's without -forge: a forge found in the
-# remotes is a project the server resolves on its forge, a call out to
-# github.com in each timed run; the forge paths are the tests' (forge/fake).
+# The perf boards are boardgen's with -forge: a [forges] table, its token
+# looked for as on a team's clone, nothing asked of GitHub.
 perf: ## Time the CLI and the server on 5k and 20k issues against testdata/perf/budgets.txt
 	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; args=""; \
 	for spec in $(PERF_BOARDS); do label=$${spec%%:*}; n=$${spec#*:}; \
-		board="$(PERF_CACHE)/boardgen-n$$n-seed$(PERF_SEED)"; \
-		if [ ! -d "$$board" ]; then rm -rf "$$board.tmp"; go run ./cmd/boardgen -n $$n -seed $(PERF_SEED) "$$board.tmp"; mv "$$board.tmp" "$$board"; fi; \
+		board="$(PERF_CACHE)/boardgen-n$$n-seed$(PERF_SEED)-forge"; \
+		if [ ! -d "$$board" ]; then rm -rf "$$board.tmp"; go run ./cmd/boardgen -n $$n -seed $(PERF_SEED) -forge "$$board.tmp"; mv "$$board.tmp" "$$board"; fi; \
 		w=$$(mktemp -d); trap 'rm -rf "$$w"' EXIT; cp -r "$$board" "$$w/board"; \
 		echo "perf: $$label ($$n issues)"; \
 		GIT_BOARD_BENCH_REPO="$$w/board" go test ./surface/cli ./surface/http -run - -bench . -benchtime 5x -count $(PERF_COUNT) -timeout 60m | tee "$(PERF_OUT)/bench-$$label.txt"; \
@@ -124,8 +123,8 @@ perf: ## Time the CLI and the server on 5k and 20k issues against testdata/perf/
 PERF_WEB_RUNS ?= 3
 PERF_INTERACTION_RUNS ?= 5
 perf-web: web-build ## Time the board's and an issue's page on the 5k board (Lighthouse, mobile)
-	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; board="$(PERF_CACHE)/boardgen-n5000-seed$(PERF_SEED)"; \
-	test -d "$$board" || go run ./cmd/boardgen -n 5000 -seed $(PERF_SEED) "$$board"; \
+	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; board="$(PERF_CACHE)/boardgen-n5000-seed$(PERF_SEED)-forge"; \
+	test -d "$$board" || go run ./cmd/boardgen -n 5000 -seed $(PERF_SEED) -forge "$$board"; \
 	w=$$(mktemp -d); trap 'rm -rf "$$w"' EXIT; cp -r "$$board" "$$w/board"; go build -o "$$w/git-board" ./cmd/git-board; \
 	cd web && node perf/lighthouse.mjs "$$w/git-board" "$$w/board" $(PERF_WEB_RUNS) | tee "$(abspath $(PERF_OUT))/web-5k.txt"; \
 	PERF_BIN="$$w/git-board" PERF_DIR="$$w/board" PERF_OUT="$(abspath $(PERF_OUT))/web-5k.txt" PERF_RUNS=$(PERF_INTERACTION_RUNS) npx playwright test --config perf/playwright.config.ts

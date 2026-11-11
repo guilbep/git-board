@@ -170,10 +170,9 @@ type forgeCache struct {
 	remotes  kept[[]string]
 	found    kept[foundIn]
 	projects map[string]string // kind host path -> project: kept for the board's life, a forge's answer
-	// kind host url login -> when a token was found (tokenFound): kept by
-	// time, not a stamp: a credential helper's store says nothing of when
-	// it changed
-	tokens map[string]time.Time
+	// kind host url login -> what tokenFound found: kept by time, not a
+	// stamp: a credential helper's store says nothing of when it changed
+	tokens map[string]tokenSeen
 }
 
 // foundIn is what finding the forges in the remotes found, and skipped.

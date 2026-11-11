@@ -26,12 +26,22 @@ type Options struct {
 	Issues int
 	People int    // 25 when 0
 	Seed   uint64 // the same seed, the same board
-	// Forge gives the board an origin on GitHub (acme/board, never asked:
-	// the remote isn't fetched): its forge is found in the remotes, and
-	// each read of the board's state looks for its token, as on a team's
-	// clone. Without it, no forge path runs.
+	// Forge gives the board a forge, GitHub's acme/board, as a
+	// [forges.github] table (ForgeConfig): each read of the board's state
+	// looks for its token, as on a team's clone. A table, not a remote: a
+	// forge found in the remotes is resolved on the forge, a call out; a
+	// table's project is the file's, and nothing is asked of GitHub until
+	// a sync. Without it, no forge path runs.
 	Forge bool
 }
+
+// ForgeConfig is the forge Options.Forge adds to Config.
+const ForgeConfig = `
+[forges.github]
+kind = "github"
+project = "acme/board"
+sync = true
+`
 
 // Config is the board's .git-board.toml, the cycle on.
 const Config = `[fields.status]
@@ -154,15 +164,16 @@ func Git(ctx context.Context, dir string, o Options) (*Board, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte(Config), 0o644); err != nil {
+	config := Config
+	if o.Forge {
+		config += ForgeConfig
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte(config), 0o644); err != nil {
 		return nil, err
 	}
 	setup := [][]string{
 		{"init", "-q"},
 		{"config", "board.me", string(b.People[0])},
-	}
-	if o.Forge {
-		setup = append(setup, []string{"remote", "add", "origin", "git@github.com:acme/board.git"})
 	}
 	for _, args := range setup {
 		if err := run(ctx, dir, nil, args...); err != nil {
