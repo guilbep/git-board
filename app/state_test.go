@@ -71,9 +71,9 @@ func TestStateOfAForge(t *testing.T) { // swaps FindToken: serial
 	if err := os.WriteFile(filepath.Join(dir, ".git-board.toml"), []byte(toml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	token := ""
+	token, asked := "", 0
 	was := FindToken
-	FindToken = func(context.Context, forge.Table, string) (string, error) { return token, nil }
+	FindToken = func(context.Context, forge.Table, string) (string, error) { asked++; return token, nil }
 	t.Cleanup(func() { FindToken = was })
 
 	b, err := Open(t.Context(), dir, Options{})
@@ -99,11 +99,22 @@ func TestStateOfAForge(t *testing.T) { // swaps FindToken: serial
 		t.Errorf("next %q", ids)
 	}
 
+	// a token not found is asked each time: one added shows at once
+	n := asked
+	state()
+	if asked == n {
+		t.Errorf("no token: not asked again")
+	}
 	token = "t"
 	if s := state(); s.Forges[0].State != "first" || s.Forges[0].Token == "" {
 		t.Fatalf("forge %+v", s.Forges[0])
 	} else if i := slices.Index(actionIDs(s), "sync:gh"); i < 0 || s.Next[i].Say != "Run the first sync with gh (o/r)." {
 		t.Errorf("next %+v", s.Next) // a pull creates nothing there: no consent to ask
+	}
+	// a token found is remembered: git's credential helper isn't asked again
+	n = asked
+	if s := state(); s.Forges[0].Token == "" || asked != n {
+		t.Errorf("found: token %q, asked %d more times", s.Forges[0].Token, asked-n)
 	}
 
 	if _, err := issuesync.CreatePerson(t.Context(), b.Kernel, issuesync.NewPerson("", "me", "")); err != nil {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/guilbep/git-board/domain/people"
 	"github.com/guilbep/git-board/forge"
@@ -94,7 +95,7 @@ func (b *Board) ForgeStatuses(ctx context.Context, check bool) ([]ForgeStatus, e
 		}
 		for _, l := range logins {
 			ts := TokenStatus{Login: l[0], Role: l[1]}
-			if t, err := FindToken(ctx, f, l[0]); err == nil && t != "" {
+			if b.tokenFound(ctx, f, l[0]) {
 				ts.Found, ts.Source = true, tokenSource(f)
 				if check {
 					if who, err := ForgeOwner(ctx, f, l[0]); err != nil {
@@ -109,6 +110,32 @@ func (b *Board) ForgeStatuses(ctx context.Context, check bool) ([]ForgeStatus, e
 		out = append(out, st)
 	}
 	return out, nil
+}
+
+// tokenFound says whether a token is found for login on f. A token found
+// is remembered for a minute, never the token: each GET /api/state asked
+// git's credential helper again (~40 ms). One not found is asked each
+// time, so a token just added shows at once.
+// ponytail: a token removed still shows found for up to a minute.
+func (b *Board) tokenFound(ctx context.Context, f forge.Table, login string) bool {
+	c := &b.forges
+	key := f.Kind + " " + f.Host + " " + baseURL(f) + " " + login
+	c.mu.Lock()
+	at, ok := c.tokens[key]
+	c.mu.Unlock()
+	if ok && time.Since(at) < time.Minute {
+		return true
+	}
+	if t, err := FindToken(ctx, f, login); err != nil || t == "" {
+		return false
+	}
+	c.mu.Lock()
+	if c.tokens == nil {
+		c.tokens = map[string]time.Time{}
+	}
+	c.tokens[key] = time.Now()
+	c.mu.Unlock()
+	return true
 }
 
 // LoginFor is whose token forge name takes by default: login when given,

@@ -164,7 +164,8 @@ type forgeCache struct {
 	foundAt   string
 	found     []forge.Table
 	skips     []string
-	projects  map[string]string // kind host path -> project
+	projects  map[string]string    // kind host path -> project
+	tokens    map[string]time.Time // kind host url login -> when a token was found (tokenFound)
 }
 
 // stamp names the state of git's config files, the repository's and
