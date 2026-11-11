@@ -1,4 +1,4 @@
-<!-- An issue, whole: the side panel (in the board's q-dialog) or the full
+<!-- An issue, whole: the side panel (in the board's dialog) or the full
      page (#/issues/<id>). Design: the canvas's "Issue side panel" and "Full
      page" artboards. Every write answers with the whole history (issue.ts). -->
 <template>
@@ -175,6 +175,7 @@ import type { Fields } from '@/fields';
 import { useIssue } from '@/issue';
 import { cycleOn, loadMe, me, meLoaded } from '@/me';
 import { getCycle } from '@/api';
+import { OPEN_KEEP } from '@/issue';
 import type { Cycle } from '@/api/cycletypes';
 import CommentCard from '@/components/CommentCard.vue';
 import CyclePanel from '@/components/CyclePanel.vue';
@@ -255,7 +256,7 @@ watch(
     if (!want || !version) return;
     if (cycle.value?.version === version) return; // the action's answer is this version's
     const id = props.id;
-    const c = await getCycle(id).catch(() => null);
+    const c = await getCycle(id, OPEN_KEEP).catch(() => null);
     if (id === props.id) cycle.value = c;
   },
   { immediate: true },
@@ -281,8 +282,15 @@ async function startRename() {
   await nextTick();
   titleInput.value?.focus();
 }
+// the title shows at once (issue.ts rename); a refusal brings the form
+// back with what was typed, a conflict its own question (412)
 async function saveTitle() {
-  if (await rename(newTitle.value.trim())) renaming.value = false;
+  const title = newTitle.value.trim();
+  renaming.value = false;
+  if (!(await rename(title)) && !conflict.value) {
+    newTitle.value = title;
+    renaming.value = true;
+  }
 }
 
 // the bar's Fit and Fill: the head and the conversation at a reading width, or the panel's

@@ -344,7 +344,7 @@ git-board reads and writes the Project through GitHub's GraphQL API with the Git
 
 ## Forges
 
-The forge projects the issues sync with, GitHub or GitLab, one table each, named as you like: Settings › Sync adds, switches and removes them. [Forges](forges.md) says how a sync goes. With no table, the forges are those `origin` is on, its fetch and push URLs ([Forges](forges.md#adding-a-forge)); one table or more, or `discover = false`, turns that off.
+The forge projects the issues sync with, GitHub or GitLab, one table each, named as you like: Settings › Sync adds, switches and removes them. [Forges](forges.md) says how a sync goes. With no table, the forges are those `origin` is on, its fetch and push URLs, the push-only ones with their sync off ([Forges](forges.md#adding-a-forge)); one table or more, or `discover = false`, turns that off.
 
 ```toml
 [forges]

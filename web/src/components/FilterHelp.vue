@@ -4,10 +4,11 @@
      filters panel's ?, the folded rail's, the one at the end of the Filter
      box, and the box's list. Never the app's shortcut list: that is ?. -->
 <template>
-  <!-- the panel floats on its own layer (q-menu, teleported): the filters
-       panel scrolls, and would cut it -->
-  <button ref="btn" type="button" :class="buttonClass ?? 'filters-help'" aria-label="How filtering works" title="How filtering works" aria-haspopup="dialog" :aria-expanded="open" @click="open = !open">?</button>
-  <q-menu v-model="open" :target="btn ?? undefined" no-parent-event :anchor="align === 'right' ? 'bottom right' : 'bottom left'" :self="align === 'right' ? 'top right' : 'top left'" :offset="[0, 6]" class="fh-menu" @show="focusTab" @hide="tryPending">
+  <!-- the panel floats on the page's top layer (a popover): the filters
+       panel scrolls, and would cut it. The ? toggles it; Esc and a click
+       outside close it, as the browser does for a popover -->
+  <button ref="btn" type="button" :class="buttonClass ?? 'filters-help'" aria-label="How filtering works" title="How filtering works" aria-haspopup="dialog" :aria-expanded="open" :popovertarget="menuId">?</button>
+  <div :id="menuId" ref="menu" popover="auto" class="fh-menu" :style="place">
     <div class="fh" role="dialog" aria-label="How filtering works">
         <p class="fh-title">How filtering works</p>
         <p class="fh-lead">Each tick in the filters panel writes words into the Filter box: both say the same thing.</p>
@@ -34,16 +35,16 @@
           <button type="button" class="gb-linkbtn" @click="close(), (helpOpen = true)">Every shortcut <kbd>?</kbd></button>
         </p>
     </div>
-  </q-menu>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, useId } from 'vue';
 import { GRAMMAR, TICKS } from '@/filterhelp';
 import { keyLabel } from '@/keys';
 import { helpOpen } from '@/shortcuts';
 
-defineProps<{ buttonClass?: string; align?: 'left' | 'right' }>();
+const props = defineProps<{ buttonClass?: string; align?: 'left' | 'right' }>();
 const emit = defineEmits<{ try: [term: string] }>();
 
 const tabs = ['Words', 'Ticks'] as const;
@@ -55,14 +56,40 @@ const columns = [GRAMMAR.slice(0, half), GRAMMAR.slice(half)];
 
 const open = ref(false);
 const btn = ref<HTMLButtonElement | null>(null);
-const close = () => (open.value = false);
+const menu = ref<HTMLElement | null>(null);
+const menuId = `fh-${useId()}`;
+const close = () => menu.value?.hidePopover();
+// under the ?, on the side the props say, 6px below; fixed: it floats
+const place = ref<Record<string, string>>({});
+function onBeforeToggle(e: Event) {
+  if ((e as ToggleEvent).newState !== 'open' || !btn.value) return;
+  const r = btn.value.getBoundingClientRect();
+  place.value = props.align === 'right'
+    ? { top: `${r.bottom + 6}px`, right: `${window.innerWidth - r.right}px`, left: 'auto' }
+    : { top: `${r.bottom + 6}px`, left: `${r.left}px`, right: 'auto' };
+}
+// open: the focus to the selected tab; closed: back to the ?, then a Try
+function onToggle(e: Event) {
+  open.value = (e as ToggleEvent).newState === 'open';
+  if (open.value) return focusTab();
+  btn.value?.focus();
+  tryPending();
+}
+onMounted(() => {
+  menu.value?.addEventListener('beforetoggle', onBeforeToggle);
+  menu.value?.addEventListener('toggle', onToggle);
+});
+onBeforeUnmount(() => {
+  menu.value?.removeEventListener('beforetoggle', onBeforeToggle);
+  menu.value?.removeEventListener('toggle', onToggle);
+});
 // the focus goes to the selected tab, so the arrows and Tab go on from there
 function focusTab() {
-  document.querySelector<HTMLElement>('.fh-menu [role=tab][aria-selected=true]')?.focus();
+  menu.value?.querySelector<HTMLElement>('[role=tab][aria-selected=true]')?.focus();
 }
 // Try closes the menu first and writes the word once it has hidden: the
-// menu gives the focus back to its ? as it hides, and the page focuses the
-// Filter box on try, so that focus must come last (issue #91)
+// focus goes back to the ? as it hides, and the page focuses the Filter
+// box on try, so that focus must come last (issue #91)
 let pending: string | null = null;
 function tryWord(term: string) {
   pending = term;
@@ -74,7 +101,7 @@ function tryPending() {
   pending = null;
   emit('try', term);
 }
-defineExpose({ show: () => (open.value = true) });
+defineExpose({ show: () => menu.value?.showPopover() });
 </script>
 
 <style scoped>

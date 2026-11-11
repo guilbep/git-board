@@ -86,12 +86,12 @@
     </div>
   </main>
 
-  <q-dialog
+  <GbDialog
     v-model="detailOpen"
     :position="panelMode === 'side' ? 'right' : 'standard'"
     :full-height="panelMode === 'side'"
     :class="`gb-dialog-${panelMode}`"
-    :backdrop-filter="panelMode === 'wide' ? 'blur(6px)' : undefined"
+    :blur="panelMode === 'wide'"
     no-route-dismiss
     no-focus
     @hide="setIssue(undefined)"
@@ -108,10 +108,11 @@
       @close="detailOpen = false"
       @open="(id: string) => setIssue(id)"
     />
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';

@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // A route is a method: Route decodes its request, calls it, and encodes
@@ -35,6 +37,7 @@ const maxBody = 16 << 20
 func Route[Req, Res any](mux *http.ServeMux, pattern string, f func(context.Context, Req) (Res, error)) {
 	dec := decoderOf(reflect.TypeFor[Req]())
 	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		obs.Name(r.Context(), pattern)
 		var req Req
 		if err := dec.decode(r, reflect.ValueOf(&req).Elem()); err != nil {
 			writeError(w, r, logOf(r.Context()), err)
@@ -45,14 +48,14 @@ func Route[Req, Res any](mux *http.ServeMux, pattern string, f func(context.Cont
 			writeError(w, r, logOf(r.Context()), err)
 			return
 		}
-		reply(w, any(res))
+		reply(w, r, any(res))
 	})
 }
 
-func reply(w http.ResponseWriter, res any) {
+func reply(w http.ResponseWriter, r *http.Request, res any) {
 	rep, ok := res.(Reply)
 	if !ok {
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, r, http.StatusOK, res)
 		return
 	}
 	if rep.ETag != "" {
@@ -66,7 +69,7 @@ func reply(w http.ResponseWriter, res any) {
 		w.WriteHeader(status)
 		return
 	}
-	writeJSON(w, status, rep.Body)
+	writeJSON(w, r, status, rep.Body)
 }
 
 func cmpOr(a, b int) int {

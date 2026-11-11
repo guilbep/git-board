@@ -3,7 +3,7 @@
      or not). POST /api/forges writes its [forges.<name>] table and gives
      the token to git's credential helper, never the file (ADR 0010). -->
 <template>
-  <q-dialog v-model="open">
+  <GbDialog v-model="open">
     <section class="af" aria-labelledby="af-title">
       <form class="af-main" @submit.prevent="next">
         <header class="af-head">
@@ -75,10 +75,11 @@
         </footer>
       </form>
     </section>
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { computed, reactive, ref, watch } from 'vue';
 import { addForge, message, type ForgeWay, type SyncForge } from '@/api';
 import { canGoOn, forgeWays, forges, forgeSteps, guessForge, type ForgeDraft } from '@/addforge';

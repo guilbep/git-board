@@ -23,6 +23,7 @@
 20k/http/ListColumn       60ms    a board's column, filtered and sorted
 20k/http/ListAll          120ms   every issue at once (design.md's target 60 ms: not met, the JSON of 20,000)
 20k/http/Facets           60ms    GET /api/labels, the filters panel's counts
+20k/http/Snapshot         150ms   every issue at once for a page to keep (ADR 0023): ListAll's work, the kept build shared
 20k/http/Thread           40ms    one issue's thread (design.md's target 10 ms: not met)
 20k/http/EventsFanOut     70ms    a comment told to 50 pages
 20k/http/WorkTeam         300ms   the Work page, every open issue (12,000), unpaged: 71 s before its rows were kept
@@ -44,8 +45,41 @@
 5k/http/ListColumn        20ms    a board's column
 5k/http/ListAll           35ms    every issue at once
 5k/http/Facets            20ms    the filters panel's counts
+5k/http/Snapshot          40ms    every issue at once for a page to keep
 5k/http/Thread            15ms    one issue's thread
 5k/http/EventsFanOut      45ms    a comment told to 50 pages
 5k/http/WorkTeam          60ms    the Work page, unpaged
 5k/http/WorkTeamPage      60ms    the Work page's first page
 5k/http/WorkTeamFirst     1s      the Work page's first request
+
+# The pages on 5,000 issues (make perf-web): Lighthouse's mobile run, a
+# slow 4G and a 4x slower CPU simulated, so a page's requests in a row
+# cost ~150 ms each. The targets are Google's "good": LCP 2.5 s, FCP
+# 1.8 s, TBT 200 ms. A desktop run is 0.8 s LCP.
+5k/web/BoardLCP           3.2s    the board's page, its first issue's title painted (target 2.5 s; 2.8 s on a laptop, 2026-11-11)
+5k/web/BoardFCP           2.3s    the board's first paint (target 1.8 s: its CSS blocks it, 48 KB)
+5k/web/BoardTBT           200ms   the board's main thread blocked
+5k/web/IssueLCP           3.5s    an issue's page, its panel over the board (target 2.5 s; 3.0 s on a laptop)
+5k/web/IssueFCP           2.3s    an issue's first paint (target 1.8 s)
+5k/web/IssueTBT           200ms   an issue's main thread blocked
+
+# What a person does on a page (web/e2e/interactions.ts), timed in the
+# page (Event Timing, and interaction.ts's act to the paint after its
+# requests), in two setups on 5,000 issues:
+#   Worst: the CPU 6x slower, slow 4G (150 ms a round trip); the targets
+#          100 ms for what the page answers alone (an optimistic write,
+#          what it shows), 200 ms for what needs the server's answer
+#   Desk:  as it is; 50 and 60 ms (an act's paint waits a frame, ~16 ms)
+# The laptop's medians on 2026-11-11 in each reason.
+5k/web/InteractionOpenPaletteDesk     50ms    the command palette (40 ms)
+5k/web/InteractionOpenPaletteWorst    100ms   (88 ms; its content made while closed: GbDialog warm)
+5k/web/InteractionOpenShortcutsDesk   50ms    every shortcut (40 ms)
+5k/web/InteractionOpenShortcutsWorst  100ms   (88 ms)
+5k/web/InteractionApplyFilterDesk     50ms    a filter typed, answered from the board kept (32 ms)
+5k/web/InteractionApplyFilterWorst    100ms   (72 ms; 470 ms when the server answered it)
+5k/web/InteractionRenameIssueDesk     50ms    a title saved, as shown before its answer (16 ms)
+5k/web/InteractionRenameIssueWorst    100ms   (40 ms)
+5k/web/InteractionOpenIssueDesk       60ms    a card clicked to its panel, every read at once (40 ms)
+5k/web/InteractionOpenIssueWorst      200ms   (152 ms: one round trip; read ahead on hover, less)
+5k/web/InteractionPostCommentDesk     50ms    a comment posted, as shown before its answer (40 ms)
+5k/web/InteractionPostCommentWorst    100ms   (72 ms)

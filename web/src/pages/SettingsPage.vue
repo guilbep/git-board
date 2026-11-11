@@ -59,6 +59,14 @@
               <span><b>{{ o.label }}</b><br /><span class="gb-hint">{{ o.hint }}</span></span>
             </label>
           </div>
+          <p id="set-panel" class="set-sub">The issue panel</p>
+          <div class="gb-opts" role="radiogroup" aria-labelledby="set-panel">
+            <label v-for="o in panelSizes" :key="o.value" class="gb-opt" :class="{ on: panelSize === o.value }">
+              <input type="radio" name="panel" :value="o.value" :checked="panelSize === o.value" @change="setPanelSize(o.value)" />
+              <span><b>{{ o.label }}</b><br /><span class="gb-hint">{{ o.hint }}</span></span>
+            </label>
+          </div>
+          <p class="gb-hint">Kept in this browser. Its edge also drags to any width, and <kbd>f</kbd> switches to expanded and back.</p>
         </section>
 
         <section aria-labelledby="set-tips">
@@ -114,6 +122,7 @@
 
 <script setup lang="ts">
 import { themePref } from '@/theme';
+import { panelMode, panelSizes, panelWidth, setPanelSize, sizeOf } from '@/panelsize';
 import { onLive } from '@/live';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
@@ -171,6 +180,7 @@ const menuState = computed<Record<string, string>>(() => {
     you: me.value?.me ? `as ${me.value.me.name}` : 'not chosen yet',
   };
 });
+const panelSize = computed(() => sizeOf(panelMode.value, panelWidth.value));
 const themeOptions = [
   { value: 'system', label: 'System', hint: 'as the computer is set' },
   { value: 'light', label: 'Light', hint: 'always' },
@@ -250,6 +260,7 @@ onBeforeUnmount(offLive);
 </script>
 
 <style scoped>
+.set-sub { margin: var(--space-3) 0 var(--space-1); font-weight: 600; }
 .set-check { display: flex; align-items: flex-start; gap: .625rem; line-height: 1.45; }
 .set { display: flex; align-items: flex-start; gap: 3rem; }
 .set-nav { flex: none; width: 15rem; display: flex; flex-direction: column; gap: .125rem; }

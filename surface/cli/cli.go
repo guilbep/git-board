@@ -15,6 +15,8 @@ import (
 
 	"github.com/guilbep/git-board/app"
 	"github.com/guilbep/git-board/domain/issues"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // The exit codes (docs/guide/cli.md, Exit codes).
@@ -38,6 +40,13 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	root := newRoot()
 	root.SetOut(out)
 	root.SetErr(stderr)
+	// a command is one trace, named by its command alone (its arguments
+	// may be a title); serve's requests are each their own
+	if len(args) > 0 && args[0] != "serve" {
+		var end func(error)
+		ctx, end = obs.Start(ctx, "git board "+args[0])
+		defer func() { end(nil) }()
+	}
 	root.SetContext(ctx)
 	err := runRoot(root, args)
 	if err == nil {

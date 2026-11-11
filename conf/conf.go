@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"slices"
+	"sync"
 
 	"github.com/BurntSushi/toml"
 )
@@ -27,7 +28,16 @@ type File struct {
 	version int
 	tables  map[string]toml.Primitive
 	md      toml.MetaData
-	names   []string // declared
+	mu      sync.Mutex // md: a decode writes to it (decoded keys, context)
+	names   []string   // declared
+}
+
+// decode is md.PrimitiveDecode, one at a time: the server's requests read
+// the file at once.
+func (f *File) decode(p toml.Primitive, v any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.md.PrimitiveDecode(p, v)
 }
 
 // Load reads the file at path once; a missing one is an empty file. A
@@ -58,7 +68,7 @@ func Parse(path string, text []byte) (*File, error) {
 	}
 	var v any
 	if p, ok := f.tables[SchemaKey]; ok {
-		if err := f.md.PrimitiveDecode(p, &v); err != nil {
+		if err := f.decode(p, &v); err != nil {
 			return nil, err
 		}
 	}
@@ -95,8 +105,11 @@ func (f *File) Version() int { return f.version }
 // Unknown are the file's keys no declared table read, in the file's
 // order: a misspelled key above all. Ask once every table was read.
 func (f *File) Unknown() []string {
+	f.mu.Lock()
+	keys := f.md.Undecoded()
+	f.mu.Unlock()
 	undecoded := map[string]bool{}
-	for _, k := range f.md.Undecoded() {
+	for _, k := range keys {
 		undecoded[k.String()] = true
 	}
 	var res []string
@@ -160,7 +173,7 @@ func (h *Handle[T]) Get() (T, []Problem) {
 	if !ok {
 		return v, nil
 	}
-	if err := h.f.md.PrimitiveDecode(p, &v); err != nil {
+	if err := h.f.decode(p, &v); err != nil {
 		return v, []Problem{{h.t.Name, err}}
 	}
 	if h.t.Check != nil {
@@ -179,7 +192,7 @@ func (h *Handle[T]) Primitive() (p toml.Primitive, ok bool) {
 }
 
 // Decode decodes a part of the table Primitive gave.
-func (h *Handle[T]) Decode(p toml.Primitive, v any) error { return h.f.md.PrimitiveDecode(p, v) }
+func (h *Handle[T]) Decode(p toml.Primitive, v any) error { return h.f.decode(p, v) }
 
 // Defined says the file has the table.
 func (h *Handle[T]) Defined() bool {

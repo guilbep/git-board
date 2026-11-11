@@ -7,9 +7,13 @@ import type { Directive } from 'vue';
 type State = { io: IntersectionObserver; fn: () => void; near: boolean };
 const states = new WeakMap<Element, State>();
 
-// the element's scrolling ancestor, if any: the screen ahead is its
+// the element's scrolling ancestor, if any: the screen ahead is its. One
+// that scrolls up and down: a table's box that scrolls sideways only
+// (overflow-x: auto makes overflow-y auto too) grows with its rows, and
+// taken for the scroller it held every row near, so that a phone's
+// table loaded every page of the list at once.
 export function scrollerOf(el: Element): Element | null {
-  for (let p = el.parentElement; p; p = p.parentElement) if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+  for (let p = el.parentElement; p; p = p.parentElement) if (/(auto|scroll)/.test(getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight) return p;
   return null;
 }
 

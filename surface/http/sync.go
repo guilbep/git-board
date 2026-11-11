@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/guilbep/git-board/app"
 	"github.com/guilbep/git-board/forge"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Sync: the forges' runs, in the background, and the git remotes, at
@@ -27,11 +30,14 @@ type Run struct {
 	DryRun    bool      `json:"dry_run"`
 	StartedAt time.Time `json:"started_at"`
 	EndedAt   time.Time `json:"ended_at,omitzero"`
-	State     string    `json:"state"` // running, done, failed
+	State     string    `json:"state"` // running, done, failed, stopped
 	Steps     []Step    `json:"steps"`
+	Tallies   []Tally   `json:"tallies"`
 	Report    *report   `json:"report,omitempty"`
 	Error     string    `json:"error,omitempty"`
 	told      time.Time // the last count told
+	stop      context.CancelFunc
+	stopped   bool // asked to stop (DELETE /api/sync)
 }
 
 // Step is one thing a run did: a whole sync's step (pull, forges,
@@ -48,6 +54,65 @@ type Step struct {
 	Total int    `json:"total,omitempty"`
 }
 
+// Tally is how many of one thing a run did on one forge, one way: a
+// write (create-comment, set-status…), an issue pulled or pushed, or a
+// warning of one reason. A check of 1,000 issues is a few tallies, not
+// 5,000 steps.
+type Tally struct {
+	Forge    string `json:"forge,omitempty"`
+	Way      string `json:"way,omitempty"`
+	What     string `json:"what"`
+	N        int    `json:"n"`
+	Examples []Step `json:"examples"` // the first few, as they came
+}
+
+// maxExamples is how many steps a tally keeps.
+const maxExamples = 5
+
+// tallied says whether a run's step goes into a tally, not the steps: a
+// write, an issue's change, a warning. The steps keep what a person reads
+// whole: notes, holds, a forge left out, waits, a whole sync's steps.
+func tallied(st Step) bool {
+	switch st.What {
+	case "", "progress", "note", "held", "left", "waiting":
+		return false
+	}
+	return st.Name == ""
+}
+
+var (
+	quoted = regexp.MustCompile(`"[^"]*"`)
+	hexID  = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
+)
+
+// tallyOf is the tally a step counts in: a write by its operation, a
+// warning by its reason (its ids and quoted values masked).
+func tallyOf(st Step) (way, what string) {
+	switch {
+	case st.What == "warning":
+		return st.Way, "warning: " + hexID.ReplaceAllString(quoted.ReplaceAllString(st.Line, `"…"`), "…")
+	case st.Line != "" && st.What != "release":
+		return st.Way, st.Line // a write's operation
+	}
+	return st.Way, st.What
+}
+
+// tally counts st in run's tallies.
+func (run *Run) tally(st Step) {
+	way, what := tallyOf(st)
+	for i := range run.Tallies {
+		t := &run.Tallies[i]
+		if t.Forge == st.Forge && t.Way == way && t.What == what {
+			t.N++
+			if len(t.Examples) < maxExamples {
+				t.Examples = append(t.Examples, st)
+			}
+			return
+		}
+	}
+	run.Tallies = append(run.Tallies, Tally{Forge: st.Forge, Way: way, What: what, N: 1, Examples: []Step{st}})
+}
+
 type report struct {
 	Created   int `json:"created"`
 	Updated   int `json:"updated"`
@@ -57,8 +122,8 @@ type report struct {
 	Restored  int `json:"restored"` // a backup's own edits, put back
 }
 
-// maxSteps is how many steps a run keeps: the progress events carry
-// them all.
+// maxSteps is how many steps a run keeps; the writes and the issues'
+// changes are tallied instead (Tally).
 const maxSteps = 500
 
 type syncRes struct {
@@ -113,7 +178,16 @@ func (s *Server) lastRun() *Run {
 	}
 	r := *s.run
 	r.Steps = slices.Clone(r.Steps)
+	r.Tallies = cloneTallies(r.Tallies)
 	return &r
+}
+
+func cloneTallies(ts []Tally) []Tally {
+	out := slices.Clone(ts)
+	for i := range out {
+		out[i].Examples = slices.Clone(out[i].Examples)
+	}
+	return out
 }
 
 type syncReq struct {
@@ -127,6 +201,21 @@ type syncReq struct {
 
 // startSync starts a run, which goes on after the request: it holds a
 // board of its own until it ends.
+// stopSync is DELETE /api/sync: this server's run stops at its next
+// step. What a sync wrote stays, and the next run goes on from its journal;
+// a check wrote nothing. A run of the CLI's or another server's is not
+// this server's to stop.
+func (s *Server) stopSync(ctx context.Context, _ none) (Reply, error) {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	if s.run == nil || s.run.State != "running" {
+		return Reply{}, &app.Error{Class: app.Busy, Err: errors.New("no sync of this server runs: one the CLI or another server started stops there")}
+	}
+	s.run.stopped = true
+	s.run.stop()
+	return Reply{Status: http.StatusAccepted}, nil
+}
+
 func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	if r.Scope == "" {
 		r.Scope = "forges"
@@ -152,29 +241,42 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	}
 
 	s.runs++
-	run := &Run{ID: strconv.Itoa(s.runs), Scope: r.Scope, Way: r.Way, DryRun: r.DryRun, StartedAt: time.Now(), State: "running", Steps: []Step{}}
+	// the run's context: the server's, not the request's (it answered), cut
+	// by DELETE /api/sync
+	runCtx, stop := context.WithCancel(context.WithValue(s.base, logKey{}, s.log))
+	run := &Run{ID: strconv.Itoa(s.runs), Scope: r.Scope, Way: r.Way, DryRun: r.DryRun, StartedAt: time.Now(), State: "running", Steps: []Step{}, Tallies: []Tally{}, stop: stop}
 	s.run = run
+	started := *run // the reply's: the run's own goes on changing as it runs
 	s.runMu.Unlock()
 
 	h := s.boards.get()
 	by := clientOf(ctx)
+	asked := ctx // its trace: the run's spans are the request's, after it answered
 	go func() {
 		defer s.boards.release(h)
-		ctx := context.WithValue(s.base, logKey{}, s.log)
-		ctx = context.WithValue(ctx, clientKey{}, by)
+		defer stop()
+		ctx := context.WithValue(runCtx, clientKey{}, by)
+		ctx, end := obs.Start(obs.Carry(ctx, asked), "sync run", obs.String("scope", run.Scope), obs.String("way", run.Way), obs.Bool("dry_run", run.DryRun))
 		s.log.Info("sync started", "run", run.ID, "scope", run.Scope, "way", run.Way, "dry_run", run.DryRun)
 		rep, err := s.runSync(ctx, h.b, run, r)
+		end(err)
 		s.runMu.Lock()
 		run.EndedAt, run.State = time.Now(), "done"
 		if rep != nil {
 			run.Report = rep
 		}
-		if err != nil {
+		stopped := run.stopped && err != nil && errors.Is(err, context.Canceled)
+		switch {
+		case stopped:
+			run.State = "stopped"
+		case err != nil:
 			run.State, run.Error = "failed", app.NoCredentials(err.Error())
 		}
 		s.runMu.Unlock()
 		s.pulls.Stale() // the branches and the forge moved: each PR is read again
-		if err != nil {
+		if stopped {
+			s.log.Info("sync stopped", "run", run.ID, "took", run.EndedAt.Sub(run.StartedAt).Round(time.Millisecond))
+		} else if err != nil {
 			s.log.Error("sync failed", "run", run.ID, "code", app.Code(err), "error", run.Error)
 		} else {
 			s.log.Info("sync ended", "run", run.ID, "took", run.EndedAt.Sub(run.StartedAt).Round(time.Millisecond))
@@ -182,36 +284,51 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 		s.publish(ctx, Event{Kind: "sync", ID: run.ID, By: by})
 	}()
 	s.publish(ctx, Event{Kind: "sync", ID: run.ID, By: by})
-	return Reply{Status: http.StatusAccepted, Body: run}, nil
+	return Reply{Status: http.StatusAccepted, Body: &started}, nil
 }
 
-// progressEvery is how often a run's counts are told: a page falls
-// behind on one event an issue.
+// progressEvery is how often a run's counts and tallies are told: a page
+// falls behind on one event an issue.
 var progressEvery = 250 * time.Millisecond
 
-// step records a run's step, and tells the pages; a count (progress),
-// at most every progressEvery, and its last.
+// step records a run's step, and tells the pages: a step a person reads
+// at once; a count (progress) or a tallied step at most every
+// progressEvery, with the tallies, and the last count.
 func (s *Server) step(ctx context.Context, run *Run, st Step) {
 	s.runMu.Lock()
-	if st.What == "progress" {
+	var tallies []Tally
+	switch {
+	case st.What == "progress" || tallied(st):
+		if tallied(st) {
+			run.tally(st)
+		}
 		now := time.Now()
-		if now.Sub(run.told) < progressEvery && st.Done < st.Total {
+		last := st.What == "progress" && st.Done >= st.Total
+		if now.Sub(run.told) < progressEvery && !last {
 			s.runMu.Unlock()
 			return
 		}
 		run.told = now
-	} else if len(run.Steps) < maxSteps {
+		tallies = cloneTallies(run.Tallies)
+		if st.What != "progress" {
+			st = Step{} // the tallies say it
+		}
+	case len(run.Steps) < maxSteps:
 		run.Steps = append(run.Steps, st)
 	}
 	s.runMu.Unlock()
 	switch st.What {
-	case "warning", "left", "held":
+	case "left", "held":
 		s.log.LogAttrs(ctx, slog.LevelWarn, "sync", slog.String("run", run.ID), slog.String("forge", st.Forge), slog.String("what", st.What), slog.String("line", app.NoCredentials(st.Line)))
 	}
 	if st.State == "failed" {
 		s.log.LogAttrs(ctx, slog.LevelWarn, "sync step failed", slog.String("run", run.ID), slog.String("step", st.Name), slog.String("line", app.NoCredentials(st.Line)))
 	}
-	s.publish(ctx, Event{Kind: "progress", ID: run.ID, Issue: st.Issue, Step: &st, By: clientOf(ctx)})
+	e := Event{Kind: "progress", ID: run.ID, Issue: st.Issue, Tallies: tallies, By: clientOf(ctx)}
+	if st != (Step{}) {
+		e.Step = &st
+	}
+	s.publish(ctx, e)
 }
 
 func (s *Server) runSync(ctx context.Context, b *app.Board, run *Run, r syncReq) (*report, error) {

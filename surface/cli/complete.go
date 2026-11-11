@@ -349,13 +349,13 @@ func completeFieldNames(cmd *cobra.Command, _ []string, toComplete string) ([]co
 	return withPrefix(toComplete, "", b.Issues.Schema.FieldOrder()), noFiles
 }
 
-// completeSortKeys completes --sort: created, updated, title or a field.
+// completeSortKeys completes --sort: created, updated, title, author, id, is or a field.
 func completeSortKeys(cmd *cobra.Command, _ []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 	b := completing(cmd)
 	if b == nil {
 		return nil, noFiles
 	}
 	defer b.Close()
-	keys := append([]string{"created", "updated", "title"}, b.Issues.Schema.FieldOrder()...)
+	keys := append([]string{"created", "updated", "title", "author", "id", "is"}, b.Issues.Schema.FieldOrder()...)
 	return withPrefix(toComplete, "", keys), noFiles
 }

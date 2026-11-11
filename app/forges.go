@@ -6,8 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/guilbep/git-board/domain/issues/issuesync"
@@ -55,7 +59,10 @@ func baseURL(f forge.Table) string {
 
 // Forges are the forges a sync runs with: the settings' [forges.<name>]
 // tables, or with none, those found in origin's URLs and push URLs, as
-// written and as git resolves them (insteadOf). Origin alone: a fork's
+// written and as git resolves them (insteadOf). A forge origin fetches
+// from syncs; one only a push URL names is listed with its sync off, as
+// the file alone says what syncs (ADR 0008), and a push mirror is no
+// place this team keeps its issues until it says so. Origin alone: a fork's
 // upstream isn't where this team's issues go. Without origin, none. A
 // local path is no forge, and isn't told; say hears each other URL that
 // names none, each forge found, and each left out, as v1 says them.
@@ -67,7 +74,7 @@ func (b *Board) Forges(ctx context.Context, say func(string)) ([]forge.Table, er
 	var out []forge.Table
 	seen := map[string]string{} // key -> forge name
 	for _, f := range found {
-		project, err := resolveProject(ctx, f)
+		project, err := b.resolveProject(ctx, f)
 		if err != nil {
 			say(fmt.Sprintf("forge %s, found in the remotes, is left out: %s %s: %v", f.Name, f.Host, cmp.Or(f.Path, f.Project), err))
 			continue
@@ -96,6 +103,26 @@ func (b *Board) FoundForges(ctx context.Context, say func(string)) ([]forge.Tabl
 	if !b.Config.Forges.Discover {
 		return b.Config.Forges.List, nil
 	}
+	c := &b.forges
+	fresh := false
+	f, err := c.found.get(c.stamp(ctx, b.Dir), func() (foundIn, error) {
+		fresh = true
+		var f foundIn
+		var err error
+		f.forges, err = b.foundForges(ctx, func(s string) { f.skips = append(f.skips, s); say("skipped " + s) })
+		return f, err
+	})
+	if !fresh { // kept: its skips said again, as a read would say them
+		for _, s := range f.skips {
+			say("skipped " + s)
+		}
+	}
+	return slices.Clone(f.forges), err
+}
+
+// foundForges is FoundForges, read from git: skipped hears each URL
+// that names no forge.
+func (b *Board) foundForges(ctx context.Context, skipped func(string)) ([]forge.Table, error) {
 	if has, err := b.hasRemote(ctx, NumbersRemote); err != nil || !has {
 		return nil, err
 	}
@@ -109,19 +136,117 @@ func (b *Board) FoundForges(ctx context.Context, say func(string)) ([]forge.Tabl
 		}
 		return us
 	}
+	fetch := append(urls("remote", "get-url", "--all", NumbersRemote), urls("config", "--get-all", "remote."+NumbersRemote+".url")...)
 	resolved := append(urls("remote", "get-url", "--all", NumbersRemote), urls("remote", "get-url", "--push", "--all", NumbersRemote)...)
 	written := append(urls("config", "--get-all", "remote."+NumbersRemote+".url"), urls("config", "--get-all", "remote."+NumbersRemote+".pushurl")...)
 	_, skips := forge.Discover(resolved) // an alias as written isn't told: its resolved URL is
 	found, _ := forge.Discover(append(resolved, written...))
 	for _, s := range skips {
-		say("skipped " + s)
+		skipped(s)
+	}
+	fetched, _ := forge.Discover(fetch)
+	for i, f := range found {
+		found[i].Sync = slices.ContainsFunc(fetched, func(g forge.Table) bool { return sameProject(f, g) })
 	}
 	return found, nil
+}
+
+// sameProject says two found forges name one project, a URL's case aside.
+func sameProject(a, b forge.Table) bool {
+	return a.Kind == b.Kind && strings.EqualFold(a.Host, b.Host) && strings.EqualFold(a.Project, b.Project)
+}
+
+// forgeCache keeps, for a board's life, what finding the forges asked
+// git and the forges: a server asks it on each GET /api/sync and
+// /api/state. The remotes and the forges found in them are kept while
+// git's config files are unchanged (stamp); a project as its forge names
+// it (resolveProject: a call to the forge) once found.
+// ponytail: a file a config includes (include.path) isn't watched; a
+// project renamed on its forge shows on the board opened next (a config
+// change, a restart).
+type forgeCache struct {
+	mu       sync.Mutex
+	common   string // the repository's git directory, its worktrees' common one
+	remotes  kept[[]string]
+	found    kept[foundIn]
+	projects map[string]string // kind host path -> project: kept for the board's life, a forge's answer
+	// kind host url login -> what tokenFound found: kept by time, not a
+	// stamp: a credential helper's store says nothing of when it changed
+	tokens map[string]tokenSeen
+}
+
+// foundIn is what finding the forges in the remotes found, and skipped.
+type foundIn struct {
+	forges []forge.Table
+	skips  []string
+}
+
+// stamp names the state of git's config files, the repository's and
+// yours: each one's size and time; "" when it can't be told.
+func (c *forgeCache) stamp(ctx context.Context, dir string) string {
+	common := c.commonDir(ctx, dir)
+	if common == "" {
+		return ""
+	}
+	files := []string{filepath.Join(common, "config")}
+	if home, err := os.UserHomeDir(); err == nil {
+		files = append(files, filepath.Join(home, ".gitconfig"))
+	}
+	files = append(files, filepath.Join(cmp.Or(os.Getenv("XDG_CONFIG_HOME"), filepath.Join(os.Getenv("HOME"), ".config")), "git", "config"))
+	var b strings.Builder
+	for _, f := range files {
+		if st, err := os.Stat(f); err == nil {
+			fmt.Fprintf(&b, "%s %d %d\n", f, st.Size(), st.ModTime().UnixNano())
+		} else {
+			fmt.Fprintf(&b, "%s -\n", f)
+		}
+	}
+	return b.String()
+}
+
+// commonDir is the repository's git directory, shared by its worktrees:
+// where its config and refs are; "" when git can't tell.
+func (c *forgeCache) commonDir(ctx context.Context, dir string) string {
+	c.mu.Lock()
+	common := c.common
+	c.mu.Unlock()
+	if common == "" {
+		out, err := gitRun(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+		if err != nil {
+			return ""
+		}
+		common = strings.TrimSpace(out)
+		c.mu.Lock()
+		c.common = common
+		c.mu.Unlock()
+	}
+	return common
 }
 
 // resolveProject is a found forge's project as a table names it, read
 // through the adapter: GitLab's numeric id, as links are keyed on it;
 // GitHub's owner/repo as GitHub spells it, as a URL's case is the user's.
+func (b *Board) resolveProject(ctx context.Context, f forge.Table) (string, error) {
+	c := &b.forges
+	key := f.Kind + " " + f.Host + " " + f.Project
+	c.mu.Lock()
+	p, ok := c.projects[key]
+	c.mu.Unlock()
+	if ok {
+		return p, nil
+	}
+	p, err := resolveProject(ctx, f)
+	if err == nil {
+		c.mu.Lock()
+		if c.projects == nil {
+			c.projects = map[string]string{}
+		}
+		c.projects[key] = p
+		c.mu.Unlock()
+	}
+	return p, err
+}
+
 func resolveProject(ctx context.Context, f forge.Table) (string, error) {
 	switch f.Kind {
 	case "gitlab":
@@ -406,7 +531,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 				why = fmt.Sprintf("%d or more in one run", MaxCreate)
 			}
 			see(SyncEvent{Forge: names[key], Way: "push", What: "held", Ops: n, Line: why})
-			return run.DryRun // counted as with consent, which the run asks for
+			return false // a check holds them as a sync would: it says what Sync does
 		},
 	}
 	ctx = forge.WithWaits(ctx, func(w forge.Wait) {

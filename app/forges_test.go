@@ -89,6 +89,37 @@ func TestForgesFromRemotes(t *testing.T) {
 	}
 }
 
+// A forge origin fetches from syncs; one that only a push URL names (a
+// mirror the code is pushed to) is found with its sync off: the file alone
+// turns it on (ADR 0008). FoundForges asks no forge.
+func TestFoundForgesPushOnlyOff(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "git@github.com:acme/app.git"},
+		{"remote", "set-url", "--add", "--push", "origin", "git@github.com:acme/app.git"},
+		{"remote", "set-url", "--add", "--push", "origin", "git@gitlab-ssh.example.org:acme/app.git"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	fs, err := b.FoundForges(t.Context(), func(string) {})
+	if err != nil || len(fs) != 2 {
+		t.Fatalf("found %+v, %v", fs, err)
+	}
+	on := map[string]bool{}
+	for _, f := range fs {
+		on[f.Kind] = f.Sync
+	}
+	if !on["github"] || on["gitlab"] {
+		t.Errorf("sync on: %v, want github on, gitlab (push only) off", on)
+	}
+}
+
 // On a Markdown folder, what a forge sync pulls is rendered into the
 // folder's files.
 func TestSyncForgesRendersMarkdown(t *testing.T) {
@@ -163,14 +194,28 @@ func TestSyncForgesCheck(t *testing.T) {
 	if before != after || len(f.All()) != 1 || len(f.Writes()) != 0 {
 		t.Fatalf("a check wrote: refs moved %t, %d forge issues, writes %v", before != after, len(f.All()), f.Writes())
 	}
-	want := []string{"1 issues to create need consent: the first sync with this forge", "would create " + here.ID[:7]}
-	for _, w := range want {
-		if !slices.Contains(lines, w) {
-			t.Errorf("lines %q lack %q", lines, w)
-		}
+	// without consent a check holds the creates as a sync would: it says
+	// what Sync does, never what a consent would do
+	if w := "1 issues to create need consent: the first sync with this forge"; !slices.Contains(lines, w) {
+		t.Errorf("lines %q lack %q", lines, w)
+	}
+	if slices.Contains(lines, "would create "+here.ID[:7]) {
+		t.Errorf("a check without consent creates: %q", lines)
 	}
 	if !slices.ContainsFunc(lines, func(l string) bool { return strings.HasPrefix(l, "would pull a new issue, ") }) {
 		t.Errorf("lines %q lack the pull", lines)
+	}
+	// with consent asked, it shows the create
+	lines = nil
+	run.AllowCreate = true
+	if _, err := b.SyncForges(t.Context(), WaySync, run); err != nil {
+		t.Fatal(err)
+	}
+	if w := "would create " + here.ID[:7]; !slices.Contains(lines, w) {
+		t.Errorf("lines %q lack %q", lines, w)
+	}
+	if len(f.Writes()) != 0 {
+		t.Fatalf("a check wrote %v", f.Writes())
 	}
 }
 
@@ -280,5 +325,49 @@ func TestSyncForgesPublishesReleases(t *testing.T) {
 	}
 	if rs, _ := f.Releases(t.Context()); len(rs) != 1 || rs[0].Tag != "v1.0.0" || rs[0].Body != "The first." {
 		t.Errorf("releases %+v", rs)
+	}
+}
+
+// A server asks the forges on every GET /api/sync and /api/state: what
+// git says is kept while its config files are unchanged. Serial: it
+// empties PATH, so that git can't answer what is kept.
+func TestFoundForgesKept(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("remote", "add", "origin", "https://github.com/o/r.git")
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	project := func() string {
+		t.Helper()
+		fs, err := b.FoundForges(t.Context(), func(string) {})
+		if err != nil || len(fs) != 1 {
+			t.Fatalf("forges %+v, %v", fs, err)
+		}
+		return fs[0].Project
+	}
+	if p := project(); p != "o/r" {
+		t.Fatalf("project %q, want o/r", p)
+	}
+	path, _ := exec.LookPath("git")
+	t.Setenv("PATH", "")
+	if p := project(); p != "o/r" {
+		t.Errorf("kept: project %q, want o/r", p)
+	}
+	if rs, err := b.Remotes(t.Context()); err != nil || !slices.Equal(rs, []string{"origin"}) {
+		t.Errorf("kept: remotes %v, %v", rs, err)
+	}
+	t.Setenv("PATH", filepath.Dir(path))
+	git("remote", "set-url", "origin", "https://github.com/o/moved.git")
+	if p := project(); p != "o/moved" {
+		t.Errorf("after the remote moved: project %q, want o/moved", p)
 	}
 }

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/app"
+
+	"github.com/guilbep/git-board/store"
 )
 
 // Server serves one board.
@@ -20,6 +22,7 @@ type Server struct {
 	log        *slog.Logger
 	boards     *boards
 	events     broker
+	changes    *changeRing // the issues' changes, numbered (changes.go)
 	seen       seen
 	configPath string
 	own        ownConfig // the server's own writes of .git-board.toml
@@ -66,7 +69,7 @@ func New(ctx context.Context, o Options) (*Server, error) {
 		o.Log = slog.New(slog.DiscardHandler)
 	}
 	s := &Server{log: o.Log, version: o.Version, exposed: o.Exposed, static: o.Static, done: make(chan struct{}),
-		seen: seen{at: map[string]string{}, pending: map[string]string{}}, base: context.WithoutCancel(ctx)}
+		seen: seen{at: map[string]string{}, pending: map[string]string{}}, base: context.WithoutCancel(ctx), changes: newChangeRing()}
 	open := o.Open
 	if open == nil {
 		open = func(ctx context.Context, dir string) (*app.Board, error) {
@@ -120,9 +123,9 @@ func (s *Server) Handler() http.Handler {
 		writeError(w, r, s.log, &coded{code: "not-found", status: http.StatusNotFound, err: errNoRoute(r)})
 	})
 	if s.static != nil {
-		mux.Handle("/", http.FileServerFS(s.static))
+		mux.Handle("/", static(s.static))
 	}
-	return withLog(s.log, withCORS(withGuard(s.log, s.exposed, s.withBoard(mux))))
+	return withLog(s.log, withCORS(withGuard(s.log, s.exposed, s.withBoard(withConditional(mux)))))
 }
 
 // withBoard holds the board for the request, and makes the request one
@@ -135,7 +138,18 @@ func (s *Server) withBoard(next http.Handler) http.Handler {
 		}
 		h := s.boards.get()
 		defer s.boards.release(h)
-		ctx := context.WithValue(r.Context(), boardKey{}, h.b)
+		// what the request did: its Server-Timing, a slow request's log; a
+		// test's own counts when it brings them
+		ctx := r.Context()
+		counts := store.CountsOf(ctx)
+		if counts == nil {
+			counts = &store.Counts{}
+			ctx = store.WithCounts(ctx, counts)
+		}
+		if rec, ok := w.(*recorder); ok {
+			rec.counts = counts
+		}
+		ctx = context.WithValue(ctx, boardKey{}, h.b)
 		ctx = h.b.Kernel.Snapshot(ctx)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

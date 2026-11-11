@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -111,6 +112,20 @@ func TestGuardRoutes(t *testing.T) {
 	} {
 		within(t, "GET "+path, countGet(t, h, path), warmRoute)
 	}
+	// a board grouped by status, its 7 lanes and 2 counts at once: the
+	// refs listed and the forges' records read once, a few view calls a
+	// list, none an issue
+	within(t, "GET /api/issues/batch", countGet(t, h, "/api/issues/batch?f=status:backlog&f=status:ready&f=status:in-progress&f=status:in-review&f=status:qa&f=status:validated&f=no:status&c=is:open&c=is:closed&limit=40"),
+		map[string]int64{"entities": 0, "objects": 0, "loads": 0, "processes": 0, "listings": 3, "view calls": 4 * 9, "rows put": 0})
+	// the issues built once while the board stays (issues.KeptList): a
+	// list again, a batch's lanes, read no issue row, whatever the size
+	countGet(t, h, "/api/issues?filter=")
+	for _, path := range []string{"/api/issues?filter=is:open", "/api/issues/batch?f=status:backlog&f=status:ready&c=is:open"} {
+		c := countGet(t, h, path)
+		if c.RowsRead.Load() > 0 {
+			t.Errorf("GET %s, the board unchanged: %d rows read, want the kept build's 0", path, c.RowsRead.Load())
+		}
+	}
 	// one issue: its entity alone
 	id := string(gb.Issues[5])
 	within(t, "GET /api/issues/{id}", countGet(t, h, "/api/issues/"+id),
@@ -119,4 +134,26 @@ func TestGuardRoutes(t *testing.T) {
 	within(t, "GET /api/cycle, first", countGet(t, h, "/api/cycle?who=team"),
 		map[string]int64{"entities": guardIssues, "loads": 4, "processes": 2, "listings": 8, "view calls": 32})
 	within(t, "GET /api/cycle", countGet(t, h, "/api/cycle?who=team&limit=100"), warmRoute)
+}
+
+// The inbox reads the threads of the issues updated in its window: the
+// people, the forges' records and the logs once for all of them, not a
+// listing and a read per issue.
+func TestGuardInboxRecent(t *testing.T) {
+	t.Parallel()
+	h, gb := guardServer(t)
+	const recent = 20
+	for _, id := range gb.Issues[:recent] {
+		req := httptest.NewRequest("POST", "/api/issues/"+string(id)+"/comments", strings.NewReader(`{"body":"recent"}`))
+		req.Host = "localhost"
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code/100 != 2 {
+			t.Fatalf("comment: %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+	countGet(t, h, "/api/inbox") // the view, fresh again after the writes
+	within(t, "GET /api/inbox, 20 recent", countGet(t, h, "/api/inbox"),
+		map[string]int64{"loads": 1, "listings": 8, "processes": 0})
 }

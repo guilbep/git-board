@@ -69,7 +69,7 @@
                 :class="{ 'cell-id': key === 'id', 'cell-title': key === 'title' }"
                 :aria-sort="sort?.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined"
               >
-                <button v-if="key !== 'other'" type="button" class="th-sort" @click="emit('sort', key)">
+                <button v-if="key !== 'other' && key !== 'links'" type="button" class="th-sort" @click="emit('sort', key)">
                   {{ label(key) }}<span class="th-arrow" aria-hidden="true">{{ sort?.key === key ? (sort.desc ? '↓' : '↑') : '' }}</span>
                 </button>
                 <template v-else>{{ label(key) }}</template>
@@ -83,14 +83,15 @@
             <!-- The whole row opens the issue, but its box and its field
                  cells (edited in place); the title button is the keyboard
                  entry point (its click bubbles up to the row). -->
-            <tr v-for="issue in bucket.issues.slice(...win(bucket))" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)">
+            <tr v-for="issue in bucket.issues.slice(...win(bucket))" :key="issue.id" :class="{ 'is-picked': selected.has(issue.id) }" @click="emit('open', issue)" @mouseenter="hover(issue.id)" @focusin="hover(issue.id)" @mouseleave="unhover">
               <td class="cell-pick" @click.stop>
                 <input type="checkbox" :aria-label="`Select ${issue.shown_title}`" :checked="selected.has(issue.id)" @click="toggleRow(issue.id, $event)" />
               </td>
               <template v-for="key in cols" :key="key">
                 <td v-if="key === 'id'" class="cell-id">{{ issue.id.slice(0, 8) }}</td>
-                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button"><span v-if="issue.number" class="gb-num">{{ issue.number }}</span>{{ issue.shown_title }}</button></td>
+                <td v-else-if="key === 'title'" class="cell-title"><span v-if="changed?.has(issue.id)" class="gb-changed-dot" title="Changed since your last visit" /><button type="button" class="title-button" :title="issue.shown_title"><span v-if="issue.number" class="gb-num">{{ issue.number }}</span>{{ issue.shown_title }}</button></td>
                 <td v-else-if="key === 'is'">{{ issue.status }}</td>
+                <td v-else-if="key === 'author'" class="cell-author">{{ issue.opened_by }}</td>
                 <td v-else-if="key === 'links'" class="cell-links" @click.stop>
                   <a v-for="f in issue.forges ?? []" :key="f.url" :href="safeHref(f.url)" target="_blank" rel="noopener noreferrer" class="forge-link" :title="`Open on ${f.name}${f.number ? ` #${f.number}` : ''}`">
                     {{ f.name }} #{{ f.number || '?' }}
@@ -116,8 +117,9 @@
 </template>
 
 <script setup lang="ts">
+import { prefetchThread } from '@/issue';
 import { safeHref } from '@/links';
-import { computed, onUpdated, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
 import { scrollerOf, vNear } from '@/near';
 import { LONG, useScroll, windowRange } from '@/windowrows';
 import { patchIssue, type Issue, type IssueChange } from '@/api';
@@ -163,9 +165,22 @@ function rangeOf(b: Bucket): [number, number] {
   const to = Math.min(box.bottom, window.innerHeight);
   return windowRange(b.issues.length, body.getBoundingClientRect().top - from, Math.max(to - from, 0), rowHeight.value);
 }
+// rows are one line each (the styles below), one height: measured once a
+// row shows, and again when the window's width changes (a zoom), never
+// after a render (a measure that moved the window measured another row:
+// render, measure, render… was a loop, "Maximum call stack size exceeded")
+let measuredAt = 0;
+function measure() {
+  if (measuredAt === window.innerWidth) return;
+  const row = [...bodies.values()].find(Boolean)?.querySelector<HTMLElement>('tr:not(.row-spacer):not(.row-more)');
+  if (!row?.offsetHeight) return;
+  measuredAt = window.innerWidth;
+  rowHeight.value = row.offsetHeight;
+}
 watch(
-  [scroll, () => props.buckets, rowHeight],
+  [scroll, () => props.buckets],
   () => {
+    measure();
     for (const b of props.buckets) {
       const r = rangeOf(b);
       const was = ranges.value[b.group];
@@ -175,13 +190,9 @@ watch(
   { flush: 'post', immediate: true },
 );
 const win = (b: Bucket): [number, number] => ranges.value[b.group] ?? [0, Math.min(b.issues.length, LONG)];
-onUpdated(() => {
-  const row = [...bodies.values()].find(Boolean)?.querySelector<HTMLElement>('tr:not(.row-spacer):not(.row-more)');
-  if (row?.offsetHeight) rowHeight.value = row.offsetHeight;
-});
 
 const cols = computed(() => shownColumns(props.columns, props.names));
-const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', other: 'Other labels', links: 'On the forge' };
+const labels: Record<string, string> = { id: 'ID', title: 'Title', is: 'State', author: 'Author', other: 'Other labels', links: 'On the forge' };
 const label = (key: string) => labels[key] ?? displayName(key);
 
 function groupLabel(value: string): string {
@@ -278,6 +289,15 @@ async function write(i: Issue, change: IssueChange) {
   i.labels = t.labels;
   i.status = t.status;
 }
+
+// a row rested on 80 ms reads its issue (prefetchThread): the click opens it at once
+let hovering: ReturnType<typeof setTimeout> | undefined;
+function hover(id: string) {
+  clearTimeout(hovering);
+  hovering = setTimeout(() => void prefetchThread(id), 80);
+}
+const unhover = () => clearTimeout(hovering);
+onBeforeUnmount(unhover);
 </script>
 
 <style scoped>
@@ -352,14 +372,24 @@ async function write(i: Issue, change: IssueChange) {
 .issue-table tbody tr { cursor: pointer; transition: background var(--t-fast); }
 
 .cell-id { font-family: var(--font-mono); color: var(--fg-muted); white-space: nowrap; }
-.cell-title { min-width: 18rem; }
+.cell-title { min-width: 18rem; max-width: 40rem; }
+/* one line a row, whatever it holds: every row one height, what the
+   windowing counts in (windowrows.ts); the whole title shows on hover
+   and in the issue */
+.issue-table tbody :deep(td) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.issue-table tbody :deep(.cell-tags) { flex-wrap: nowrap; }
 .cell-other { color: var(--fg-muted); }
 .cell-links { white-space: nowrap; cursor: default; }
-.forge-link { display: flex; align-items: center; gap: .25rem; color: var(--fg-muted); font-family: var(--font-mono); font-size: var(--fs-sm); text-decoration: none; }
+.forge-link { display: inline-flex; align-items: center; gap: .25rem; color: var(--fg-muted); font-family: var(--font-mono); font-size: var(--fs-sm); text-decoration: none; }
 .forge-link:hover { text-decoration: underline; }
-.forge-link + .forge-link { margin-top: .25rem; }
+.forge-link + .forge-link { margin-left: var(--space-2); }
 
 .title-button {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0;
   font: inherit;
   text-align: left;

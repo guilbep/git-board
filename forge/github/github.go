@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/forge"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 const (
@@ -79,6 +81,8 @@ type shared struct {
 	mu     sync.Mutex
 	labels map[string]bool // the project's labels known to exist, in lower case
 	writes []time.Time     // the last hour's writes, for pacing
+
+	tagged taggedAnswers // GETs' answers by ETag (do)
 }
 
 // New is the project through the posting account's token.
@@ -131,7 +135,7 @@ func open(ctx context.Context, o Options) (*Forge, error) {
 	}
 	s := &shared{
 		host: host, api: api, graphql: graphql, tokenOf: tokenOf,
-		client: &http.Client{Timeout: time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
+		client: &http.Client{Timeout: time.Minute, Transport: obs.Transport(nil), CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse // a moved issue is gone; and Go would turn a PATCH into a GET
 		}},
 		now: time.Now, sleep: sleep, labels: map[string]bool{},
@@ -676,13 +680,70 @@ func (f *Forge) do(ctx context.Context, method, u string, body []byte) (int, htt
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	key := ""
+	if method == http.MethodGet {
+		key = f.token + " " + u
+		if t, ok := f.s.tagged.get(key); ok {
+			req.Header.Set("If-None-Match", t.etag)
+		}
+	}
 	resp, err := f.s.client.Do(req)
 	if err != nil {
 		return 0, nil, nil, err
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
+	if key != "" && err == nil {
+		switch {
+		case resp.StatusCode == http.StatusNotModified:
+			if t, ok := f.s.tagged.get(key); ok {
+				return http.StatusOK, t.header, t.data, nil // as it was: GitHub counts no rate limit for it
+			}
+		case resp.StatusCode == http.StatusOK && resp.Header.Get("ETag") != "":
+			f.s.tagged.put(key, taggedAnswer{etag: resp.Header.Get("ETag"), header: resp.Header, data: data})
+		}
+	}
 	return resp.StatusCode, resp.Header, data, err
+}
+
+// taggedAnswers are the last answer of each GET that came with an ETag, by
+// token and URL: asked again, it goes If-None-Match, and GitHub's 304 costs
+// no rate limit (an unchanged issue's comments, read again by each sync).
+// ponytail: in memory, the last maxTagged; a server's syncs share them, a
+// command's start empty; kept in the sync state if commands sync often.
+type taggedAnswers struct {
+	mu sync.Mutex
+	by map[string]taggedAnswer
+}
+
+type taggedAnswer struct {
+	etag   string
+	header http.Header
+	data   []byte
+}
+
+const maxTagged = 4096
+
+func (t *taggedAnswers) get(key string) (taggedAnswer, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	a, ok := t.by[key]
+	return a, ok
+}
+
+func (t *taggedAnswers) put(key string, a taggedAnswer) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.by == nil {
+		t.by = map[string]taggedAnswer{}
+	}
+	if _, ok := t.by[key]; !ok && len(t.by) >= maxTagged {
+		for k := range t.by { // one out, any: a full map keeps working
+			delete(t.by, k)
+			break
+		}
+	}
+	t.by[key] = a
 }
 
 // rateLimited says whether GitHub turned a request away for a rate limit,

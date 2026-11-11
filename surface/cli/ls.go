@@ -46,7 +46,7 @@ func newLs() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&at, "at", "", "the board as it was then: a date (its end), a time (2026-10-01T14:30) or a while ago (36h, 7d)")
 	cmd.Flags().StringVar(&group, "group", "", "group results by field")
-	cmd.Flags().StringVar(&sort, "sort", "", `sort by created, updated, title or a field, then asc or desc: "prio asc", "updated desc"`)
+	cmd.Flags().StringVar(&sort, "sort", "", `sort by created, updated, title, author, id, is or a field, then asc or desc: "prio asc", "updated desc"`)
 	cmd.Flags().IntVarP(&limit, "limit", "L", 0, "list this many at most, after sorting (0: all)")
 	cmd.Flags().BoolVar(&md, "md", false, "render as markdown")
 	cmd.Flags().StringVar(&me, "me", "", "current user, for @me filters/values (env GIT_BOARD_ME)")

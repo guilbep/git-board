@@ -58,7 +58,7 @@
     </div>
     <p v-else-if="!error" class="ft-note">No forge: none in <code>.git-board.toml</code>, and none found in the git remotes.</p>
 
-    <q-dialog v-model="adding">
+    <GbDialog v-model="adding">
       <section class="ft-dialog" role="dialog" aria-modal="true" aria-labelledby="ft-title">
         <form @submit.prevent="store">
           <header class="ft-head">
@@ -91,13 +91,14 @@
           </footer>
         </form>
       </section>
-    </q-dialog>
+    </GbDialog>
 
     <ForgesGuide v-model="guideOpen" />
   </section>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getDeviceLogin, getForgeAuth, message, startDeviceLogin, storeForgeToken, type DeviceLogin, type ForgeAuth, type ForgeToken } from '@/api';
 import ForgesGuide from '@/components/ForgesGuide.vue';

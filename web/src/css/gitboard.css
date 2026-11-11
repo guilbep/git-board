@@ -325,7 +325,7 @@ span.gb-hint{display:inline;margin:0}
 .gb-save-error{display:flex;gap:.375rem;align-items:center;margin:0;padding:.5rem 1rem;font-size:.875rem;color:var(--danger-fg);background:var(--danger-bg)}
 
 /* ---- The app (the canvas places artboards absolutely) ---- */
-/* the panel lives in a right-hand q-dialog, which places it */
+/* the panel lives in a right-hand dialog (GbDialog.vue), which places it */
 .gb-panel { position: relative; top: auto; right: auto; bottom: auto; height: 100%; width: min(64rem, 100vw); max-width: 100vw; }
 .gb-panel-page { width: auto; max-width: 80rem; height: auto; margin: 0 auto; box-shadow: none; overflow: visible; }
 
@@ -455,8 +455,8 @@ a.gb-bar-step:hover .gb-bar-name { text-decoration: underline; text-underline-of
 .gb-resize{position:sticky;top:0;z-index:3;flex:none;align-self:flex-start;width:.5rem;height:100vh;margin-bottom:-100vh;cursor:col-resize;touch-action:none}
 .gb-resize:hover,.gb-resize:focus-visible,.gb-resize.is-dragging{background:color-mix(in srgb,var(--primary) 35%,transparent);outline:none}
 .gb-panel-wide{width:calc(100vw - 5rem);height:calc(100vh - 5rem);max-width:none;border-radius:var(--radius)}
-.gb-dialog-wide .q-dialog__inner>div{max-width:none!important;max-height:none!important}
-@media (max-width:47.99rem){.gb-panel-wide{width:100vw;height:100vh;border-radius:0}.gb-dialog-wide .q-dialog__inner--minimized{padding:0}}
+
+@media (max-width:47.99rem){.gb-panel-wide{width:100vw;height:100vh;border-radius:0}dialog.gb-dialog-wide{padding:0}}
 .gb-panel:focus{outline:none}
 /* TOML colors (web/src/toml.ts): the settings page's editor and its reference */
 .tk-comment{color:var(--fg-subtle);font-style:italic}.tk-table{color:var(--primary);font-weight:700}.tk-key{color:var(--fg);font-weight:600}.tk-string{color:var(--success-fg)}.tk-value{color:var(--info-fg)}.tk-punct{color:var(--fg-muted)}
@@ -494,5 +494,5 @@ body.gb-has-keyline .gb-live{bottom:2.875rem}
 .filters-help{display:inline-flex;align-items:center;justify-content:center;width:1.5rem;height:1.5rem;padding:0;border:var(--border-w) solid var(--border);border-radius:50%;background:none;color:var(--fg-muted);font:inherit;font-size:.75rem;font-weight:var(--w-bold);cursor:pointer}
 .filters-help:hover,.filters-help:focus-visible,.filters-help[aria-expanded="true"]{border-color:var(--fg);color:var(--fg)}
 .filters-help[aria-expanded="true"]{background:var(--bg-dark);color:var(--fg-inverse)}
-/* "How filtering works" floats on its own layer (FilterHelp.vue's q-menu) */
-.fh-menu{background:var(--bg);color:var(--fg);border:var(--border-w) solid var(--border-strong);border-radius:0;box-shadow:var(--shadow)}
+/* "How filtering works" floats on the top layer (FilterHelp.vue's popover) */
+.fh-menu{position:fixed;inset:auto;margin:0;padding:0;max-height:calc(100vh - 4rem);overflow:auto;background:var(--bg);color:var(--fg);border:var(--border-w) solid var(--border-strong);border-radius:0;box-shadow:var(--shadow)}

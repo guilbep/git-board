@@ -12,6 +12,12 @@ import (
 
 	"github.com/guilbep/git-board/domain/people"
 	"github.com/guilbep/git-board/kernel"
+
+	"github.com/guilbep/git-board/obs"
+
+	"sync"
+
+	bsync "github.com/guilbep/git-board/sync"
 )
 
 // Service is the issue domain on an open board.
@@ -39,6 +45,91 @@ type Service struct {
 	// Held, when set, says which labels the sync keeps off the forge of
 	// a key (forge.Forges.Held): none of them waits for that forge.
 	Held func(key, label string) bool
+	// Kept, when set, keeps the issues List builds while the board stays
+	// (KeptList): a board's lanes and counts filter one build, not one
+	// each. Nil builds them each time.
+	Kept *KeptList
+}
+
+// KeptList is the issues a List built, and the board's version they were
+// built at: the issues', the people's, the forges' records' and the
+// counter's. Its issues are shared: a list filters a copy.
+// ponytail: one board's issues in memory, as the view holds them; a
+// 50,000-issue board keeps ~50 MB.
+type KeptList struct {
+	mu      sync.Mutex
+	version string
+	dir     people.Directory
+	list    []Issue
+}
+
+// built is the people and the list kept at version; ok false when none is.
+func (k *KeptList) built(version string) (people.Directory, []Issue, bool) {
+	if k == nil || version == "" {
+		return people.Directory{}, nil, false
+	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.version != version {
+		return people.Directory{}, nil, false
+	}
+	return k.dir, k.list, true
+}
+
+func (k *KeptList) keep(version string, dir people.Directory, list []Issue) {
+	if k == nil || version == "" {
+		return
+	}
+	k.mu.Lock()
+	k.version, k.dir, k.list = version, dir, list
+	k.mu.Unlock()
+}
+
+// Version is the board's version as a list reads it (version): a reply
+// built from it holds while it stays; "" when it can't be told.
+func (s *Service) Version(ctx context.Context) string { return s.version(s.Board.Snapshot(ctx)) }
+
+// version is what a built list depends on: the issues and the people (the
+// view's marks), the forges' records and the counter (the store's); ""
+// when it can't be told, and nothing is kept.
+func (s *Service) version(ctx context.Context) string {
+	if s.Kept == nil {
+		return ""
+	}
+	if o, _ := ctx.Value(readOnceKey{}).(*readOnce); o != nil { // a batch: once for its lists
+		o.mu.Lock()
+		defer o.mu.Unlock()
+		if o.version == nil {
+			v := s.version1(ctx)
+			o.version = &v
+		}
+		return *o.version
+	}
+	return s.version1(ctx)
+}
+
+func (s *Service) version1(ctx context.Context) string {
+	v, err := s.Board.Version(ctx, Kind, people.Kind)
+	if err != nil {
+		return ""
+	}
+	// the forges' records aren't in the view: their heads, as the store
+	// lists them (ThreadsMark's)
+	heads, err := s.Board.Store().Heads(ctx, bsync.Kind.Name())
+	if err != nil {
+		return ""
+	}
+	for _, h := range heads {
+		v += "sync " + h.ID + " " + h.Version + "\n"
+	}
+	if c := s.Board.Store().Caps().Counter; c != nil {
+		_, cv, err := c.Count(ctx)
+		if err != nil {
+			return ""
+		}
+		v += "counter " + cv
+	}
+	return v
 }
 
 // notice tells s.Notice, if any.
@@ -75,34 +166,26 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 	if r.Today.IsZero() {
 		r.Today = time.Now()
 	}
-	dir, err := people.Read(ctx, s.Board, s.Avatars)
-	if err != nil {
-		return nil, err
+	version := s.version(ctx)
+	dir, list, kept := s.Kept.built(version)
+	if !kept {
+		var err error
+		if dir, err = people.Read(ctx, s.Board, s.Avatars); err != nil {
+			return nil, err
+		}
 	}
 	// the free text's hits first: a first build then indexes as it reads
 	conds, me, err := s.prepare(ctx, dir, r, true)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := Kind.List(ctx, s.Board, kernel.Query{Sort: "created"})
-	if err != nil {
-		return nil, fmt.Errorf("listing the issues: %w", err)
+	if !kept {
+		if list, err = s.build(ctx, dir); err != nil {
+			return nil, err
+		}
+		s.Kept.keep(version, dir, list)
 	}
-	broken, err := s.Board.Broken(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range broken {
-		s.notice("%s %s: %v", b.Kind, b.ID, b.Err)
-	}
-	rd := s.reading(ctx, s.notice, true)
-	list := make([]Issue, 0, len(rows))
-	for _, l := range rows {
-		is := s.issue(l.ID, &l.Row, dir, rd)
-		is.Version = l.Version
-		is.Inherited = s.Schema.RolesFor(is.Labels) // a list's alone, as v1's
-		list = append(list, is)
-	}
+	list = slices.Clone(list) // the caller's: keep filters it in place
 	if slices.ContainsFunc(conds, func(c Condition) bool { return c.Kind == QFollows }) {
 		f, err := s.following(ctx, dir, me, list, r.Today)
 		if err != nil {
@@ -115,6 +198,33 @@ func (s *Service) List(ctx context.Context, r ListReq) ([]Issue, error) {
 		}
 	}
 	return s.keep(list, conds, me, r.Today), nil
+}
+
+// build is every issue, as a list shows it, oldest first, from the
+// view's rows.
+func (s *Service) build(ctx context.Context, dir people.Directory) ([]Issue, error) {
+	rows, err := Kind.List(ctx, s.Board, kernel.Query{Sort: "created"})
+	if err != nil {
+		return nil, fmt.Errorf("listing the issues: %w", err)
+	}
+	broken, err := s.Board.Broken(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range broken {
+		s.notice("%s %s: %v", b.Kind, b.ID, b.Err)
+	}
+	rd := s.reading(ctx, s.notice, true)
+	_, end := obs.Start(ctx, "issues build", obs.Int("issues", int64(len(rows))))
+	defer end(nil)
+	list := make([]Issue, 0, len(rows))
+	for _, l := range rows {
+		is := s.issue(l.ID, &l.Row, dir, rd)
+		is.Version = l.Version
+		is.Inherited = s.Schema.RolesFor(is.Labels) // a list's alone, as v1's
+		list = append(list, is)
+	}
+	return list, nil
 }
 
 // keep keeps the issues conds match, each with what it inherits.
@@ -250,6 +360,9 @@ func (s *Service) issue(id kernel.ID, r *Row, dir people.Directory, rd reading) 
 	is.Shown = is.ShownTitle()
 	is.numbered(rd.cnt)
 	is.AuthorLogins = dir.Names(r.Author)
+	if len(is.AuthorLogins) > 0 {
+		is.Author = is.AuthorLogins[0]
+	}
 	if len(r.Commenters) > 0 {
 		is.CommenterIDs = make([]string, 0, len(r.Commenters))
 		is.CommenterLogins = make([]string, 0, len(r.Commenters))

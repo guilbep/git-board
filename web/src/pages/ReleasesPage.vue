@@ -124,14 +124,15 @@
 
     <!-- persistent while its POST is out, so a refusal lands in it; the
          content stays through the hide animation, cleared on hide -->
-    <q-dialog v-model="dialogOpen" :persistent="pending" @hide="dialogOpen || (dialog = null)">
+    <GbDialog v-model="dialogOpen" :persistent="pending" @hide="dialogOpen || (dialog = null)">
       <CutReleaseDialog v-if="dialog?.kind === 'cut'" v-model:sending="pending" :envs="envs" :binaries="data?.binaries ?? []" :releases="data?.releases ?? []" :remote="data?.remote || 'origin'" :trunk="data?.trunk ?? ''" :busy="busy" @close="dialogOpen = false" @started="onCut" />
       <RollbackDialog v-else-if="dialog?.kind === 'rollback'" v-model:sending="pending" :env="dialog.env" :envs="envs" :releases="data?.releases ?? []" :busy="busy" @close="dialogOpen = false" @started="onStarted" />
-    </q-dialog>
+    </GbDialog>
   </main>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AdoptPanel from '@/components/AdoptPanel.vue';
 import AppHeader from '@/components/AppHeader.vue';

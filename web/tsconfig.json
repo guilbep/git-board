@@ -1,7 +1,27 @@
 {
-  "extends": "./.quasar/tsconfig.json",
   "compilerOptions": {
+    "target": "esnext",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "noEmit": true,
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "types": ["node"],
+    "strict": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
     // facets.ts imports ./fields.ts by its file name, so node can run its test
-    "allowImportingTsExtensions": true
-  }
+    "allowImportingTsExtensions": true,
+    "paths": { "@": ["./src"], "@/*": ["./src/*"] }
+  },
+  "include": ["src/**/*", "e2e/**/*", "perf/**/*", "vite.config.ts", "playwright.config.ts"],
+  "exclude": ["dist", "node_modules"]
 }

@@ -3,6 +3,8 @@ package forge
 import (
 	"context"
 	"time"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Outage is how long a read waits out a dropped connection or a server
@@ -36,6 +38,7 @@ func WithWaits(ctx context.Context, hear func(Wait)) context.Context {
 
 // Waiting tells ctx's hearer, if any, of a wait.
 func Waiting(ctx context.Context, w Wait) {
+	obs.Event(ctx, "waiting", obs.String("forge", w.Forge), obs.String("why", w.Why), obs.Int("ms", w.For.Milliseconds()))
 	if hear, ok := ctx.Value(waitsKey{}).(func(Wait)); ok {
 		hear(w)
 	}

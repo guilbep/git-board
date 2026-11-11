@@ -1,10 +1,10 @@
 // The table's columns: id, links (the issue on its forges, #1436), title,
-// is (open/closed), one per field,
+// is (open/closed), author (who opened it), one per field,
 // (the forge issues), other (labels without a namespace). A view without
 // `columns` shows the default ones, so a new field gets its column; a
 // view with them shows those, in that order. The title is always shown.
 export function defaultColumns(names: string[]): string[] {
-  return ['id', 'links', 'title', 'is', ...names, 'other'];
+  return ['id', 'links', 'title', 'is', 'author', ...names, 'other'];
 }
 
 export function shownColumns(saved: string[] | undefined, names: string[]): string[] {

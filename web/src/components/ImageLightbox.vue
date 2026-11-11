@@ -2,7 +2,7 @@
      image or its expand button): ←/→ through the issue's images, Download,
      Open in a new tab, Esc or a click beside the image closes. -->
 <template>
-  <q-dialog :model-value="index !== null" maximized class="lb-dialog" @update:model-value="(v) => !v && emit('close')">
+  <GbDialog :model-value="index !== null" maximized class="lb-dialog" @update:model-value="(v) => !v && emit('close')">
     <div v-if="img" class="lb" role="dialog" aria-modal="true" :aria-label="`Image ${pos + 1} of ${images.length}: ${img.name}`" @click.self="emit('close')" @keydown="onKey">
       <header class="lb-bar">
         <span class="lb-name" :title="img.name">{{ img.name }}</span>
@@ -18,10 +18,11 @@
         <button v-if="images.length > 1" type="button" class="lb-nav lb-next" aria-label="Next image (→)" @click="step(1)"><GbIcon name="back" /></button>
       </div>
     </div>
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { computed, nextTick, ref, watch } from 'vue';
 import GbIcon from '@/components/GbIcon.vue';
 

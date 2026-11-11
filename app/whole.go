@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"strings"
 
 	"github.com/guilbep/git-board/tools/ghproject"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // The whole sync (git board sync): a git pull from the remote, the forges'
@@ -45,11 +46,8 @@ type Whole struct {
 
 // hasRemote says the repository has the remote.
 func (b *Board) hasRemote(ctx context.Context, remote string) (bool, error) {
-	out, err := gitRun(ctx, b.Dir, "remote")
-	if err != nil {
-		return false, err
-	}
-	return slices.Contains(strings.Fields(out), remote), nil
+	rs, err := b.Remotes(ctx)
+	return slices.Contains(rs, remote), err
 }
 
 // SyncWhole runs the whole sync's steps in turn, each told.
@@ -107,7 +105,9 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 			continue
 		}
 		step(s.name, "running", "")
-		note, err := s.do(ctx)
+		sctx, end := obs.Start(ctx, "sync "+s.name)
+		note, err := s.do(sctx)
+		end(err)
 		if err == nil {
 			step(s.name, "done", note)
 			continue

@@ -12,6 +12,12 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"cmp"
+
+	"github.com/guilbep/git-board/obs"
+
+	"github.com/guilbep/git-board/store"
 )
 
 // The server's logs (docs/rewrite/api.md, Logs): log/slog to stderr, a
@@ -92,17 +98,22 @@ func redactQuery(raw string) string {
 }
 
 // recorder keeps what a response was: its status, its size, the error
-// code it answered.
+// code it answered; and says, in a Server-Timing header, how long the
+// server took, what it did (store.Counts) and its trace.
 type recorder struct {
 	http.ResponseWriter
 	status int
 	bytes  int
 	code   string
+	start  time.Time
+	counts *store.Counts // the request's work, from withBoard
+	trace  string
 }
 
 func (r *recorder) WriteHeader(code int) {
 	if r.status == 0 {
 		r.status = code
+		r.timing()
 	}
 	r.ResponseWriter.WriteHeader(code)
 }
@@ -110,6 +121,7 @@ func (r *recorder) WriteHeader(code int) {
 func (r *recorder) Write(b []byte) (int, error) {
 	if r.status == 0 {
 		r.status = http.StatusOK
+		r.timing()
 	}
 	n, err := r.ResponseWriter.Write(b)
 	r.bytes += n
@@ -132,19 +144,52 @@ func (r *recorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
+// timing sets the Server-Timing header, before the headers go: the time
+// to the answer's first byte, the git processes, loads and view calls,
+// the trace (a page's devtools show them, and its trace id finds the
+// request in Tempo).
+func (r *recorder) timing() {
+	if r.start.IsZero() {
+		return
+	}
+	parts := []string{fmt.Sprintf("app;dur=%.1f", float64(time.Since(r.start).Microseconds())/1000)}
+	if c := r.counts; c != nil {
+		parts = append(parts, fmt.Sprintf(`work;desc="%d procs, %d loads, %d view"`, c.Processes.Load(), c.Loads.Load(), c.ViewCalls.Load()))
+	}
+	if r.trace != "" {
+		parts = append(parts, `trace;desc="`+r.trace+`"`)
+	}
+	r.Header().Set("Server-Timing", strings.Join(parts, ", "))
+}
+
 // withLog logs each request once it is answered: at info, its method,
 // path, status, duration and size; at warn when it took longer than
 // Slow; the query string at debug, redacted.
 func withLog(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		rec := &recorder{ResponseWriter: w}
 		ctx := context.WithValue(r.Context(), logKey{}, log)
 		if c := r.Header.Get("X-Git-Board-Client"); c != "" {
 			ctx = context.WithValue(ctx, clientKey{}, c)
 		}
+		name := r.Method + " " + r.URL.Path // the route's pattern, once Route knows it
+		if !strings.HasPrefix(r.URL.Path, "/api/") {
+			name = r.Method + " the web app"
+		}
+		ctx, end := obs.StartServer(obs.FromTraceparent(ctx, r.Header.Get("traceparent")), name,
+			obs.String("http.method", r.Method), obs.String("url.path", r.URL.Path))
+		rec := &recorder{ResponseWriter: w, start: start, trace: obs.TraceID(ctx)}
 		next.ServeHTTP(rec, r.WithContext(ctx))
 		took := time.Since(start)
+		obs.Set(ctx, obs.Int("http.status_code", int64(cmpOr(rec.status, http.StatusOK))), obs.Int("bytes", int64(rec.bytes)))
+		if rec.code != "" {
+			obs.Set(ctx, obs.String("code", rec.code))
+		}
+		var failed error
+		if rec.status >= 500 {
+			failed = errors.New(cmp.Or(rec.code, http.StatusText(rec.status)))
+		}
+		end(failed)
 		attrs := []slog.Attr{slog.String("method", r.Method), slog.String("path", r.URL.Path),
 			slog.Int("status", cmpOr(rec.status, http.StatusOK)), slog.Duration("duration", took), slog.Int("bytes", rec.bytes)}
 		if rec.code != "" {
@@ -156,6 +201,13 @@ func withLog(log *slog.Logger, next http.Handler) http.Handler {
 		level, msg := slog.LevelInfo, "request"
 		if took > Slow && r.URL.Path != "/api/events" { // a stream lasts
 			level, msg = slog.LevelWarn, "slow request"
+			if c := rec.counts; c != nil {
+				attrs = append(attrs, slog.Int64("processes", c.Processes.Load()), slog.Int64("loads", c.Loads.Load()),
+					slog.Int64("entities", c.Entities.Load()), slog.Int64("view_calls", c.ViewCalls.Load()))
+			}
+		}
+		if rec.trace != "" {
+			attrs = append(attrs, slog.String("trace", rec.trace))
 		}
 		log.LogAttrs(ctx, level, msg, attrs...)
 	})

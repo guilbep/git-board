@@ -187,7 +187,7 @@
     </template>
   </main>
 
-  <q-dialog v-model="yanking" :persistent="pending">
+  <GbDialog v-model="yanking" :persistent="pending">
     <section class="gb-dialog gb-rel-yank" role="dialog" aria-modal="true" aria-labelledby="yank-title">
       <header class="gb-dialog-head">
         <h2 id="yank-title" class="h5">Yank {{ tag }}</h2>
@@ -203,10 +203,11 @@
         <button type="button" class="epfl-btn epfl-btn-primary" :disabled="busy || !yankReason.trim()" @click="yank">Yank {{ tag }}</button>
       </footer>
     </section>
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { memo } from '@/memo';
 import { useRoute } from 'vue-router';

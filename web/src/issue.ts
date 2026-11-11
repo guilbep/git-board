@@ -6,12 +6,51 @@
 // without a version, the last writer wins, field by field).
 import { ref, watch, type Ref } from 'vue';
 import {
-  addComment, ApiError, editComment, getThread, isStale, message, patchIssue,
-  type IssueChange, type Thread,
+  addComment, ApiError, changesHeard, editComment, getCycle, getFollow, getThread, getThreadSince, isStale, message, patchIssue,
+  type IssueChange, type IssueEvent, type Thread,
 } from '@/api';
 import { latestOnly } from '@/latest';
+import { cycleOn, me } from '@/me';
+import { loadUploadStatus } from '@/uploads';
+import { apply as applyKept } from '@/local/store';
 
 export { message };
+
+// the threads last read, by issue: an issue opened again shows at once,
+// then asks whether it moved (If-None-Match: a 304 when it didn't); a
+// card hovered reads its thread before the click (prefetchThread)
+// ponytail: the last 200 kept; an LRU if people open thousands a visit
+const threads = new Map<string, Thread>();
+const readAt = new Map<string, { at: number; heard: number }>(); // when, and at which change heard
+function keepThread(t: Thread) {
+  threads.delete(t.id);
+  threads.set(t.id, t);
+  readAt.set(t.id, { at: performance.now(), heard: changesHeard() });
+  if (threads.size > 200) {
+    const old = threads.keys().next().value!;
+    threads.delete(old);
+    readAt.delete(old);
+  }
+}
+// fresh: read a moment ago, and nothing heard since: no need to ask again
+function fresh(id: string): boolean {
+  const r = readAt.get(id);
+  return !!r && r.heard === changesHeard() && performance.now() - r.at < OPEN_KEEP;
+}
+
+// OPEN_KEEP is how long what an issue's opening read ahead serves it
+export const OPEN_KEEP = 10_000;
+
+// prefetchThread reads what opening an issue reads, at once rather than
+// one after the other: its thread, its cycle (when on), whether one
+// follows it, whether files attach; a card hovered, an issue opened
+export function prefetchThread(id: string): Promise<void> {
+  loadUploadStatus();
+  void getFollow(id, OPEN_KEEP).catch(() => {});
+  if (cycleOn.value) void getCycle(id, OPEN_KEEP).catch(() => {});
+  if (threads.has(id)) return Promise.resolve();
+  return getThread(id).then(keepThread, () => {}); // opened, it reads it again and says why
+}
 
 export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => {}) {
   const thread = ref<Thread | null>(null);
@@ -28,9 +67,20 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     const current = loads.start();
     loading.value = true;
     error.value = '';
+    const kept = threads.get(id.value);
+    if (kept && thread.value?.id !== kept.id) {
+      thread.value = kept; // shown at once, then asked whether it moved
+      loading.value = false;
+    }
+    if (kept && fresh(id.value)) {
+      thread.value = kept;
+      loading.value = false;
+      return;
+    }
     try {
-      const t = await getThread(id.value);
-      if (current()) thread.value = t;
+      const t = kept ? await getThreadSince(id.value, kept.version) : await getThread(id.value);
+      if (t) keepThread(t);
+      if (current()) thread.value = t ?? kept ?? thread.value;
     } catch (e) {
       if (current()) error.value = message(e);
     } finally {
@@ -41,6 +91,7 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
   // a write's answer: the thread after it, fresher than a load asked
   // before it answered, which is dropped
   function written(t: Thread) {
+    keepThread(t);
     loads.skip();
     loading.value = false;
     error.value = '';
@@ -75,6 +126,33 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
 
   const patch = (change: IssueChange) => write((v) => patchIssue(id.value, v, change));
 
+  // shown: a write the page shows at once, here and on the board's card
+  // (the board kept, ADR 0023), back as it was if the server refuses it
+  async function shown(p: Partial<Thread>, run: () => Promise<boolean>): Promise<boolean> {
+    const before = thread.value;
+    if (before) thread.value = { ...before, ...p };
+    // the board's card: what a list shows (a comment, its count), never the thread's events
+    const { events, ...card } = p;
+    if (events) card.comments = (before?.comments ?? 0) + 1;
+    const undo = applyKept(id.value, card);
+    const ok = await run();
+    if (!ok) {
+      if (before && thread.value?.version === before.version) thread.value = before;
+      undo();
+    }
+    return ok;
+  }
+  const withComment = (body: string, status?: 'open' | 'closed'): Partial<Thread> => {
+    const who = me.value?.me ?? { id: '', name: 'You' };
+    const html = `<p>${body.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!).replace(/\n/g, '<br>')}</p>`;
+    const pending: IssueEvent = { kind: 'comment', id: `pending-${Date.now()}`, author: who, at: new Date().toISOString(), body, html };
+    return { events: [...(thread.value?.events ?? []), pending], ...(status ? { status } : {}) };
+  };
+  const relabeled = (add: string[], remove: string[]): Partial<Thread> => {
+    const now = (thread.value?.labels ?? []).filter((l) => !remove.includes(l));
+    return { labels: [...now, ...add.filter((l) => !now.includes(l))] };
+  };
+
   return {
     thread,
     loading,
@@ -93,13 +171,15 @@ export function useIssue(id: Ref<string>, onChange: (t: Thread) => void = () => 
     // Overwrite after a 412: the write again, over whatever it is now
     overwrite: () => conflict.value?.() ?? Promise.resolve(false),
     // a comment, or a status with one: "Close with comment"
+    // shown at once, as a comment of yours waiting for its answer (its
+    // text as typed: the server renders it); gone if the server refuses it
     comment: (body: string, status?: 'open' | 'closed') =>
-      status ? patch({ status, comment: body }) : write((v) => addComment(id.value, v, body)),
+      shown(withComment(body, status), () => (status ? patch({ status, comment: body }) : write((v) => addComment(id.value, v, body)))),
     // throws: the comment card shows why (ApiError code "changed")
     edit: (commentId: string, body: string, base: string) => write((v) => editComment(id.value, v, commentId, body, base), true),
-    rename: (title: string) => patch({ title }),
-    setStatus: (status: 'open' | 'closed') => patch({ status }),
-    labels: (add: string[], remove: string[]) => patch({ labels: { add, remove } }),
+    rename: (title: string) => shown({ title, shown_title: title }, () => patch({ title })),
+    setStatus: (status: 'open' | 'closed') => shown({ status }, () => patch({ status })),
+    labels: (add: string[], remove: string[]) => shown(relabeled(add, remove), () => patch({ labels: { add, remove } })),
     // field=value, field=-value removing one, field= clearing it
     set: (assignments: string[]) => patch({ set: assignments }),
   };

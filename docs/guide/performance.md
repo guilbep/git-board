@@ -21,6 +21,11 @@ go run ./cmd/boardgen -n 20000 -seed 7 /tmp/board20k
   bodies, comments, edits and status moves, some closed. Each change is
   its own pack, as a command writes it. The same seed makes the same
   board.
+- `-forge` gives it a forge, GitHub's `acme/board`, as a `[forges]`
+  table: its token is looked for on each read of the board's state, as
+  on a team's clone, and nothing is asked of GitHub until a sync (a forge
+  found in the remotes would be resolved on GitHub, a call out). The
+  timed boards of `make perf` have one.
 - For a board in PostgreSQL, copy it there: set `board.datastore` and run
   `git board datastore copy` ([Where the board is kept](datastores.md)).
 
@@ -39,6 +44,63 @@ go test ./surface/http -run - -bench . -benchtime 20x
 Add `-cpuprofile cpu.out -memprofile mem.out` and read them with `go tool
 pprof -top -cum`. For the command line itself, build the binary outside
 the checkout and time it in the board.
+
+## Traces
+
+git-board records what each request, command and sync does as
+OpenTelemetry spans, and sends them to Grafana Tempo, when
+`OTEL_EXPORTER_OTLP_ENDPOINT` says where (`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`,
+whole, wins; `OTEL_SERVICE_NAME` names the service, `git-board` by
+default). Without it nothing is recorded. The spans are the OTLP/JSON
+format, sent by the `obs` package with no SDK (ADR 0014).
+
+```sh
+make obs-up        # Tempo on :4318 and :3200, Grafana on http://localhost:3001
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 git board serve
+```
+
+| Span | What |
+|---|---|
+| `GET /api/issues/{id}`… | a request, by its route; its status, its size |
+| `git <command>`, `git credential fill` | a git process: the store's, the app's, the code's |
+| `load` | entities read through `git cat-file`, how many |
+| `view rows`, `view heads`, `view write` | the view's queries, rows read |
+| `GET <host>` | a forge's request: method, path, status; its waits (rate limit, pace) as events |
+| `sync run`, `sync <stage>`, `sync issues` | a sync, in the trace of the request that started it |
+| `interaction <name>` | a page's act that took over 200 ms (`web/src/interaction.ts`): its requests are its children |
+| `git board <command>` | a command, its spans under it |
+
+Every reply says what it cost in a `Server-Timing` header (`app;dur`,
+the git processes, loads and view calls, the trace id), so a page's
+devtools show it, and a slow request's log line has its counts and trace.
+
+The questions to ask Tempo, from a terminal or an agent:
+
+```sh
+# every request or interaction over 200 ms, the last hour
+curl -sG localhost:3200/api/search --data-urlencode 'q={resource.service.name="git-board" && duration>200ms}' --data-urlencode limit=50
+# one trace, every span
+curl -s localhost:3200/api/traces/<trace id>
+# the git processes of slow requests
+curl -sG localhost:3200/api/search --data-urlencode 'q={resource.service.name="git-board" && name=~"git .*" && duration>50ms}'
+```
+
+## Tried, and left
+
+Measured with Lighthouse's mobile run on the 5,000-issue board, each
+worse, and reverted; not to try again without a new reason:
+
+- fetching `/api/config` beside the board page's code: largest paint
+  2.79 s to 3.08 s (3 runs);
+- preloading the opened page's code beside the entry, three ways (3
+  runs each, 2026-11-11, the board's largest paint 2.47 s without):
+  - its chunks, their CSS and the chunks they share, from a generated
+    `route-preload.js`: 2.68 s (they take the first paint's bandwidth);
+  - its own chunk alone, from the same file: 2.70 s (the file is a
+    round trip of its own, in the head);
+  - its own chunk alone, inline, its hash in the CSP: 2.47 to 2.56 s,
+    no gain: the entry finds the page's chunk at once, nothing waits on
+    it.
 
 ## Guarded, then timed
 
@@ -92,11 +154,14 @@ writes `perf-results/report.md`. It takes about seven minutes.
 |---|---|
 | `surface/cli` | `Ls`, `LsFields`, `LsText`, `LsFirst` (no view), `LsTextFirst` (no index), `Show`, `Comment`, `Set`, `New` |
 | `surface/http` | `ListOpen`, `ListColumn`, `ListAll`, `Facets`, `Thread`, `EventsFanOut` (a comment told to 50 pages), `WorkTeam`, `WorkTeamPage`, `WorkTeamFirst` |
+| `web` (`make perf-web`) | `BoardLCP`, `BoardFCP`, `BoardTBT`, `IssueLCP`, `IssueFCP`, `IssueTBT`: Lighthouse's mobile run on the 5k board's page and an issue's, `PERF_WEB_RUNS` (3) each |
 
 The `perf` workflow runs it nightly and on a pull request labelled
 `perf`, and keeps `perf-results/` as an artifact; not on every push,
-where a shared runner's noise would read as a regression. The web app's
-first paint is measured by hand (web.md), not here yet.
+where a shared runner's noise would read as a regression. What a page
+asks for, counted rather than timed, is held on every push by
+`web/e2e/budget.spec.ts`: each page's API requests, none asked twice,
+its files gzipped.
 
 **A budget** moves down when the code gets faster. It moves up only with
 the reason in its line (a feature that must cost more, a target found

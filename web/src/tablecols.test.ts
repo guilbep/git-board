@@ -5,23 +5,23 @@ import { chooserColumns, defaultColumns, moveColumn, rangeIds, savedColumns, sho
 const names = ['prio', 'status'];
 
 test('a view without columns shows the default ones, the forge after the id', () => {
-  assert.deepEqual(defaultColumns(names), ['id', 'links', 'title', 'is', 'prio', 'status', 'other']);
+  assert.deepEqual(defaultColumns(names), ['id', 'links', 'title', 'is', 'author', 'prio', 'status', 'other']);
   assert.deepEqual(shownColumns(undefined, names), defaultColumns(names));
-  assert.deepEqual(chooserColumns(undefined, names), ['id', 'links', 'title', 'is', 'prio', 'status', 'other']);
+  assert.deepEqual(chooserColumns(undefined, names), ['id', 'links', 'title', 'is', 'author', 'prio', 'status', 'other']);
 });
 
 test('saved columns keep their order, drop unknown keys, always show the title', () => {
   assert.deepEqual(shownColumns(['status', 'links', 'gone', 'id', 'status'], names), ['status', 'title', 'links', 'id']);
-  assert.deepEqual(chooserColumns(['status', 'links'], names), ['status', 'title', 'links', 'id', 'is', 'prio', 'other']);
+  assert.deepEqual(chooserColumns(['status', 'links'], names), ['status', 'title', 'links', 'id', 'is', 'author', 'prio', 'other']);
 });
 
 test('toggling and moving columns', () => {
   const cols = defaultColumns(names);
-  assert.deepEqual(toggleColumn(cols, 'prio'), ['id', 'links', 'title', 'is', 'status', 'other']);
+  assert.deepEqual(toggleColumn(cols, 'prio'), ['id', 'links', 'title', 'is', 'author', 'status', 'other']);
   assert.deepEqual(toggleColumn(cols, 'title'), cols); // the title stays
-  assert.deepEqual(toggleColumn(cols, 'links'), ['id', 'title', 'is', 'prio', 'status', 'other']); // hidden
-  assert.deepEqual(toggleColumn(toggleColumn(cols, 'links'), 'links'), ['id', 'title', 'is', 'prio', 'status', 'other', 'links']); // shown again, at the end
-  assert.deepEqual(moveColumn(cols, 'status', -1), ['id', 'links', 'title', 'is', 'status', 'prio', 'other']);
+  assert.deepEqual(toggleColumn(cols, 'links'), ['id', 'title', 'is', 'author', 'prio', 'status', 'other']); // hidden
+  assert.deepEqual(toggleColumn(toggleColumn(cols, 'links'), 'links'), ['id', 'title', 'is', 'author', 'prio', 'status', 'other', 'links']); // shown again, at the end
+  assert.deepEqual(moveColumn(cols, 'status', -1), ['id', 'links', 'title', 'is', 'author', 'status', 'prio', 'other']);
   assert.deepEqual(moveColumn(cols, 'id', -1), cols);
 });
 

@@ -100,10 +100,6 @@
         </div>
       </div>
 
-      <!-- What differs from the saved view (ViewBar): saved into
-           .git-board.toml for everyone, or dropped. -->
-      <ViewBar :draft="draft" :view="view" :active-view="activeView" :view-layout="viewLayout" @saved="onViewSaved" @discard="resetAll" />
-
       <div v-if="buckets" class="status" role="status">
         <span><b>{{ count }}</b>{{ count === total ? '' : ` of ${total}` }} {{ total === 1 ? 'issue' : 'issues' }}</span>
         <template v-if="changed.size || onlyChanged">
@@ -113,6 +109,9 @@
           </button>
           <button v-if="changed.size" type="button" class="changed-seen" @click="markAllSeen">Mark all seen</button>
         </template>
+        <!-- What differs from the saved view (ViewBar), at the row's end:
+             saved into .git-board.toml for everyone, or dropped -->
+        <ViewBar :draft="draft" :view="view" :active-view="activeView" :view-layout="viewLayout" @saved="onViewSaved" @discard="resetAll" />
       </div>
       </div>
 
@@ -167,7 +166,7 @@
           :columns="columns"
           @open="openIssue"
           @sort="sortBy"
-          @changed="load"
+          @changed="load()"
           @more="lists.more"
           @update:columns="(c) => (columns = c)"
         />
@@ -175,12 +174,12 @@
     </main>
   </div>
 
-  <q-dialog
+  <GbDialog
     v-model="detailOpen"
     :position="panelMode === 'side' ? 'right' : 'standard'"
     :full-height="panelMode === 'side'"
     :class="`gb-dialog-${panelMode}`"
-    :backdrop-filter="panelMode === 'wide' ? 'blur(6px)' : undefined"
+    :blur="panelMode === 'wide'"
     no-route-dismiss
     no-focus
     @hide="closePanel"
@@ -192,7 +191,7 @@
       :names="names"
       :fields="fields"
       :title="detailTitle"
-      :crumb="activeView || 'All open issues'"
+      :crumb="crumb"
       :position="position"
       :has-prev="!!near.prev"
       :has-next="!!near.next"
@@ -200,17 +199,20 @@
       @close="detailOpen = false"
       @prev="step(-1)"
       @next="step(1)"
-      @changed="load"
+      @changed="load()"
       @open="openId"
     />
-  </q-dialog>
+  </GbDialog>
 
-  <q-dialog v-model="newOpen">
+  <GbDialog v-model="newOpen">
     <NewIssueDialog :names="names" :fields="fields" :view="activeView" :prefill="prefill" @close="newOpen = false" @created="onCreated" />
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import { begin } from '@/interaction';
+import { prefetchThread } from '@/issue';
+import GbDialog from '@/components/GbDialog.vue';
 import FilterBox from '@/components/FilterBox.vue';
 import ViewBar from '@/components/ViewBar.vue';
 import FilterHelp from '@/components/FilterHelp.vue';
@@ -318,7 +320,7 @@ const facetList = lists.facets;
 const sel = computed(() => Object.fromEntries(facetList.value.map((f) => [f.key, f.selected])));
 function setFacet(key: string, values: string[]) {
   const f = facetList.value.find((x) => x.key === key);
-  if (f) void setFilter(withFacet(f, values)).then(load);
+  if (f) void setFilter(withFacet(f, values)).then(() => load());
 }
 
 // the filters panel hidden to a rail (commands.ts: the palette toggles it
@@ -536,15 +538,18 @@ async function resetAll() {
 
 let loaded = ''; // the filter last asked for
 let colorsAsked = false;
-async function load() {
+async function load(keep = false) {
   loaded = applied.value;
-  await lists.load({ filter: applied.value, group: groupField.value, sort: apiSort(sort.value) });
+  await lists.load({ filter: applied.value, group: groupField.value, sort: apiSort(sort.value) }, keep);
   if (!colorsAsked && fieldsRead) {
     colorsAsked = true;
     void fieldsRead.then(loadColors, () => {});
   }
 }
-watch(sort, () => void load());
+watch(sort, () => {
+  begin('sort');
+  void load();
+});
 
 watch(activeView, resetView);
 
@@ -552,6 +557,7 @@ watch(activeView, resetView);
 // asked once typing pauses, unless a tick or the view asked already
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
 watch(applied, () => {
+  begin('apply filter'); // timed to the paint after its lists (interaction.ts)
   clearTimeout(filterTimer);
   filterTimer = setTimeout(() => applied.value !== loaded && void load(), 50);
 });
@@ -595,20 +601,27 @@ watch(detailId, () => (lastAt.value = index.value));
 watch(index, (i) => i >= 0 && (lastAt.value = i));
 const near = computed(() => neighbours(flat.value.map((i) => i.id), detailId.value, lastAt.value));
 const detailTitle = computed(() => all.value.find((i) => i.id === detailId.value)?.title ?? '');
+// the crumb names the list the issue is in: the view, or the filter tried
+// over it (is:closed over "open" lists closed issues)
+const crumb = computed(() => (applied.value !== completeTerms(viewFilter.value) ? applied.value : activeView.value) || 'All open issues');
+// of the list's total, not of its pages loaded so far (those grow as it
+// scrolls)
 const position = computed(() => {
   if (index.value < 0) return '';
   const b = shown.value.find((x) => x.issues.some((i) => i.id === detailId.value));
   if (groupField.value && b) {
     const at = b.issues.findIndex((i) => i.id === detailId.value);
-    return `${b.group === '(none)' ? `no ${groupField.value}` : b.group}, ${at + 1} of ${b.issues.length}`;
+    return `${b.group === '(none)' ? `no ${groupField.value}` : b.group}, ${at + 1} of ${(b.total ?? b.issues.length).toLocaleString()}`;
   }
-  return `${index.value + 1} of ${flat.value.length}`;
+  return `${index.value + 1} of ${shown.value.reduce((n, b) => n + (b.total ?? b.issues.length), 0).toLocaleString()}`;
 });
 
 function openIssue(issue: Issue) {
   openId(issue.id);
 }
 function openId(id: string) {
+  begin('open issue'); // timed to the paint after its thread (interaction.ts)
+  void prefetchThread(id); // its reads at once, not after its thread
   void setQuery({ issue: id });
 }
 function step(delta: number) {
@@ -668,17 +681,18 @@ onMounted(() => window.addEventListener('keydown', onKey));
 // page. The state is asked only when the list is empty with no filter
 // changed, and again each time it is.
 const isNew = ref(false);
-watch([total, modified], async ([n, changed]) => {
+watch([total, modified, () => lists.buckets.value === null], async ([n, changed, unread]) => {
   isNew.value = false;
-  if (n !== 0 || changed) return;
+  if (unread || n !== 0 || changed) return; // unread: total is 0 until the list answers
   const st = await getState().catch(() => null);
   isNew.value = st?.phase === 'new' && st.issues === 0 && total.value === 0;
 }, { immediate: true });
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 // live updates (live.ts): another page or a sync changed the issues or the
-// configuration; reload once a burst is over (the board keeps its scroll)
-const reloadLive = debounced(() => void Promise.all([load(), loadColors(fields.value)]));
+// configuration; reload once a burst is over, the rows loaded kept (the
+// board keeps its scroll)
+const reloadLive = debounced(() => void Promise.all([load(true), loadColors(fields.value)]));
 const reloadConfig = debounced(async () => {
   await loadConfig();
   void load();

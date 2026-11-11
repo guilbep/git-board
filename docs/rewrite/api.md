@@ -166,6 +166,25 @@ event for each issue pulled.
 | 12 | `POST /api/issues/{id}/undo` | `{force}` | `{issue, title, undone, what}`, as `undo --json` |
 | 13 | `GET /api/issues/{id}/follow` | | `{following, reasons, set}`, as `follow --json` |
 | 14 | `PUT /api/issues/{id}/follow` | `{follow: true, false or null}` | the same |
+| 64 | `GET /api/snapshot` | `If-None-Match` | `{stamp, cursor, issues}`: every issue, open and closed, as a list shows it; `ETag` its stamp, 304 when held |
+| 65 | `GET /api/changes` | `since`: a cursor | `{cursor, put, dropped}`: the issues changed since, as they are now, and those gone; 410 `gone` when the cursor is older than the server holds |
+| 66 | `GET /api/issues/ids` | `f` (up to 64), `sort`, `limit` (0: all), `offset` | `{stamp, lists, totals}`: the ids each filter matches, sorted, from `offset`, `limit` of them, and how many it matches, in the order asked |
+
+**The board a page keeps (64 to 66; ADR 0023).** A page takes the
+snapshot once, then the changes since its cursor, as the change events
+say when (an `issue` event carries the cursor after it), and asks which
+ids its lists hold (66): the filter grammar stays the server's, and the
+page shows its own copies. The server
+remembers its last 4,096 issue changes; a cursor older, or of a server
+started since, answers 410, and the page takes the snapshot again (a
+304 when nothing changed). A stamp is the board's version: its issues',
+people's, forges' records' and counter's, and which open of the board it
+is. `GET /api/issues`, `/api/issues/batch`, `/api/labels`,
+`/api/issues/ids` and `/api/insights` answer an `ETag` too (the stamp,
+the query, who `@me` is and the day), and a 304 to a page that holds it,
+no list built; `/api/inbox` and `/api/cycle` (the Work page) too, their
+names adding what they read beside the board: the inbox's read marks
+(its file), the branches and the pull requests read (and the hour).
 
 **List (3).** `sort` is `ls --sort`'s: `created`, `updated`,
 `title` or a field, then `asc` or `desc` (`prio desc`); absent, oldest
@@ -329,6 +348,7 @@ page and the Start page download it.
 | 30 | `GET /api/sync` | | `{forges, remotes, run}` |
 | 60 | `GET /api/state` | | the board's state, as `git board state --json` |
 | 31 | `POST /api/sync` | `{scope, way, forges, remote, dry_run, allow_create}` | 202, the run |
+| 67 | `DELETE /api/sync` | | 202; 409 `busy` when no run of this server's runs |
 | 32 | `POST /api/remotes/{name}/{action}` | `action`: `fetch`, `pull`, `push` | `{remote, action, note, issues, people}` |
 | 57 | `POST /api/remotes/{name}` | `{url}`; loopback only | 204 |
 | 33 | `POST /api/forges` | `{kind, url, name, login, token, sync, way}`; loopback only | 201, `{name}` |
@@ -362,17 +382,28 @@ run (31) started while another process holds the lock answers 409.
 is `forges` (`forge sync`), or `all` (fetch, the forges, push: `sync`).
 `way` is `sync` (or `both`, the forge table's word), `pull` or `push` (`forge pull|push|sync`); `forges`
 limits it to those named; `remote` is the whole sync's git remote
-(`origin`); `dry_run` says what a forge run would do (`--check`); a
+(`origin`); `dry_run` says what a forge run would do (`--check`),
+`allow_create` included, as the run would; a
 whole sync goes both ways and has none. One issue's run (v1's
 `/api/issues/{id}/sync`, an `issue` here) waits for the sync engine to
 take one issue (*later*). A run while another runs answers 409 `busy`.
+**Stopping one (67)** cuts this server's run at its next step: it ends
+`stopped`, with no error. What a sync wrote stays, and its journal lets
+the next run go on from there; a check wrote nothing, and its scratch
+copy goes. A run the CLI or another server started is theirs to stop.
 A run is `{id, scope, way, dry_run, started_at, ended_at, state, steps,
-report, error}`: `state` is `running`, `done` or `failed`; a step is a
-whole sync's (`{name, state, line}`: `pull`, `forges`, `project`,
-`push`) or a forge's event (`{forge, way, what, issue, line}`, `what`
-one of `created`, `updated`, `linked`, `posted`, `pushed`, `warning`,
-`waiting`, `left`, `held`, `note`); `report` counts what the forges'
-run did, `{created, updated, unchanged, posted, pushed}`.
+tallies, report, error}`: `state` is `running`, `done`, `failed` or
+`stopped`; a
+step is a whole sync's (`{name, state, line}`: `pull`, `forges`,
+`project`, `push`) or a forge's event a person reads whole (`{forge,
+way, what, line}`, `what` one of `waiting`, `left`, `held`, `note`).
+What a run did to the issues is tallied, never a step each: a tally is
+`{forge, way, what, n, examples}`, `what` an issue's change (`created`,
+`updated`, `linked`, `posted`, `pushed`, `restored`, `release`), a
+write's operation (`create-comment`, `set-status`, `change-labels`…),
+or `warning: <reason>`, its ids and quoted values masked, with its first
+5 steps as `examples`. `report` counts what the forges' run did,
+`{created, updated, unchanged, posted, pushed}`.
 
 **Remotes (32)** run at once. A fetch answers what a pull would
 receive and a push would send, of `issues` and `people`
@@ -597,14 +628,14 @@ data: {"kind":"issue","id":"a9f3…","version":"5c1e…","by":"k3j2h1"}
 
 | `kind` | When | `id` |
 |---|---|---|
-| `issue` | an issue was written (a delete too: a tombstone is a version), here or by anyone else (a command, a fetch, a sync) | the issue, with its `version`; none when its ref is gone |
+| `issue` | an issue was written (a delete too: a tombstone is a version), here or by anyone else (a command, a fetch, a sync) | the issue, with its `version`; none when its ref is gone; `cursor`, the changes' after it (65) |
 | `person` | a person was written | the person |
 | `config` | `.git-board.toml` changed | |
 | `config-error` | `.git-board.toml` was edited by hand and does not open: the board keeps the last file that opened, and `error` says why | |
 | `me` | who writes, or `board.avatars`, changed | |
 | `inbox` | what you read or follow | |
 | `sync` | a run started or ended; a remote moved | the run |
-| `progress` | a run's step, in `step` | the run; `issue` when it is one issue's |
+| `progress` | a run's step, in `step`; at most every 250 ms, its `tallies` so far | the run; `issue` when it is one issue's |
 | `release` | a release job's step, its end, or a write on a record | the tag, when known |
 
 `by` is the `X-Git-Board-Client` of the request that wrote it, when one

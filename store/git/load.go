@@ -13,12 +13,16 @@ import (
 
 	"github.com/guilbep/git-board/kernel/pack"
 	"github.com/guilbep/git-board/store"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // Load reads the refs' entities through `git cat-file`: one process for a
 // few, one per CPU for many, each walking its share. each is called from
 // those processes' goroutines, so it may run on several at once.
-func (s *Store) Load(ctx context.Context, refs []store.Ref, each func(store.Ref, [][]byte, error) error) error {
+func (s *Store) Load(ctx context.Context, refs []store.Ref, each func(store.Ref, [][]byte, error) error) (err error) {
+	ctx, end := obs.Start(ctx, "load", obs.Int("entities", int64(len(refs))))
+	defer func() { end(err) }()
 	if c := store.CountsOf(ctx); c != nil {
 		c.Loads.Add(1)
 		c.Entities.Add(int64(len(refs)))
@@ -54,7 +58,6 @@ func (s *Store) loadShare(ctx context.Context, refs []store.Ref, each func(store
 		return err
 	}
 	w.counts = store.CountsOf(ctx)
-	defer func() { w.counts = nil }()
 	err = w.walk(refs, func(r store.Ref, nodes []node, err error) error {
 		var packs [][]byte
 		if err == nil {
@@ -65,6 +68,7 @@ func (s *Store) loadShare(ctx context.Context, refs []store.Ref, each func(store
 		}
 		return each(r, packs, err)
 	})
+	w.counts = nil // before another load takes w (done)
 	if err != nil {
 		w.close() // its answers may be half read
 		return err

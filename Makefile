@@ -1,4 +1,4 @@
-.PHONY: help build test flow test-pg perf web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
+.PHONY: help build test race flow test-pg perf perf-web obs-up obs-down web-e2e lint fmt vet licences ci compat dogfood golden agents install install-latest web-dev web-check web-lint web-build dist docs docs-serve clean
 
 # The public targets, each with its ## line: a bare make prints them.
 help: ## List the make targets
@@ -9,6 +9,9 @@ build: ## Build every package
 
 test: ## Run the Go tests
 	go test ./...
+
+race: ## Run the Go tests with the race detector (make ci's)
+	go test -race ./...
 
 test-pg: ## Run the PostgreSQL tests: the datastore, the view and the golden board on it (needs GIT_BOARD_TEST_POSTGRES)
 	@test -n "$$GIT_BOARD_TEST_POSTGRES" || { echo "GIT_BOARD_TEST_POSTGRES: a DSN whose user may create databases"; exit 1; }
@@ -32,7 +35,7 @@ licences: ## Check every licence, Go modules and the web app's packages
 # Everything CI's test job runs: .github/workflows/ci.yml only sets up Go and
 # Node, then runs this (its e2e job runs web-e2e). The web checks and build come first, in prerequisite order,
 # because the binary embeds web/dist.
-ci: web-check web-build build vet test compat proved ## Everything CI runs
+ci: web-check web-build build vet race compat proved ## Everything CI runs, the tests with the race detector
 	@test -z "$$(gofmt -l .)" || (echo "gofmt needs to be run on:"; gofmt -l .; exit 1)
 
 # git-board-agents (contrib/board-agents): v1's agents and wtx, out of the
@@ -97,17 +100,34 @@ PERF_COUNT ?= 5
 PERF_TOLERANCE ?= 0.15
 PERF_SEED ?= 1
 PERF_BOARDS ?= 5k:5000 20k:20000
+# The perf boards are boardgen's with -forge: a [forges] table, its token
+# looked for as on a team's clone, nothing asked of GitHub.
 perf: ## Time the CLI and the server on 5k and 20k issues against testdata/perf/budgets.txt
 	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; args=""; \
 	for spec in $(PERF_BOARDS); do label=$${spec%%:*}; n=$${spec#*:}; \
-		board="$(PERF_CACHE)/boardgen-n$$n-seed$(PERF_SEED)"; \
-		if [ ! -d "$$board" ]; then rm -rf "$$board.tmp"; go run ./cmd/boardgen -n $$n -seed $(PERF_SEED) "$$board.tmp"; mv "$$board.tmp" "$$board"; fi; \
+		board="$(PERF_CACHE)/boardgen-n$$n-seed$(PERF_SEED)-forge"; \
+		if [ ! -d "$$board" ]; then rm -rf "$$board.tmp"; go run ./cmd/boardgen -n $$n -seed $(PERF_SEED) -forge "$$board.tmp"; mv "$$board.tmp" "$$board"; fi; \
 		w=$$(mktemp -d); trap 'rm -rf "$$w"' EXIT; cp -r "$$board" "$$w/board"; \
 		echo "perf: $$label ($$n issues)"; \
 		GIT_BOARD_BENCH_REPO="$$w/board" go test ./surface/cli ./surface/http -run - -bench . -benchtime 5x -count $(PERF_COUNT) -timeout 60m | tee "$(PERF_OUT)/bench-$$label.txt"; \
 		rm -rf "$$w"; args="$$args $$label=$(PERF_OUT)/bench-$$label.txt"; \
 	done; \
-	go run ./tools/perfcheck -budgets testdata/perf/budgets.txt -tolerance $(PERF_TOLERANCE) -report $(PERF_OUT)/report.md $$args
+	$(MAKE) --no-print-directory perf-web; \
+	go run ./tools/perfcheck -budgets testdata/perf/budgets.txt -tolerance $(PERF_TOLERANCE) -report $(PERF_OUT)/report.md $$args 5k=$(PERF_OUT)/web-5k.txt
+
+# The pages' timings, run by make perf: Lighthouse's mobile run on the 5k
+# board's page and an issue's (web/perf/lighthouse.mjs), PERF_WEB_RUNS
+# each, then each interaction of web/e2e/interactions.ts, timed
+# PERF_INTERACTION_RUNS times (web/perf/interactions.perf.ts), as benchmark
+# lines in $(PERF_OUT)/web-5k.txt. Needs a Chrome.
+PERF_WEB_RUNS ?= 3
+PERF_INTERACTION_RUNS ?= 5
+perf-web: web-build ## Time the board's and an issue's page on the 5k board (Lighthouse, mobile)
+	@set -e; mkdir -p "$(PERF_CACHE)" "$(PERF_OUT)"; board="$(PERF_CACHE)/boardgen-n5000-seed$(PERF_SEED)-forge"; \
+	test -d "$$board" || go run ./cmd/boardgen -n 5000 -seed $(PERF_SEED) -forge "$$board"; \
+	w=$$(mktemp -d); trap 'rm -rf "$$w"' EXIT; cp -r "$$board" "$$w/board"; go build -o "$$w/git-board" ./cmd/git-board; \
+	cd web && node perf/lighthouse.mjs "$$w/git-board" "$$w/board" $(PERF_WEB_RUNS) | tee "$(abspath $(PERF_OUT))/web-5k.txt"; \
+	PERF_BIN="$$w/git-board" PERF_DIR="$$w/board" PERF_OUT="$(abspath $(PERF_OUT))/web-5k.txt" PERF_RUNS=$(PERF_INTERACTION_RUNS) npx playwright test --config perf/playwright.config.ts
 
 # Records the golden outputs again (docs/rewrite/compat.md): make
 # compat's on the golden boards, and the cross tests' transcripts in
@@ -154,6 +174,15 @@ EPFL_SKILL ?= ../epfl-design-skill
 web-lint: ## Report the EPFL adherence linter's problems in web/src (needs EPFL_SKILL)
 	@test -f $(EPFL_SKILL)/adherence/.stylelintrc.json || (echo "web-lint: no $(EPFL_SKILL)/adherence/.stylelintrc.json; clone EPFL-ENAC/epfl-design-skill there or set EPFL_SKILL"; exit 1)
 	-npx --yes --package=stylelint@16 --package=postcss-html -- stylelint "web/src/**/*.{css,vue}" --ignore-pattern "web/src/css/tokens/**" --config $(EPFL_SKILL)/adherence/.stylelintrc.json
+
+# Traces (docs/guide/performance.md, Traces): Tempo on :4318 (OTLP) and
+# :3200 (its API), Grafana on :3001. Serve with
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318.
+obs-up: ## Start Tempo and Grafana, to read git-board's traces
+	docker compose -f contrib/observability/docker-compose.yml up -d
+
+obs-down: ## Stop Tempo and Grafana
+	docker compose -f contrib/observability/docker-compose.yml down
 
 # The browser tests: web/e2e/serve.mjs builds the web app and the binary,
 # then serves throwaway boards, git and Markdown (CONTRIBUTING.md, Workflow).

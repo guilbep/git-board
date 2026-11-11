@@ -1,7 +1,7 @@
 # The decisions
 
 git-board keeps a team's issues in the team's own repository, and shows
-them on the forges the team uses. Nine decisions make it what it is. Read
+them on the forges the team uses. Ten decisions make it what it is. Read
 them in this order.
 
 [ADR 0003: The board is the team's](0003-own-core-instead-of-git-bug.md).
@@ -51,6 +51,12 @@ and adds a dependency only when a few lines cannot do the work.
 A check's result is a signed line in a git note, keyed by the content it
 checked, so the proof travels with the code. The development cycle that
 reads it is opt-in.
+
+[ADR 0023: The page keeps the board, the server says what it costs](0023-v3-local-first-traced.md).
+Requests, git, forges and a page's acts are traced to Tempo, and every
+reply says its cost. The page keeps the whole board, filters it itself,
+and hears what changed; the server builds the issues once while the
+board stays. Vue runs on plain Vite, without Quasar.
 
 Merged and kept as stubs: 0005, 0012, 0020 and 0021 into 0006, 0007 into
 0004 and 0008, 0009, 0015 and 0016 into 0002, 0013 into 0010, 0017 into

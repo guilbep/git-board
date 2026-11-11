@@ -36,7 +36,7 @@ design](docs/rewrite/design.md#packages), [ADR
 | `app/` | opens a board and wires the domains: the one API every surface calls |
 | `surface/` | `cli`, `http` (the server and its API) and `tui`, on `app` |
 | `cmd/git-board` | the binary; `cmd/boardgen` makes the boards `make perf` times |
-| `web/` | the web app (Quasar/Vue), embedded in the binary |
+| `web/` | the web app (Vue on Vite), embedded in the binary |
 | `golden/`, `testdata/golden/` | the golden boards and the outputs git-board is held to (`make compat`, [compat.md](docs/rewrite/compat.md)) |
 | `contrib/board-agents` | `git-board-agents`, a module of its own: agents and wtx, through git-board's CLI and HTTP API |
 
@@ -84,7 +84,7 @@ board's file instead, for a one-off smoke run of `e2e/tabs.spec.ts`. `make web-e
 CI runs it in its own job (`e2e` in `.github/workflows/ci.yml`), Playwright's
 Chromium in a cache.
 
-The `web/` frontend (Quasar/Vue) has its own toolchain: `make web-dev` /
+The `web/` frontend (Vue on Vite) has its own toolchain: `make web-dev` /
 `make web-build`, or `cd web && npm run dev`/`build`/`typecheck` directly
 ([web/README.md](web/README.md)).
 
@@ -141,6 +141,19 @@ send. The per-issue sync touches only that issue.
   (`tools/ghproject/projectfake`), not hand-rolled mocks ([ADR
   0014](docs/adr/0014-hermetic-tests-on-real-repositories.md)).
 - Every bug fix ships with a regression test that fails without the fix.
+  A crash fix lands on its own, the day it is found, not with the branch
+  it was found on.
+- A new act a person does on a page (open, save, move, sort) adds its
+  entry to `web/e2e/interactions.ts` (whether it shows before the server
+  answers, how many requests it may make) and its budget line,
+  `5k/web/Interaction<Name>`, to `testdata/perf/budgets.txt` ([ADR
+  0023](docs/adr/0023-v3-local-first-traced.md)).
+- A new cache of the server's keeps its value while a stamp holds, with
+  `app/kept.go`'s `kept`, or says in its comment why not (kept by time,
+  kept by entry).
+- A slow request is asked of its trace before it is read in the code:
+  `make obs-up`, serve with `OTEL_EXPORTER_OTLP_ENDPOINT`, and query Tempo
+  ([Traces](docs/guide/performance.md#traces)).
 - Read [the design](docs/rewrite/design.md) before starting: its section 5
   is the status of each milestone, what was built and what was left.
   `docs/implementation-plan.md` is v1's log, kept as history.

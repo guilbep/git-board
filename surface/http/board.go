@@ -25,6 +25,10 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "GET /api/board", s.boardInfo)
 
 	Route(mux, "GET /api/issues", listIssues)
+	Route(mux, "GET /api/issues/batch", listBatch)
+	Route(mux, "GET /api/issues/ids", issueIDs)
+	Route(mux, "GET /api/snapshot", s.snapshot)
+	Route(mux, "GET /api/changes", s.changesSince)
 	Route(mux, "POST /api/issues", createIssue)
 	Route(mux, "GET /api/issues/{id}", showIssue)
 	Route(mux, "PATCH /api/issues/{id}", patchIssue)
@@ -43,6 +47,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	Route(mux, "GET /api/people", listPeople)
 	Route(mux, "GET /api/me", me)
 	Route(mux, "GET /api/state", s.state)
+	Route(mux, "POST /api/slow", s.slow)
 	Route(mux, "PUT /api/me", s.setMe)
 
 	Route(mux, "GET /api/inbox", inbox)
@@ -75,6 +80,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	Route(mux, "GET /api/sync", s.syncStatus)
 	Route(mux, "POST /api/sync", s.startSync)
+	Route(mux, "DELETE /api/sync", s.stopSync)
 	Route(mux, "POST /api/remotes/{name}/{action}", remote)
 	Route(mux, "POST /api/numbers", numbers)
 	Route(mux, "PATCH /api/forges/{name}", s.patchForge)

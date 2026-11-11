@@ -10,6 +10,8 @@ import (
 
 	"github.com/guilbep/git-board/kernel/pack"
 	"github.com/guilbep/git-board/store"
+
+	"strings"
 )
 
 // Board is an open board: a datastore and its view.
@@ -85,6 +87,25 @@ func (b *Board) Snapshot(ctx context.Context) context.Context {
 		return ctx
 	}
 	return context.WithValue(ctx, snapshotKey{b}, &snapshot{fresh: map[string]bool{}})
+}
+
+// Version is the kinds' version, as they stand once fresh: their view
+// marks' sums, one listing of the heads (Fresh) and a view call a kind. A
+// value kept with it (a list built from those kinds) holds while it
+// stays. "" with no kind.
+func (b *Board) Version(ctx context.Context, kinds ...Kind) (string, error) {
+	if err := b.Fresh(ctx, kinds...); err != nil {
+		return "", err
+	}
+	var v strings.Builder
+	for _, k := range kinds {
+		m, err := b.view.Mark(ctx, k.Name())
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&v, "%s %x\n", k.Name(), m.Sum)
+	}
+	return v.String(), nil
 }
 
 // Fresh brings the view to the datastore's heads, for the kinds given or

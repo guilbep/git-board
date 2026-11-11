@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { ApiError, getFollow, setFollow, type FollowState, type IssueEvent } from '@/api';
+import { OPEN_KEEP } from '@/issue';
 import { bellState } from '@/inboxcheck';
 import { message } from '@/issue';
 import GbIcon from '@/components/GbIcon.vue';
@@ -41,7 +42,7 @@ const error = ref('');
 const busy = ref(false);
 async function load() {
   try {
-    follow.value = await getFollow(props.id);
+    follow.value = await getFollow(props.id, OPEN_KEEP);
     error.value = '';
   } catch (e) {
     follow.value = null;

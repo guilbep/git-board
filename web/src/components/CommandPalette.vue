@@ -4,7 +4,7 @@
      New issue, Insights, Settings, Sync, the filters, shortcuts). Nothing
      typed: the issues opened lately, then the commands. -->
 <template>
-  <q-dialog v-model="paletteOpen" position="top" @show="onShow" @hide="onHide">
+  <GbDialog v-model="paletteOpen" position="top" warm @show="onShow" @hide="onHide">
     <div class="cp" role="dialog" aria-label="Filter the issues, jump to one, or run a command" @keydown="onKey">
       <div class="cp-search">
         <GbIcon name="search" small />
@@ -57,10 +57,11 @@
         <button type="button" class="cp-foot-help" @click="showShortcuts"><kbd v-if="!query">?</kbd> every shortcut</button>
       </p>
     </div>
-  </q-dialog>
+  </GbDialog>
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { listIssues, type Issue } from '@/api';

@@ -64,5 +64,11 @@ async function readDocs(page: 'configuration' | 'forges'): Promise<DocSection[]>
     const nl = s.indexOf('\n');
     return { title: s.slice(0, nl).trim(), body: s.slice(nl + 1) };
   });
-  return Promise.all(sections.map(async (s) => ({ id: idOf(s.title), title: s.title, html: (await renderMarkdown(s.body)).html })));
+  // one render for the whole guide, not one a section (19 requests): the
+  // sections joined by a paragraph no guide writes, split on it after
+  const html = (await renderMarkdown(sections.map((s) => s.body).join(`\n\n${SPLIT}\n\n`))).html.split(new RegExp(`<p>${SPLIT}</p>\\s*`));
+  if (html.length !== sections.length) return Promise.all(sections.map(async (s) => ({ id: idOf(s.title), title: s.title, html: (await renderMarkdown(s.body)).html })));
+  return sections.map((s, i) => ({ id: idOf(s.title), title: s.title, html: html[i] ?? '' }));
 }
+
+const SPLIT = 'GBDOCSSPLIT7f3a';

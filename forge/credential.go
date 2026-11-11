@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/guilbep/git-board/obs"
 )
 
 // CredentialTimeout bounds each call to git's credential helper.
@@ -17,7 +19,9 @@ var CredentialTimeout = 10 * time.Second
 // input, never prompting: no terminal, no askpass, no Git Credential
 // Manager window, and for CredentialTimeout at most. Its output may hold a
 // password, so it is never put in an error.
-func Credential(ctx context.Context, action, in string) (string, error) {
+func Credential(ctx context.Context, action, in string) (_ string, err error) {
+	ctx, end := obs.Start(ctx, "git credential "+action)
+	defer func() { end(err) }()
 	ctx, cancel := context.WithTimeout(ctx, CredentialTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "credential", action)

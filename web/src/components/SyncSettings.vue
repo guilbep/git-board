@@ -75,8 +75,10 @@
                   </select>
                 </div>
               </td>
-              <td>{{ f.login ? `as ${f.login}` : 'no token found' }}</td>
-              <td />
+              <td>{{ tokenWords(f) }}</td>
+              <td class="sy-acts">
+                <button v-if="f.sync" type="button" class="epfl-btn epfl-btn-secondary epfl-btn-sm" :disabled="starting || running" :title="`What a sync with ${f.name} alone would do: nothing is written`" @click="start({ scope: 'forges', dry_run: true, forges: [f.name], allow_create: allowCreate })">Check</button>
+              </td>
               <td><button v-if="!f.discovered" type="button" class="gb-linkbtn" :disabled="busy === f.name || running" @click="confirmingRemove = f.name">Remove</button></td>
             </tr>
             <tr v-if="confirmingRemove === f.name" class="sy-confirm-row">
@@ -93,10 +95,12 @@
     <p v-else-if="!error" class="sy-note">Loading…</p>
 
     <div class="sy-run">
-      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="starting || running || !forges.length" @click="start({ scope: 'forges', dry_run: true })">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
+      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="starting || running || !forges.length" @click="start({ scope: 'forges', dry_run: true, allow_create: allowCreate })">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
       <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting || running" @click="confirming = true">{{ running && !run?.dry_run ? 'Syncing…' : 'Sync' }}</button>
-      <span class="sy-note">Check says what a sync with the forges would do, and writes nothing. Sync pulls, syncs the forges, and pushes.</span>
+      <button v-if="running" type="button" class="epfl-btn epfl-btn-secondary" :disabled="stopping" @click="stop">{{ stopping ? 'Stopping…' : 'Stop' }}</button>
+      <span class="sy-note">Check says what Sync would do with the forges, as counts, and writes nothing. Sync pulls, syncs the forges, and pushes.</span>
     </div>
+    <label class="sy-check"><input v-model="allowCreate" type="checkbox" /> Create issues on a forge never synced with, or 50 or more at once (a forge may email everyone watching it, once per issue)</label>
     <p v-if="startError" class="epfl-alert epfl-alert-danger" role="alert"><b>Not started.</b> {{ startError }}</p>
 
     <!-- the run in progress, or the last one: its steps as they came -->
@@ -107,16 +111,36 @@
       </div>
       <SyncProgress v-if="running" :run="run" />
       <p v-if="run.state === 'failed'" class="epfl-alert epfl-alert-danger" role="alert"><b>{{ run.dry_run ? 'The check' : 'The sync' }} stopped.</b> {{ run.error }}</p>
+      <p v-else-if="run.state === 'stopped'" class="gb-hint" role="status">{{ run.dry_run ? 'Stopped. Nothing was written.' : 'Stopped. What it wrote stays; the next sync goes on from there.' }}</p>
       <p v-else-if="run.report" class="gb-hint">{{ reportWords(run.report) }}</p>
-      <details v-if="run.steps.length" class="sy-lines" :open="running">
-        <summary>Steps ({{ run.steps.length }})</summary>
+      <div v-for="g in groups" :key="g.forge" class="sy-forge">
+        <h4 class="h6">{{ g.forge || 'The run' }}</h4>
+        <p v-if="!g.ways.length && !g.warnings.length" class="gb-hint">Nothing to change.</p>
+        <div v-for="w in g.ways" :key="w.way" class="sy-way-tallies">
+          <span class="sy-way-name">{{ run.dry_run ? `would ${w.way}` : w.way }}</span>
+          <ul class="gb-plain-list">
+            <li v-for="t in w.tallies" :key="t.what">
+              <details>
+                <summary>{{ tallyWords(t) }}</summary>
+                <ol class="sy-steps"><li v-for="(x, i) in t.examples" :key="i">{{ stepWords(x) }}</li><li v-if="t.n > t.examples.length" class="gb-hint">… and {{ (t.n - t.examples.length).toLocaleString() }} more</li></ol>
+              </details>
+            </li>
+          </ul>
+        </div>
+        <details v-if="g.warnings.length" class="sy-warnings">
+          <summary>{{ g.warnings.reduce((a, t) => a + t.n, 0).toLocaleString() }} warnings, {{ g.warnings.length }} kinds</summary>
+          <ul class="gb-plain-list"><li v-for="t in g.warnings" :key="t.what">{{ tallyWords(t) }}</li></ul>
+        </details>
+      </div>
+      <details v-if="run.steps.length" class="sy-lines">
+        <summary>Notes ({{ run.steps.length }})</summary>
         <ol class="sy-steps">
           <li v-for="(s, i) in run.steps" :key="i" :class="s.state ? `sy-step-${s.state}` : ''">{{ stepWords(s) }}</li>
         </ol>
       </details>
     </section>
 
-    <q-dialog v-model="confirming">
+    <GbDialog v-model="confirming">
       <section class="gb-dialog" role="dialog" aria-modal="true" aria-labelledby="sy-confirm-title">
         <header class="gb-dialog-head">
           <h2 id="sy-confirm-title" class="h5">Sync now?</h2>
@@ -128,8 +152,7 @@
             <li v-for="f in forges.filter((x) => x.sync)" :key="f.name"><span><b>{{ f.name }}</b>: {{ wayWords(f.way) }}</span></li>
             <li><span><b>git push to {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
           </ul>
-          <label class="sy-check"><input v-model="allowCreate" type="checkbox" /> Create issues on a forge never synced with, or 50 or more at once (a forge may email everyone watching it, once per issue)</label>
-          <p class="gb-hint">A failed pull stops the sync; a forge that fails is told, and the push still runs. It goes on if you leave this page.</p>
+          <p class="gb-hint">{{ allowCreate ? 'Issues are created on a forge never synced with, or 50 or more at once.' : 'No issue is created on a forge never synced with, nor 50 or more at once: tick “Create issues” first.' }} A failed pull stops the sync; a forge that fails is told, and the push still runs. It goes on if you leave this page.</p>
         </div>
         <footer class="gb-dialog-foot">
           <span class="gb-grow" />
@@ -137,7 +160,7 @@
           <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting" @click="runReal">Sync</button>
         </footer>
       </section>
-    </q-dialog>
+    </GbDialog>
 
     <ForgeTokens :key="forges.map((f) => f.name).join(',')" @changed="reload" />
 
@@ -147,6 +170,7 @@
 </template>
 
 <script setup lang="ts">
+import GbDialog from '@/components/GbDialog.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { message, patchConfig, remoteAction, startSync, type SyncRequest, type SyncStatus } from '@/api';
@@ -155,9 +179,10 @@ import { keptIn, needsGit } from '@/datastore';
 import { placesSummary } from '@/fieldplaces';
 import { datastore, loadDatastore } from '@/kept';
 import { onLive } from '@/live';
-import { setForgeWay, addRemote, type ForgeWay } from '@/api/sync';
+import { setForgeWay, addRemote, stopSync, type ForgeWay } from '@/api/sync';
 import { loadSync, syncStatus } from '@/sync';
-import { reportWords, remoteWords, stepWords } from '@/ways';
+import { reportWords, remoteWords, stepWords, tallyGroups, tallyWords } from '@/ways';
+import { boardState } from '@/me';
 import AddForgeDialog from '@/components/AddForgeDialog.vue';
 import ForgeTokens from '@/components/ForgeTokens.vue';
 import ForgesGuide from '@/components/ForgesGuide.vue';
@@ -182,6 +207,14 @@ const st = syncStatus;
 const forges = computed(() => st.value?.forges ?? []);
 const run = computed(() => st.value?.run ?? null);
 const running = computed(() => run.value?.state === 'running');
+const groups = computed(() => tallyGroups(run.value?.tallies ?? []));
+// where a forge's token was found (/api/state): git's credential helper,
+// the environment; the login when the file names one
+function tokenWords(f: { name: string; login?: string }): string {
+  const found = boardState.value?.forges?.find((x) => x.name === f.name)?.token;
+  if (f.login) return `as ${f.login}${found ? `, ${found}` : ''}`;
+  return found ? `token: ${found}` : 'no token found';
+}
 const error = ref('');
 const startError = ref('');
 const busy = ref(''); // a forge being switched or removed
@@ -230,7 +263,7 @@ const reportTitle = computed(() => {
   const r = run.value!;
   const what = r.scope === 'all' ? 'The sync' : r.dry_run ? 'The check' : 'The forges’ sync';
   if (r.state === 'running') return `${what}: so far`;
-  return `${what} ${r.state === 'failed' ? 'stopped' : 'finished'} ${new Date(r.ended_at ?? r.started_at).toLocaleString()}`;
+  return `${what} ${r.state === 'failed' ? 'failed' : r.state === 'stopped' ? 'stopped' : 'finished'} ${new Date(r.ended_at ?? r.started_at).toLocaleString()}`;
 });
 
 // where each field of a forge lives, from the file's model
@@ -307,10 +340,22 @@ async function start(r: SyncRequest) {
     starting.value = false;
   }
 }
+// stop: the run ends at its next step; its end comes as an event
+const stopping = ref(false);
+async function stop() {
+  stopping.value = true;
+  startError.value = '';
+  try {
+    await stopSync();
+  } catch (e) {
+    startError.value = message(e);
+  } finally {
+    stopping.value = false;
+  }
+}
 async function runReal() {
   confirming.value = false;
   await start({ scope: 'all', remote, allow_create: allowCreate.value });
-  allowCreate.value = false;
 }
 
 // a run started or ended, here or elsewhere: the status again
@@ -348,7 +393,12 @@ onMounted(reload);
 .sy-steps { display: grid; gap: .25rem; margin: .5rem 0 0; padding: 0; list-style: none; font-size: .875rem; }
 .sy-step-failed { color: var(--danger-fg); font-weight: 700; }
 .sy-step-skipped { color: var(--fg-muted); }
-.sy-lines summary { cursor: pointer; }
+.sy-lines summary, .sy-forge summary { cursor: pointer; }
+.sy-forge { display: grid; gap: .5rem; }
+.sy-forge h4 { margin: 0; }
+.sy-way-tallies { display: grid; grid-template-columns: 7rem 1fr; gap: .25rem 1rem; }
+.sy-way-name { color: var(--fg-muted); font-size: .875rem; }
+.sy-warnings ul { margin-top: .25rem; font-size: .875rem; overflow-wrap: anywhere; }
 .sy-check { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; }
 .sy-check input { accent-color: var(--primary-hover); }
 .gb-linkbtn { padding: 0; border: 0; background: none; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
