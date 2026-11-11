@@ -141,6 +141,15 @@ send. The per-issue sync touches only that issue.
   (`tools/ghproject/projectfake`), not hand-rolled mocks ([ADR
   0014](docs/adr/0014-hermetic-tests-on-real-repositories.md)).
 - Every bug fix ships with a regression test that fails without the fix.
+  A crash fix lands on its own, the day it is found, not with the branch
+  it was found on.
+- A new act a person does on a page (open, save, move, sort) adds its
+  entry to `web/e2e/interactions.ts`: its budget, whether it shows before
+  the server answers, how many requests it may make ([ADR
+  0023](docs/adr/0023-v3-local-first-traced.md)).
+- A slow request is asked of its trace before it is read in the code:
+  `make obs-up`, serve with `OTEL_EXPORTER_OTLP_ENDPOINT`, and query Tempo
+  ([Traces](docs/guide/performance.md#traces)).
 - Read [the design](docs/rewrite/design.md) before starting: its section 5
   is the status of each milestone, what was built and what was left.
   `docs/implementation-plan.md` is v1's log, kept as history.
