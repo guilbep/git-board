@@ -146,3 +146,13 @@ test('a long table keeps its rows while the board changes under it', async ({ pa
   expect(ids.length - new Set(ids).size, 'rows shown twice').toBe(0);
   expect(errs).toEqual([]);
 });
+
+// the panel's crumb counts the list, not its pages loaded so far (it said
+// "open / 294 of 300" over is:closed's 1,023, then 400, 600… as it scrolled)
+test('an issue opened from a long list says where it is in the whole list', async ({ page }) => {
+  await page.goto(`${longBoard}/#/?filter=is:closed`);
+  await expect(page.locator(ROWS).first()).toBeVisible();
+  const total = (await closedIDs(r, 5000)).length;
+  await page.locator(`${ROWS} .title-button`).first().click();
+  await expect(page.locator('.gb-ptop-view')).toHaveText(`is:closed / 1 of ${total.toLocaleString('en-US')}`);
+});

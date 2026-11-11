@@ -455,7 +455,7 @@ a.gb-bar-step:hover .gb-bar-name { text-decoration: underline; text-underline-of
 .gb-resize{position:sticky;top:0;z-index:3;flex:none;align-self:flex-start;width:.5rem;height:100vh;margin-bottom:-100vh;cursor:col-resize;touch-action:none}
 .gb-resize:hover,.gb-resize:focus-visible,.gb-resize.is-dragging{background:color-mix(in srgb,var(--primary) 35%,transparent);outline:none}
 .gb-panel-wide{width:calc(100vw - 5rem);height:calc(100vh - 5rem);max-width:none;border-radius:var(--radius)}
-dialog.gb-dialog-wide>*{max-width:none;max-height:none}
+
 @media (max-width:47.99rem){.gb-panel-wide{width:100vw;height:100vh;border-radius:0}dialog.gb-dialog-wide{padding:0}}
 .gb-panel:focus{outline:none}
 /* TOML colors (web/src/toml.ts): the settings page's editor and its reference */

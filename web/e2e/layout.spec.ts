@@ -96,3 +96,20 @@ test('the issue side panel resizes by its edge', async ({ page, request }) => {
   await edge.dblclick();
   await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBeLessThan(1040);
 });
+
+// expanded, the panel covers the board less 2.5rem around it: the 560px
+// cap of small dialogs squeezed it, and its crumb to nothing ("› #2619")
+test('the expanded issue panel takes the window, its crumb shown', async ({ page, request }) => {
+  await identity(request);
+  const { id } = await issue(request, 'Expand me');
+  await page.goto('/#/');
+  await page.evaluate(() => localStorage.setItem('gb-panel-mode', 'wide'));
+  await page.goto(`/#/?issue=${id}`);
+  await page.reload(); // a hash route keeps the app: the stored mode is read at boot
+  const panel = page.locator('.gb-panel');
+  await expect(panel).toBeVisible();
+  const vw = page.viewportSize()!.width;
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBeGreaterThan(vw - 100);
+  expect((await page.locator('.gb-ptop-view').boundingBox())!.width).toBeGreaterThan(40);
+  await page.evaluate(() => localStorage.setItem('gb-panel-mode', 'side'));
+});

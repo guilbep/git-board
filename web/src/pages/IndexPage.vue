@@ -191,7 +191,7 @@
       :names="names"
       :fields="fields"
       :title="detailTitle"
-      :crumb="activeView || 'All open issues'"
+      :crumb="crumb"
       :position="position"
       :has-prev="!!near.prev"
       :has-next="!!near.next"
@@ -601,14 +601,19 @@ watch(detailId, () => (lastAt.value = index.value));
 watch(index, (i) => i >= 0 && (lastAt.value = i));
 const near = computed(() => neighbours(flat.value.map((i) => i.id), detailId.value, lastAt.value));
 const detailTitle = computed(() => all.value.find((i) => i.id === detailId.value)?.title ?? '');
+// the crumb names the list the issue is in: the view, or the filter tried
+// over it (is:closed over "open" lists closed issues)
+const crumb = computed(() => (applied.value !== completeTerms(viewFilter.value) ? applied.value : activeView.value) || 'All open issues');
+// of the list's total, not of its pages loaded so far (those grow as it
+// scrolls)
 const position = computed(() => {
   if (index.value < 0) return '';
   const b = shown.value.find((x) => x.issues.some((i) => i.id === detailId.value));
   if (groupField.value && b) {
     const at = b.issues.findIndex((i) => i.id === detailId.value);
-    return `${b.group === '(none)' ? `no ${groupField.value}` : b.group}, ${at + 1} of ${b.issues.length}`;
+    return `${b.group === '(none)' ? `no ${groupField.value}` : b.group}, ${at + 1} of ${(b.total ?? b.issues.length).toLocaleString()}`;
   }
-  return `${index.value + 1} of ${flat.value.length}`;
+  return `${index.value + 1} of ${shown.value.reduce((n, b) => n + (b.total ?? b.issues.length), 0).toLocaleString()}`;
 });
 
 function openIssue(issue: Issue) {
