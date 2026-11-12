@@ -64,6 +64,7 @@ var synonyms = map[string]string{
 // hasn't yet counts with the warnings its pull brings, so the first
 // check of a board, before any pull, proposes the same. It carries no
 // label of a field the Project holds: the pull leaves those on the forge.
+// An issue of a repository other than the forge table's never comes.
 func Fit(s State, plan Plan, c *Config) []Proposal {
 	here := map[string]bool{}
 	for _, is := range s.Issues {
@@ -71,7 +72,8 @@ func Fit(s State, plan Plan, c *Config) []Proposal {
 	}
 	coming := Plan{Bases: map[string]map[string]string{}}
 	for _, it := range s.Items {
-		if it.Type == "Issue" && it.URL != "" && !here[it.URL] {
+		ours := c.Forge.Project == "" || strings.EqualFold(repoOf(it.URL), c.Forge.Project)
+		if it.Type == "Issue" && it.URL != "" && !here[it.URL] && ours {
 			syncIssue(&coming, it, Issue{URL: it.URL}, nil, s.Meta, c)
 		}
 	}
