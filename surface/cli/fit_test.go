@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,9 +33,9 @@ func TestTheCo2Fit(t *testing.T) {
 	t.Chdir(dir)
 	file := filepath.Join(dir, ".git-board.toml")
 
-	// the board, pulled from the forge before the file: 80 issues with a
-	// Category on the Project and no kind, one on each of two statuses
-	// the file lacks, and one off the Project that carries the third
+	// the forge: 80 issues with a Category on the Project and no kind, one
+	// on each of two statuses the file lacks, and one off the Project that
+	// carries the third
 	categories := []struct {
 		name string
 		n    int
@@ -47,6 +48,10 @@ func TestTheCo2Fit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	b.Close()
+	if out, err := exec.Command("git", "-C", dir, "config", "board.me", string(me.ID)).CombinedOutput(); err != nil {
+		t.Fatalf("git config: %v\n%s", err, out)
+	}
 	f := fake.New("github.com/o/r")
 	author := forge.Account{ID: "7", Login: "dev"}
 	for i := 1; i <= 80; i++ {
@@ -55,14 +60,11 @@ func TestTheCo2Fit(t *testing.T) {
 	f.Add(forge.Issue{Author: author, Title: "On tests metier", Labels: []string{"status:tests-metier"}})
 	f.Add(forge.Issue{Author: author, Title: "On comite", Labels: []string{"status:comite"}})
 	f.Add(forge.Issue{Author: author, Title: "Off the Project", Labels: []string{"status:qa"}})
-	if _, err := b.SyncForges(ctx, app.WayPull, app.ForgeRun{Forges: []app.NamedForge{{Name: "gh", Forge: f}}}); err != nil {
-		t.Fatal(err)
-	}
-	b.Close()
-	if out, err := exec.Command("git", "-C", dir, "config", "board.me", string(me.ID)).CombinedOutput(); err != nil {
-		t.Fatalf("git config: %v\n%s", err, out)
-	}
-	old := app.DefaultConfig + "\n[github-project]\nowner = \"o\"\nnumber = 1\n"
+	opened := app.OpenForge
+	app.OpenForge = func(context.Context, forge.Table) (forge.Forge, error) { return f, nil }
+	t.Cleanup(func() { app.OpenForge = opened })
+	forges := app.DefaultConfig + "\n[forges.gh]\nkind = \"github\"\nproject = \"o/r\"\nsync = true\n"
+	old := forges + "\n[github-project]\nowner = \"o\"\nnumber = 1\n"
 	if err := os.WriteFile(file, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -100,30 +102,15 @@ func TestTheCo2Fit(t *testing.T) {
 	app.GitHubAPI = srv.URL
 	t.Cleanup(func() { app.GitHubAPI = was })
 	t.Setenv("GITHUB_TOKEN", "t")
-
-	// the check: 82 warnings, and the line that names the fit
-	out, errs, code := run(t, "-C", dir, "project", "sync", "--check")
-	for _, want := range []string{"82 warning(s)", "config: 12 changes clear 82 warnings: git board project fit"} {
-		if code != 0 || !strings.Contains(out, want) {
-			t.Fatalf("check: %d, want %q in\n%s\n%s", code, want, out[max(0, len(out)-600):], errs)
+	proposals := func(r ghproject.Report) (got []string) {
+		for _, p := range r.Fit {
+			l := fmt.Sprintf("%s -> ? clears %d", p.ID, p.Clears)
+			if p.Ticked {
+				l = fmt.Sprintf("%s -> %s %s clears %d", p.ID, p.Do, p.Value, p.Clears)
+			}
+			got = append(got, l)
 		}
-	}
-
-	// the twelve proposals: six ticked, six asked
-	if b, err = app.Open(ctx, dir, app.Options{Who: true}); err != nil {
-		t.Fatal(err)
-	}
-	r, err := b.ProjectRun(ctx, ghproject.Both, false, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	for _, p := range r.Fit {
-		l := fmt.Sprintf("%s -> ? clears %d", p.ID, p.Clears)
-		if p.Ticked {
-			l = fmt.Sprintf("%s -> %s %s clears %d", p.ID, p.Do, p.Value, p.Clears)
-		}
-		got = append(got, l)
+		return got
 	}
 	want := []string{
 		"status:Comité Spécialisé -> ? clears 1",
@@ -139,8 +126,65 @@ func TestTheCo2Fit(t *testing.T) {
 		"sprint:Sprint 2 -> sprint sprint-2 clears 0",
 		"sprint:Sprint 3 -> sprint sprint-3 clears 0",
 	}
-	if !slices.Equal(got, want) || !r.First {
-		t.Fatalf("the proposals, first %v:\n%s\nwant:\n%s", r.First, strings.Join(got, "\n"), strings.Join(want, "\n"))
+
+	// a new team's first check, of a board with no issue yet: each part
+	// counted, and the twelve proposals with the warnings the pull brings.
+	// No label says a status here, so each option takes the Project's name.
+	out, errs, code := run(t, "-C", dir, "sync", "--check")
+	for _, want := range []string{"parts: 0 pull-changes, 83 pull-new, 0 create, 0 send", "config: 12 changes clear 82 warnings: git board project fit", "checked: nothing written"} {
+		if code != 0 || !strings.Contains(out, want) {
+			t.Fatalf("the first check: %d, want %q in\n%s\n%s", code, want, out[max(0, len(out)-600):], errs)
+		}
+	}
+	if b, err = app.Open(ctx, dir, app.Options{Who: true}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := b.ProjectRun(ctx, ghproject.Both, false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := slices.Clone(want)
+	fresh[0], fresh[1] = "status:Comité Spécialisé -> option comite-specialise clears 1", "status:QA Validation -> option qa-validation clears 0"
+	if got := proposals(r); !slices.Equal(got, fresh) || !r.First || r.Plan.Counts().Matched != 0 {
+		t.Fatalf("the proposals of a board with no issue, first %v:\n%s\nwant:\n%s", r.First, strings.Join(got, "\n"), strings.Join(fresh, "\n"))
+	}
+	b.Close()
+
+	// co2's board is older than its Project's table: its issues came with
+	// their status labels. The new issues alone are pulled: nothing goes
+	// to the forge, and the next check has none left to pull.
+	if err := os.WriteFile(file, []byte(forges), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, errs, code = run(t, "-C", dir, "sync", "--only", "pull-new")
+	if code != 0 || !strings.Contains(out, "synced") || len(f.Writes()) != 0 {
+		t.Fatalf("sync --only pull-new: %d, forge writes %v\n%s\n%s", code, f.Writes(), out[max(0, len(out)-600):], errs)
+	}
+	out, errs, code = run(t, "-C", dir, "sync", "--check")
+	if code != 0 || !strings.Contains(out, "parts: 0 pull-changes, 0 pull-new, 0 create, 0 send") {
+		t.Fatalf("the check after the pull: %d\n%s\n%s", code, out[max(0, len(out)-600):], errs)
+	}
+	if err := os.WriteFile(file, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// the check: 82 warnings, and the line that names the fit
+	out, errs, code = run(t, "-C", dir, "project", "sync", "--check")
+	for _, want := range []string{"82 warning(s)", "config: 12 changes clear 82 warnings: git board project fit"} {
+		if code != 0 || !strings.Contains(out, want) {
+			t.Fatalf("check: %d, want %q in\n%s\n%s", code, want, out[max(0, len(out)-600):], errs)
+		}
+	}
+
+	// the twelve proposals: six ticked, six asked
+	if b, err = app.Open(ctx, dir, app.Options{Who: true}); err != nil {
+		t.Fatal(err)
+	}
+	if r, err = b.ProjectRun(ctx, ghproject.Both, false, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := proposals(r); !slices.Equal(got, want) || !r.First {
+		t.Fatalf("the proposals:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 	if c := r.Fit[0].Choices; !slices.Equal(c, []string{"map=comite-specialise", "map=comite", "map=qa", "unmapped"}) {
 		t.Errorf("Comité Spécialisé offers %q", c)

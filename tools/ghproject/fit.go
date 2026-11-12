@@ -60,11 +60,24 @@ var synonyms = map[string]string{
 }
 
 // Fit is what the file lacks for the Project, from both sides as a check
-// read them and the plan it made.
+// read them and the plan it made. An issue of the Project the board
+// hasn't yet counts with the warnings its pull brings, so the first
+// check of a board, before any pull, proposes the same. It carries no
+// label of a field the Project holds: the pull leaves those on the forge.
 func Fit(s State, plan Plan, c *Config) []Proposal {
+	here := map[string]bool{}
+	for _, is := range s.Issues {
+		here[is.URL] = true
+	}
+	coming := Plan{Bases: map[string]map[string]string{}}
+	for _, it := range s.Items {
+		if it.Type == "Issue" && it.URL != "" && !here[it.URL] {
+			syncIssue(&coming, it, Issue{URL: it.URL}, nil, s.Meta, c)
+		}
+	}
 	clears := map[string]int{}
 	var categories []string
-	for _, ch := range plan.Changes {
+	for _, ch := range slices.Concat(plan.Changes, coming.Changes) {
 		for _, w := range ch.Warnings {
 			if w.Kind != WarnNoOption && w.Kind != WarnNotAKind {
 				continue
