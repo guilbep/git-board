@@ -619,7 +619,7 @@ sync and leaves the others for the next one: `pull-changes` (the forge
 issues that changed), `pull-new` (the forge issues new here), `create`
 (the issues to create on a forge) and `send` (the changes to send). The
 Project pulls with a pull part, and is written to with `create` or
-`send`. `--git` syncs with git alone, a pull then a push. With no path it syncs the current
+`send`. A release is published with `send`. `--git` syncs with git alone, a pull then a push. With no path it syncs the current
 directory; it goes on past a path that fails and reports every failure at
 the end. Each step has its own commands: `fetch`, `pull` and `push` (the
 git remote), `forge pull|push|sync` and `project pull|push|sync`

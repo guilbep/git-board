@@ -597,7 +597,9 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	})
 	im := &issuesync.Mapper{Options: opt}
 	ms := []bsync.Mapper{im}
-	if len(cfg.Release.Binaries) > 0 && !forgeOnly { // v1 publishes the releases of binaries alone
+	// v1 publishes the releases of binaries alone; a release goes with
+	// send: a run without it pushes nothing to a forge
+	if len(cfg.Release.Binaries) > 0 && !forgeOnly && (run.Only == nil || slices.Contains(run.Only, issuesync.Send)) {
 		var raw []forge.Forge
 		for _, f := range run.Forges {
 			if forgeWayOf(f.Way) != bsync.Pull { // a release is published: a read-only mirror takes none

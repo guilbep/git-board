@@ -95,6 +95,7 @@ shape.
 | The parts | `pull-changes`, `pull-new`, `create` and `send`. The sync engine skips a part left out: its issues are not written and not journaled. The run records no run, so the next sync lists them again. **(call)** |
 | A creation | What a sync sends after it creates an issue (its labels, its comments) is part of `create`. It counts there alone. When `send` is left out, it still goes with the creation. **(call)** |
 | The Project's side | The Project reads its labels with a pull part. It writes to the Project with `create` or `send`. Without `create` and `send`, the sync writes nothing to the Project. The git pull and push are not parts: they always run. **(call)** |
+| A release | A release of binaries is published with `send`. Without `send`, the sync publishes none. **(call)** |
 | Command line | `git board sync --only pull-changes,pull-new`. One list flag, and no `--no-push`, because "push" already names the git push. `sync --check` ends with the count of each part. **(call)** |
 | The web page | Check is the whole sync's dry run. Once it ends, it shows a box for each part with its count, and the issues under it. Sync runs the parts ticked. The GitHub Project is a section of the Sync page, with the fit and the conflicts. **(call)** |
 | The Project's routes | The Project's own `check` and `apply` routes go. The whole sync checks and runs the Project, so Stop stops it. A resolve and a fit read the last check, and check nothing again. After a fit writes, the page asks for a new check. **(call)** |
