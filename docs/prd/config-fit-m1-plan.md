@@ -101,7 +101,8 @@ The PRD now says them.
   - **An issue not pulled yet.** `Fit` plans each issue of the Project
     that the board lacks, and counts its warnings. The first check of an
     empty board gives the same proposals. An issue of another repository
-    than the forge table's does not count.
+    than the forge table's does not count. If no item is of the table's
+    repository, every issue counts.
 - `Config.Answer(p, answer)`: `map=<value>`, `add-kind`, `unmapped`.
 - `Report.Fit`, `Report.First` and `Report.FitLine`, filled by `Run`.
 
@@ -237,9 +238,11 @@ The PRD now says them.
 3. A second check still counts the change to pull, the creations and
    the change to send.
 4. A sync with `only: [create]` creates the two issues. It writes to no
-   issue that the forge already has. The next check counts no creation.
-5. A sync with `only: [send]` sends the change. The title changed on the
-   forge stays as the forge has it, and the next check still counts it.
+   issue that the forge already has, and nothing to the Project. The
+   next check counts no creation.
+5. A sync with `only: [send]` sends the change, and the status changed
+   here to the Project. The title changed on the forge stays as the
+   forge has it, and the next check still counts it.
 6. A Project check and a Project sync each stop on `DELETE /api/sync`.
    Nothing more is written to the Project.
 7. The stopped sync ran the forges whole. The forge still has five
@@ -247,6 +250,9 @@ The PRD now says them.
 
 ### After the review
 
+- **The Project is written with `send` alone.** With `create` it took
+  the changes of issues that were there. `projectSide` now leaves the
+  Project out of a sync of `create` alone.
 - **A release goes with `send`.** The release mapper ran whatever the
   parts were. It now runs with `send` alone.
 - **A check goes on past a failed fetch.** `SyncWhole` stops after a

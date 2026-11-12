@@ -83,7 +83,8 @@ nothing on the Project. The fit still gives its proposals. **(call)**
   `Slug(name)`. On an empty board, co2's fit ticks eight proposals and
   asks four.
 - If the file names a GitHub forge's repository, an issue of another
-  repository does not count. A pull never brings it.
+  repository does not count. A pull never brings it. If no item of the
+  Project is of that repository, every issue counts: the name moved.
 
 ## Part 2: the first sync, chosen
 
@@ -109,7 +110,7 @@ shape.
 | --- | --- |
 | The parts | `pull-changes`, `pull-new`, `create` and `send`. The sync engine skips a part left out: its issues are not written and not journaled. The run records no run, so the next sync lists them again. **(call)** |
 | A creation | What a sync sends after it creates an issue (its labels, its comments) is part of `create`. It counts there alone. When `send` is left out, it still goes with the creation. **(call)** |
-| The Project's side | The Project reads its labels with a pull part. It writes to the Project with `create` or `send`. Without `create` and `send`, the sync writes nothing to the Project. The git pull and push are not parts: they always run. **(call)** |
+| The Project's side | The Project reads its labels with a pull part. It writes to the Project with `send`. An issue just created is no item of the Project yet, so `create` writes nothing there. With `create` alone, the Project's step is skipped. The git pull and push are not parts: they always run. **(call)** |
 | A release | A release of binaries is published with `send`. Without `send`, the sync publishes none. **(call)** |
 | Command line | `git board sync --only pull-changes,pull-new`. One list flag, and no `--no-push`, because "push" already names the git push. `sync --check` ends with the count of each part. **(call)** |
 | The web page | Check is the whole sync's dry run. Once it ends, it shows a box for each part with its count, and the issues under it. Sync runs the parts ticked. The GitHub Project is a section of the Sync page, with the fit and the conflicts. **(call)** |
@@ -150,9 +151,9 @@ shape.
 Part 2 has one test, `TestTheChosenSync`. It checks a board through the
 forge fake and `projectfake`, then syncs the new issues alone. A second
 check still counts the other parts. A sync of `create` alone writes to
-no issue that the forge already has. A sync of `send` alone leaves a
+no issue that the forge already has, and nothing to the Project. A sync of `send` alone leaves a
 change made on the forge as it is. A Project check and a Project sync
-then stop, and nothing is written to the Project. The stopped sync ran
+then stop, and nothing more is written to the Project. The stopped sync ran
 the forges whole, so a last check counts nothing in any part.
 
 Part 1 has one test, the co2 case end to end, through `projectfake`. The Project
