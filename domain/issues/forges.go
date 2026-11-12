@@ -72,16 +72,33 @@ func (s *Service) read1(ctx context.Context, notice Notice, now bool) (rd readin
 			b.WriteString(h.ID + " " + h.Version + "\n")
 		}
 		rd.sum = b.String()
+		if recs, ok := s.Records.at(rd.sum); ok {
+			rd.recs = recs
+			return rd
+		}
+		broken := false
 		rd.recs, err = bsync.Records(ctx, s.Board, func(id kernel.ID, err error) {
+			broken = true
 			if notice != nil {
 				notice("sync %s: %v", id, err)
 			}
 		})
+		if err == nil {
+			cleanNumbers(rd.recs, notice)
+			if !broken {
+				s.Records.keep(rd.sum, rd.recs)
+			}
+		}
 	}
 	if err != nil && notice != nil {
 		notice("the sync records: %v; the issues show without their forges", err)
 	}
-	for _, recs := range rd.recs {
+	return rd
+}
+
+// cleanNumbers leaves aside a record's forge number that isn't one.
+func cleanNumbers(all map[string][]bsync.Record, notice Notice) {
+	for _, recs := range all {
 		for i, r := range recs {
 			if r.Number != "" && !isNumber(r.Number) {
 				if notice != nil {
@@ -91,7 +108,37 @@ func (s *Service) read1(ctx context.Context, notice Notice, now bool) (rd readin
 			}
 		}
 	}
-	return rd
+}
+
+// KeptRecords are the sync entities' records as read1 last read them, by
+// their heads' sum: each thread, follow and list read them whole again
+// (~200 ms on a board of a thousand synced issues). Shared: no reader
+// changes them. A read that found an entity broken keeps nothing, so it
+// says so again.
+// ponytail: kept whole by the sync heads' sum; a forge number left aside
+// is told on the read that kept them, not on each request.
+type KeptRecords struct {
+	mu   sync.Mutex
+	sum  string
+	recs map[string][]bsync.Record
+}
+
+func (k *KeptRecords) at(sum string) (map[string][]bsync.Record, bool) {
+	if k == nil {
+		return nil, false
+	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.recs, k.sum != "" && k.sum == sum
+}
+
+func (k *KeptRecords) keep(sum string, recs map[string][]bsync.Record) {
+	if k == nil {
+		return
+	}
+	k.mu.Lock()
+	k.sum, k.recs = sum, recs
+	k.mu.Unlock()
 }
 
 // forged sets where the issue is on forges, from its records, and its

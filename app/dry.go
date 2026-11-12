@@ -181,11 +181,12 @@ func (c *counted) SetAssignees(ctx context.Context, issue forge.Ref, users []for
 // to, opened as a board; done removes it. It is a mirror in the board's
 // folder: on the same disk, git links the objects rather than copying
 // them. The sync's journal goes with it, for the check to skip what a cut
-// run read.
-func (b *Board) scratch(ctx context.Context, g *git.Store) (*kernel.Board, func(), error) {
+// run read; was is the journal as it went (nil for none), for
+// bsync.Adopt.
+func (b *Board) scratch(ctx context.Context, g *git.Store) (_ *kernel.Board, _ func(), was []byte, _ error) {
 	parent := g.Folder()
 	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	left, _ := filepath.Glob(filepath.Join(parent, "check-*"))
 	for _, d := range left {
@@ -195,21 +196,22 @@ func (b *Board) scratch(ctx context.Context, g *git.Store) (*kernel.Board, func(
 	}
 	dir, err := os.MkdirTemp(parent, "check-")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	done := func() { _ = os.RemoveAll(dir) }
 	cmd := exec.CommandContext(ctx, "git", "clone", "--mirror", "--quiet", filepath.Dir(parent), dir)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		done()
-		return nil, nil, fmt.Errorf("copying the refs for a check: %w: %s", err, strings.TrimSpace(string(out)))
+		return nil, nil, nil, fmt.Errorf("copying the refs for a check: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	s, err := git.OpenGitDir(dir)
 	if err != nil {
 		done()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if data, err := os.ReadFile(filepath.Join(parent, "sync.lock")); err == nil {
+		was = data
 		if err := os.MkdirAll(s.Folder(), 0o755); err == nil {
 			_ = os.WriteFile(filepath.Join(s.Folder(), "sync.lock"), data, 0o644)
 		}
@@ -218,14 +220,14 @@ func (b *Board) scratch(ctx context.Context, g *git.Store) (*kernel.Board, func(
 	if err != nil {
 		s.Close()
 		done()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	kb, err := kernel.Open(ctx, s, v, issues.Kind, people.Kind)
 	if err != nil {
 		v.Close()
 		s.Close()
 		done()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return kb, func() { kb.Close(); done() }, nil
+	return kb, func() { kb.Close(); done() }, was, nil
 }

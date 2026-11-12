@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,8 +18,6 @@ import (
 	"time"
 
 	"github.com/guilbep/git-board/forge"
-	"github.com/guilbep/git-board/forge/github"
-	"github.com/guilbep/git-board/forge/gitlab"
 )
 
 // The pictures of issue text that a forge keeps (v1's media proxy): a
@@ -69,25 +68,33 @@ func ForgeMedia(u *url.URL, gitlabHosts []string) bool {
 // gitlabForges are the board's GitLab forges, host and login: its
 // [forges] tables, else those its remotes name (no network: the hosts
 // alone).
+// They are kept while git's config files are unchanged (forgeCache): a
+// picture asked ran `git remote -v` each time.
 func (b *Board) gitlabForges(ctx context.Context) []forge.Table {
-	tables := b.Config.Forges.List
-	if len(tables) == 0 || b.Config.Forges.Discover {
-		out, _ := gitRun(ctx, b.Dir, "remote", "-v")
-		for _, l := range strings.Split(out, "\n") {
-			if f := strings.Fields(l); len(f) >= 2 {
-				if t, _ := forge.FromRemote(NoCredentials(f[1])); t.Kind != "" {
-					tables = append(tables, t)
+	c := &b.forges
+	out, _ := c.gitlab.get(c.stamp(ctx, b.Dir), func() ([]forge.Table, error) {
+		tables := b.Config.Forges.List
+		var err error // a read that failed (a request gone) keeps nothing
+		if len(tables) == 0 || b.Config.Forges.Discover {
+			var out string
+			out, err = gitRun(ctx, b.Dir, "remote", "-v")
+			for _, l := range strings.Split(out, "\n") {
+				if f := strings.Fields(l); len(f) >= 2 {
+					if t, _ := forge.FromRemote(NoCredentials(f[1])); t.Kind != "" {
+						tables = append(tables, t)
+					}
 				}
 			}
 		}
-	}
-	var out []forge.Table
-	for _, t := range tables {
-		if t.Kind == "gitlab" && t.Host != "" {
-			out = append(out, t)
+		var out []forge.Table
+		for _, t := range tables {
+			if t.Kind == "gitlab" && t.Host != "" {
+				out = append(out, t)
+			}
 		}
-	}
-	return out
+		return out, err
+	})
+	return slices.Clone(out)
 }
 
 // MediaURL is where a page loads a picture of issue text from: the
@@ -117,9 +124,24 @@ func (b *Board) MediaURL(ctx context.Context) func(raw string) string {
 	}
 }
 
+// Picture is a forge's picture as the server answers it: its type, its
+// bytes, their ETag, and whether its address names these bytes for good.
+type Picture struct {
+	Type      string
+	Data      []byte
+	ETag      string // the bytes' sum, quoted: If-None-Match answers 304
+	Immutable bool   // immutableMedia: a browser keeps it a year
+}
+
+// mediaFresh is how long a kept picture whose address may show other
+// bytes later (an avatar, a file in a repository) is answered from disk.
+const mediaFresh = 24 * time.Hour
+
 // Media is a forge's picture, fetched with the forge's token, kept on
-// disk (a git board's folder) and answered from there next time.
-func (b *Board) Media(ctx context.Context, raw string) (contentType string, data []byte, err error) {
+// disk (the board's own folder) and answered from there next time: for
+// good when immutableMedia, for mediaFresh otherwise, then fetched again;
+// a fetch that fails then answers the kept one.
+func (b *Board) Media(ctx context.Context, raw string) (Picture, error) {
 	u, err := url.Parse(raw)
 	gitlabs := b.gitlabForges(ctx)
 	var hosts []string
@@ -127,32 +149,39 @@ func (b *Board) Media(ctx context.Context, raw string) (contentType string, data
 		hosts = append(hosts, t.Host)
 	}
 	if err != nil || !ForgeMedia(u, hosts) {
-		return "", nil, &Error{Class: Usage, Err: fmt.Errorf("not a forge's picture: %q", raw)}
+		return Picture{}, &Error{Class: Usage, Err: fmt.Errorf("not a forge's picture: %q", raw)}
 	}
+	immutable := immutableMedia(u, hosts)
 	var file string
-	if b.inGit() {
+	if folder := b.Kernel.Store().Folder(); folder != "" { // this machine's, never a checkout's
 		sum := sha256.Sum256([]byte(raw))
-		file = filepath.Join(b.Kernel.Store().Folder(), "v2", "media", hex.EncodeToString(sum[:]))
+		file = filepath.Join(folder, "v2", "media", hex.EncodeToString(sum[:]))
+	}
+	var kept *Picture
+	if file != "" {
 		if contentType, data, err := cachedMedia(file); err == nil {
-			touchMedia(file, time.Now())
-			return contentType, data, nil
-		}
-	}
-	token := ""
-	switch host := u.Hostname(); {
-	case host == "github.com" || strings.HasSuffix(host, ".githubusercontent.com"):
-		token, _ = github.Token(ctx, "github.com", "")
-	default:
-		for _, t := range append(gitlabs, forge.Table{Host: "gitlab.com"}) {
-			if t.Host == host {
-				token, _ = gitlab.Token(ctx, "https://"+host, t.Login)
-				break
+			p := picture(contentType, data, immutable)
+			if immutable {
+				touchMedia(file, time.Now())
+				return p, nil
 			}
+			// a mutable one's time is when it was fetched: never touched
+			if st, err := os.Stat(file); err == nil && time.Since(st.ModTime()) < mediaFresh {
+				return p, nil
+			}
+			kept = &p
 		}
 	}
-	contentType, data, err = fetchMedia(ctx, u, token, hosts)
+	token, key := b.mediaToken(ctx, u.Hostname(), gitlabs)
+	contentType, data, err := fetchMedia(ctx, u, token, hosts)
+	if fa := (forgeAnswered{}); key != "" && errors.As(err, &fa) && (fa.code == http.StatusUnauthorized || fa.code == http.StatusForbidden) {
+		b.forges.dropMediaToken(key) // revoked, or another account's: looked up again next time
+	}
 	if err != nil {
-		return "", nil, err
+		if kept != nil {
+			return *kept, nil // the forge out of reach: the picture as it was
+		}
+		return Picture{}, err
 	}
 	if file != "" { // a failure costs a fetch next time
 		if os.MkdirAll(filepath.Dir(file), 0o755) == nil {
@@ -160,8 +189,117 @@ func (b *Board) Media(ctx context.Context, raw string) (contentType string, data
 			trimMedia(filepath.Dir(file), mediaKeep, time.Now())
 		}
 	}
-	return contentType, data, nil
+	return picture(contentType, data, immutable), nil
 }
+
+func picture(contentType string, data []byte, immutable bool) Picture {
+	sum := sha256.Sum256(data)
+	return Picture{Type: contentType, Data: data, ETag: `"` + hex.EncodeToString(sum[:12]) + `"`, Immutable: immutable}
+}
+
+// immutableMedia says u's address names one picture for good: GitHub's
+// attachments (github.com/user-attachments, private-user-images and
+// user-images.githubusercontent.com) and GitLab's uploads, by their hash.
+// Any other (raw.githubusercontent.com, an avatar) may show other bytes
+// later.
+func immutableMedia(u *url.URL, gitlabHosts []string) bool {
+	switch host := u.Hostname(); {
+	case host == "github.com":
+		return strings.HasPrefix(u.Path, "/user-attachments/")
+	case host == "private-user-images.githubusercontent.com", host == "user-images.githubusercontent.com":
+		return true
+	case host == "gitlab.com" || slices.Contains(gitlabHosts, host):
+		return strings.Contains(u.Path, "/uploads/")
+	}
+	return false
+}
+
+// mediaToken is the token host's pictures are fetched with, and the
+// forge it is kept for (key, "" for none): GitHub's for github.com and
+// its githubusercontent.com hosts, one token for all of them; a GitLab
+// forge's for its host; none for any other (S3's bucket: the token never
+// goes there). Yours on that host, else the forge's posting account's,
+// else any (LoginFor's order). Looked up once and kept
+// (forgeCache.mediaToken), whatever becomes of the request that asked.
+func (b *Board) mediaToken(ctx context.Context, host string, gitlabs []forge.Table) (token, key string) {
+	var f forge.Table
+	switch {
+	case host == "github.com" || strings.HasSuffix(host, ".githubusercontent.com"):
+		f = forge.Table{Kind: "github", Host: "github.com"}
+		if found, err := b.FoundForges(ctx, func(string) {}); err == nil {
+			if i := slices.IndexFunc(found, func(t forge.Table) bool { return t.Kind == "github" && t.Host == "github.com" }); i >= 0 {
+				f.Login = found[i].Login
+			}
+		}
+	default:
+		for _, t := range append(gitlabs, forge.Table{Kind: "gitlab", Host: "gitlab.com"}) {
+			if t.Host == host {
+				f = t
+				break
+			}
+		}
+	}
+	if f.Kind == "" {
+		return "", ""
+	}
+	key = f.Kind + " " + f.Host
+	ctx = context.WithoutCancel(ctx) // the others waiting on it keep its answer
+	return b.forges.mediaToken(key, func() string {
+		for _, login := range slices.Compact([]string{cmp.Or(b.myLogin(ctx, f.Host), f.Login), ""}) {
+			if t, err := FindToken(ctx, f, login); err == nil && t != "" {
+				return t
+			}
+		}
+		return ""
+	}), key
+}
+
+// mediaToken is a forge's token for its pictures (key: its kind and
+// host), find's answer kept: a
+// minute found, 10 s not, and until a token is stored here (tokenFound's
+// rule). The lock is held across find, so thirty pictures missing at
+// once run one git credential fill, not thirty. The token stays in this
+// process's memory alone, never on disk nor in an answer.
+// ponytail: one lock for every host; a lock a host if pictures from
+// several forges load at once.
+func (c *forgeCache) mediaToken(key string, find func() string) string {
+	c.mediaMu.Lock()
+	defer c.mediaMu.Unlock()
+	stored := tokensStored.Load()
+	if k, ok := c.media[key]; ok && k.stored == stored {
+		if age := time.Since(k.at); k.token != "" && age < time.Minute || age < 10*time.Second {
+			return k.token
+		}
+	}
+	t := find()
+	if c.media == nil {
+		c.media = map[string]mediaToken{}
+	}
+	c.media[key] = mediaToken{token: t, at: time.Now(), stored: stored}
+	return t
+}
+
+// dropMediaToken forgets a forge's token: it refused it.
+func (c *forgeCache) dropMediaToken(key string) {
+	c.mediaMu.Lock()
+	delete(c.media, key)
+	c.mediaMu.Unlock()
+}
+
+// mediaToken is a forge's token as mediaToken found it ("" for none).
+type mediaToken struct {
+	token  string
+	at     time.Time
+	stored int64 // tokensStored then
+}
+
+// forgeAnswered is a forge's answer to a picture other than 200.
+type forgeAnswered struct {
+	code   int
+	status string
+}
+
+func (e forgeAnswered) Error() string { return "the forge answered " + e.status }
 
 func fetchMedia(ctx context.Context, u *url.URL, token string, gitlabHosts []string) (string, []byte, error) {
 	client := &http.Client{
@@ -188,7 +326,7 @@ func fetchMedia(ctx context.Context, u *url.URL, token string, gitlabHosts []str
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", nil, fmt.Errorf("the forge answered %s", resp.Status)
+		return "", nil, forgeAnswered{resp.StatusCode, resp.Status}
 	}
 	contentType := resp.Header.Get("Content-Type")
 	if !strings.HasPrefix(contentType, "image/") {

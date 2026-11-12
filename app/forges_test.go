@@ -1,11 +1,15 @@
 package app
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/guilbep/git-board/domain/issues"
@@ -13,6 +17,7 @@ import (
 	"github.com/guilbep/git-board/domain/releases"
 	"github.com/guilbep/git-board/forge"
 	"github.com/guilbep/git-board/forge/fake"
+	bsync "github.com/guilbep/git-board/sync"
 )
 
 // A forge run on an open board: what it pushes and pulls is the board's,
@@ -86,6 +91,33 @@ func TestForgesFromRemotes(t *testing.T) {
 	}
 	if want := []string{"skipped https://example.com/x/y.git: not github.com, nor a GitLab host"}; !slices.Equal(said, want) {
 		t.Errorf("said %q, want %q", said, want)
+	}
+}
+
+// A request gone while the forges are read from the remotes keeps no
+// empty list: the next request finds them.
+func TestFoundForgesCancelledKeepsNothing(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "git@github.com:o/r.git"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if _, err := b.Remotes(t.Context()); err != nil { // kept, as a request before left them
+		t.Fatal(err)
+	}
+	gone, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, _ = b.FoundForges(gone, func(string) {})
+	fs, err := b.FoundForges(t.Context(), func(string) {})
+	if err != nil || len(fs) != 1 {
+		t.Fatalf("after a request gone mid-read: forges %+v, %v, want o/r", fs, err)
 	}
 }
 
@@ -216,6 +248,102 @@ func TestSyncForgesCheck(t *testing.T) {
 	}
 	if len(f.Writes()) != 0 {
 		t.Fatalf("a check wrote %v", f.Writes())
+	}
+}
+
+// completes is a fake whose issue reads (Complete) are told, by title; one
+// titled failOn fails, as a dropped connection.
+type completes struct {
+	*fake.Forge
+	mu     sync.Mutex
+	read   []string
+	failOn string
+}
+
+func (c *completes) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if is.Title == c.failOn {
+		return is, errors.New("the connection dropped")
+	}
+	c.read = append(c.read, is.Title)
+	return c.Forge.Complete(ctx, is)
+}
+
+// then is the reads since the last, which it forgets, with the next to
+// fail.
+func (c *completes) then(failOn string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	got := c.read
+	c.read, c.failOn = nil, failOn
+	return got
+}
+
+// A sync right after a check doesn't read again what the check found
+// the board holding: it reads what changed alone, and pulls it. A check
+// that failed hands nothing on.
+func TestASyncAfterACheckReadsWhatChanged(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	b, err := Open(t.Context(), dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	f := &completes{Forge: fake.New("example.com/p")}
+	var added []forge.Issue
+	for i := range 5 {
+		added = append(added, f.Add(forge.Issue{Author: forge.Account{ID: "7", Login: "ann"}, Title: fmt.Sprint("i", i), Status: "open", Created: int64(1000 + i)}))
+	}
+	run := ForgeRun{Forges: []NamedForge{{Name: "p", Forge: f}}}
+	// pulled by a pull alone, which records no run, its journal emptied:
+	// each run after lists all five
+	if _, err := b.SyncForges(t.Context(), WayPull, run); err != nil {
+		t.Fatal(err)
+	}
+	if err := bsync.Forget(b.Kernel.Store()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SetTitle(t.Context(), added[2].Ref(), "i2, renamed"); err != nil {
+		t.Fatal(err)
+	}
+	lock := filepath.Join(b.Kernel.Store().Folder(), "sync.lock")
+	journal := func() string { data, _ := os.ReadFile(lock); return string(data) }
+
+	f.then("i3")
+	before := journal()
+	check := run
+	check.DryRun = true
+	if _, err := b.SyncForges(t.Context(), WaySync, check); err == nil {
+		t.Fatal("the failing check went through")
+	}
+	if journal() != before {
+		t.Fatalf("a failed check handed on:\n%s", journal())
+	}
+	f.then("")
+	if _, err := b.SyncForges(t.Context(), WaySync, check); err != nil {
+		t.Fatal(err)
+	}
+	// a set: a read the failed check started ahead may land late
+	if got := slices.Compact(slices.Sorted(slices.Values(f.then("")))); !slices.Equal(got, []string{"i0", "i1", "i2, renamed", "i3", "i4"}) {
+		t.Fatalf("the check read %q, want the five", got)
+	}
+	if _, err := b.SyncForges(t.Context(), WaySync, run); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.then(""); !slices.Equal(got, []string{"i2, renamed"}) {
+		t.Fatalf("the sync after the check read %q, want what changed alone", got)
+	}
+	list, err := b.Issues.List(t.Context(), issues.ListReq{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(list, func(is issues.Issue) bool { return is.Title == "i2, renamed" }) {
+		t.Fatal("the change the check saw wasn't pulled")
 	}
 }
 

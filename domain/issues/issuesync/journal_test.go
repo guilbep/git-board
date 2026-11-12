@@ -19,12 +19,28 @@ import (
 )
 
 // reads is a fake whose reads of an issue the pull reaches are told, by
-// title, and one of which fails as a dropped connection would.
+// title, and one of which fails as a dropped connection would; and the
+// since of its last listing.
 type reads struct {
 	*fake.Forge
 	mu     sync.Mutex
 	read   []string
 	failOn string
+	since  int64
+}
+
+func (r *reads) Issues(ctx context.Context, since int64) ([]forge.Issue, error) {
+	r.mu.Lock()
+	r.since = since
+	r.mu.Unlock()
+	return r.Forge.Issues(ctx, since)
+}
+
+// listedSince is the since its last listing asked for.
+func (r *reads) listedSince() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.since
 }
 
 func (r *reads) Complete(ctx context.Context, is forge.Issue) (forge.Issue, error) {
@@ -350,4 +366,77 @@ func TestASkippedOriginalJoinsItsMirror(t *testing.T) {
 	if all := allIssues(t, s); len(all) != 1 {
 		t.Fatalf("%d issues: b's copy didn't join the one pulled from a", len(all))
 	}
+}
+
+// pulledAlready is tenOld's forge pulled once by a pull alone, which
+// records no run, and the journal emptied: the next sync lists all ten,
+// and finds each as the board holds it.
+func pulledAlready(t *testing.T) (*kernel.Board, *reads, []forge.Issue) {
+	t.Helper()
+	s, r, added := tenOld(t)
+	if _, err := Pull(t.Context(), s, Options{Readers: 1}, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := bsync.Forget(s.Store()); err != nil {
+		t.Fatal(err)
+	}
+	r.then("")
+	return s, r, added
+}
+
+// A run that writes nothing records no run in the sync entity, which
+// doesn't grow; the journal keeps its start, and the next run lists from
+// there: a quiet board isn't read whole again each run.
+func TestAQuietRunIsRemembered(t *testing.T) {
+	t.Parallel()
+	s, r, added := pulledAlready(t)
+	if rep := syncInOrder(t, s, r); rep != (Report{Unchanged: 10}) {
+		t.Fatalf("the first sync: %+v, want the ten unchanged", rep)
+	}
+	if got := r.then(""); len(got) != 10 || r.listedSince() != 0 {
+		t.Fatalf("the first sync listed since %d, read %q, want all ten", r.listedSince(), got)
+	}
+	syncInOrder(t, s, r)
+	if got := r.then(""); len(got) != 0 || r.listedSince() == 0 {
+		t.Fatalf("the sync after a quiet one listed since %d, read %q: want from the quiet run's start, nothing read", r.listedSince(), got)
+	}
+	if err := r.SetTitle(t.Context(), added[3].Ref(), "i3, renamed"); err != nil {
+		t.Fatal(err)
+	}
+	syncInOrder(t, s, r)
+	if got := r.then(""); titles(got) != "i3, renamed" {
+		t.Fatalf("after a change on the forge, the sync read %q, want it alone", got)
+	}
+}
+
+// A run cut before its end leaves no quiet start: the next lists what the
+// last recorded run would.
+func TestACutRunIsntQuiet(t *testing.T) {
+	t.Parallel()
+	s, r, _ := pulledAlready(t)
+	cut(t, s, r, "i6")
+	if q := quietSince(t, s); q != 0 {
+		t.Fatalf("a cut run left a quiet start: %d", q)
+	}
+}
+
+// A first run, no sync entity yet, records no quiet start: a first pull
+// may have held back what it read.
+func TestAFirstRunIsntQuiet(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	syncInOrder(t, s, fake.New(key))
+	if q := quietSince(t, s); q != 0 {
+		t.Fatalf("a first run left a quiet start: %d", q)
+	}
+}
+
+func quietSince(t *testing.T, s *kernel.Board) int64 {
+	t.Helper()
+	j, err := bsync.Lock(s.Store(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer j.Unlock()
+	return j.QuietSince(key)
 }

@@ -42,7 +42,9 @@ func guardServer(t *testing.T) (http.Handler, *boardgen.Board) {
 			return
 		}
 		guard.dir = filepath.Join(tmp, "board")
-		guard.b, guard.err = boardgen.Git(context.Background(), guard.dir, boardgen.Options{Issues: guardIssues, Seed: 1})
+		// every issue linked to a forge, as on a synced board: a read of
+		// an issue's forges reads the sync entity's records
+		guard.b, guard.err = boardgen.Git(context.Background(), guard.dir, boardgen.Options{Issues: guardIssues, Seed: 1, Synced: true})
 	})
 	if guard.err != nil {
 		t.Fatal(guard.err)
@@ -130,6 +132,13 @@ func TestGuardRoutes(t *testing.T) {
 	id := string(gb.Issues[5])
 	within(t, "GET /api/issues/{id}", countGet(t, h, "/api/issues/"+id),
 		map[string]int64{"entities": 1, "loads": 1, "objects": 40, "processes": 2, "listings": 6, "view calls": 16, "rows put": 0})
+	// the forges' records kept while the sync entities stay: another
+	// issue, its follow state, read their issue alone
+	other := string(gb.Issues[6])
+	within(t, "GET /api/issues/{id}, another", countGet(t, h, "/api/issues/"+other),
+		map[string]int64{"entities": 1, "loads": 1, "objects": 40, "processes": 2, "listings": 6, "view calls": 16, "rows put": 0})
+	within(t, "GET /api/issues/{id}/follow", countGet(t, h, "/api/issues/"+other+"/follow"),
+		map[string]int64{"entities": 1, "loads": 1, "processes": 2, "rows put": 0})
 	// the Work page: every open thread in one load, then none
 	within(t, "GET /api/cycle, first", countGet(t, h, "/api/cycle?who=team"),
 		map[string]int64{"entities": guardIssues, "loads": 4, "processes": 2, "listings": 8, "view calls": 32})

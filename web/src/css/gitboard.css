@@ -5,7 +5,6 @@
 /* git-board, EPFL design: this stylesheet is identical in every artboard.
    Token values come from epfl-design-skill tokens/colors_and_type.css.
    .epfl-* classes mirror its css/ layer; .gb-* are git-board parts. */
-@font-face{font-family:"Suisse Int'l";src:url("https://enac-it-fonts.epfl.ch/SuisseIntl-Regular-WebS.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 .gb-icon{width:1rem;height:1rem;flex:none}
 .gb-brand{display:flex;align-items:center;gap:1rem;color:var(--fg);text-decoration:none}
 .gb-brand:hover{color:var(--fg)}
