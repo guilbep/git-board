@@ -388,7 +388,7 @@ the forges' dry run and the Project's check, in one report. `only` lists
 the parts the run writes, empty for every one: `pull-changes`,
 `pull-new`, `create`, `send` (`sync --only`). A part left out is left for
 the next sync. The Project runs on the side the parts name (labels
-with a pull part, the Project with create or send). A whole sync goes
+with a pull part, the Project with send). A whole sync goes
 both ways. One issue's run (v1's
 `/api/issues/{id}/sync`, an `issue` here) waits for the sync engine to
 take one issue (*later*). A run while another runs answers 409 `busy`.

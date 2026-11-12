@@ -41,8 +41,8 @@ for the next sync: pull-changes (the forge issues that changed, pulled
 into their issues), pull-new (the forge issues new to the board), create
 (the issues created on a forge), send (the changes sent to the linked
 forge issues). --only pull-changes,pull-new pushes nothing to the forges.
-The Project pulls with a pull part, and is written to with create or
-send. A release is published with send. --check counts each part, and says the issues of each.
+The Project pulls with a pull part, and is written to with send. A
+release is published with send. --check counts each part, and says the issues of each.
 
 Each path is a directory of a git repository (the current directory if
 none given), synced in turn: a failure on one doesn't stop the others.`,

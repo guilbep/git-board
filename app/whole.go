@@ -45,7 +45,7 @@ type Whole struct {
 	NoProject bool
 	// Only are the parts the sync writes, nil every one; the caller's
 	// Forges take them too. The Project pulls with a pull part, and is
-	// written to with a create or send part (projectSide).
+	// written to with send; create alone leaves it out (projectSide).
 	Only []Part
 	// Project hears the Project step's report, nil none.
 	Project func(ghproject.Report)
@@ -89,9 +89,12 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 		{StepProject, "no [github-project] in .git-board.toml", nil},
 		{StepPush, noRemote, nil},
 	}
-	if gp, _ := b.Config.Tools.GithubProject.Get(); gp.Owner != "" && gp.Number != 0 && !w.NoProject {
+	side, ok := projectSide(w.Only)
+	if gp, _ := b.Config.Tools.GithubProject.Get(); gp.Owner != "" && gp.Number != 0 && !w.NoProject && !ok {
+		steps[2].skip = "create alone writes nothing to the Project"
+	} else if gp.Owner != "" && gp.Number != 0 && !w.NoProject {
 		steps[2].do = func(ctx context.Context) (string, error) {
-			r, err := b.ProjectRun(ctx, projectSide(w.Only), !w.DryRun, 0)
+			r, err := b.ProjectRun(ctx, side, !w.DryRun, 0)
 			if w.Project != nil && err == nil {
 				w.Project(r)
 			}
@@ -138,17 +141,21 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 }
 
 // projectSide is the Project's side for the parts a sync writes: its
-// labels with a pull part, the Project with a create or send part.
-func projectSide(only []Part) ghproject.Side {
+// labels with a pull part, the Project with send. A creation is no item
+// of the Project yet, so create writes nothing there: with create alone
+// the Project has no side, and ok is false.
+func projectSide(only []Part) (_ ghproject.Side, ok bool) {
 	pulls := only == nil || slices.Contains(only, issuesync.PullChanges) || slices.Contains(only, issuesync.PullNew)
-	pushes := only == nil || slices.Contains(only, issuesync.Create) || slices.Contains(only, issuesync.Send)
+	pushes := only == nil || slices.Contains(only, issuesync.Send)
 	switch {
-	case pulls && !pushes:
-		return ghproject.Labels
-	case pushes && !pulls:
-		return ghproject.OnGH
+	case pulls && pushes:
+		return ghproject.Both, true
+	case pulls:
+		return ghproject.Labels, true
+	case pushes:
+		return ghproject.OnGH, true
 	}
-	return ghproject.Both
+	return "", false
 }
 
 var credentials = regexp.MustCompile(`://[^/\s@]+@`)

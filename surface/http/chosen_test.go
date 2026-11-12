@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -151,6 +153,9 @@ func TestTheChosenSync(t *testing.T) {
 	for _, is := range f.All() {
 		there[is.ID] = true
 	}
+	// One's status, which the pull took from the Project, changed here: a
+	// change the Project takes with send, and not with create
+	want[map[string]any](t, a.do("PATCH", "/api/issues/"+one.Items[0].ID, map[string]any{"labels": map[string]any{"add": []string{"status:done"}, "remove": []string{"status:doing"}}}), 200)
 	if sy := ran(t, a, map[string]any{"scope": "all", "only": []string{"create"}}); sy.State != "done" {
 		t.Fatalf("the sync of create: %s %s %+v", sy.State, sy.Error, sy.Steps)
 	}
@@ -161,6 +166,9 @@ func TestTheChosenSync(t *testing.T) {
 		if there[w.Issue] {
 			t.Errorf("a sync of create wrote to an issue that was there: %+v", w)
 		}
+	}
+	if w := p.Writes(); len(w) != 0 {
+		t.Fatalf("a sync of create wrote to the Project: %q", w)
 	}
 	wantCounts("the check after the creations", ran(t, a, map[string]any{"scope": "all", "dry_run": true}),
 		map[string]int{"pull-changes": 1, "send": 1})
@@ -174,6 +182,12 @@ func TestTheChosenSync(t *testing.T) {
 	two, _ := f.Get("2")
 	if one1.Title != "One, here" || two.Title != "Two, renamed" || len(f.All()) != 5 {
 		t.Fatalf("a sync of send left One %q and Two %q among %d issues", one1.Title, two.Title, len(f.All()))
+	}
+	if !slices.ContainsFunc(f.Writes(), func(w fake.Write) bool { return there[w.Issue] && w.Op == "set-title" }) {
+		t.Errorf("a sync of send wrote One's title to no issue that was there: %+v", f.Writes())
+	}
+	if w := p.Writes(); len(w) != 1 || !strings.Contains(w[0], "Status = Done") {
+		t.Fatalf("a sync of send wrote %q to the Project, want One's status", w)
 	}
 	wantCounts("the check after the send", ran(t, a, map[string]any{"scope": "all", "dry_run": true}), map[string]int{"pull-changes": 1})
 	onProject := len(p.Writes())
