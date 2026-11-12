@@ -98,8 +98,8 @@
     <p v-else-if="!error" class="sy-note">Loading…</p>
 
     <div class="sy-run">
-      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="starting || running" @click="start({ scope: 'all', dry_run: true, remote, allow_create: allowCreate })">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
-      <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting || running || only?.length === 0" @click="confirming = true">{{ running && !run?.dry_run ? 'Syncing…' : 'Sync' }}</button>
+      <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="!st || starting || running" @click="start({ scope: 'all', dry_run: true, remote, allow_create: allowCreate })">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
+      <button type="button" class="epfl-btn epfl-btn-primary" :disabled="!st || starting || running || only?.length === 0" @click="confirming = true">{{ running && !run?.dry_run ? 'Syncing…' : 'Sync' }}</button>
       <button v-if="running" type="button" class="epfl-btn epfl-btn-secondary" :disabled="stopping" @click="stop">{{ stopping ? 'Stopping…' : 'Stop' }}</button>
       <span class="sy-note">Check says what Sync would do with the forges and the Project, part by part, and writes nothing. Sync pulls, syncs the forges and the Project, and pushes.</span>
     </div>
@@ -338,6 +338,7 @@ async function setWay(name: string, way: ForgeWay) {
   }
 }
 
+// a run started: its buttons wait for the status (st), which holds the run
 async function start(r: SyncRequest) {
   starting.value = true;
   startError.value = '';

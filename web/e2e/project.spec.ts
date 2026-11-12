@@ -19,7 +19,8 @@ test('the GitHub Project: a check, and the fields it holds', async ({ page, requ
   try {
     await page.reload();
     await expect(page.getByText('Not checked yet')).toBeVisible();
-    await page.getByRole('button', { name: 'Check', exact: true }).click();
+    // the page's Check, the whole sync's: each forge's row has its own
+    await page.locator('.sy-run').getByRole('button', { name: 'Check', exact: true }).click();
     await expect(page.locator('.pj-meta').first()).toContainText('The e2e Project');
     await expect(page.locator('.pj-meta').first()).toContainText('0 issues matched, 1 unmatched');
     await expect(page.getByRole('heading', { name: 'No conflicts' })).toBeVisible();
