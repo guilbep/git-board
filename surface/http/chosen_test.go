@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -144,6 +145,24 @@ func TestTheChosenSync(t *testing.T) {
 	wantCounts("the second check", ran(t, a, map[string]any{"scope": "all", "dry_run": true}),
 		map[string]int{"pull-changes": 1, "create": 2, "send": 1})
 
+	// the creations alone: two issues go to the forge, and One, which is
+	// there, is sent nothing. The run records no run, and the next check
+	// counts no creation again, the change to pull and the change to send still
+	if sy := ran(t, a, map[string]any{"scope": "all", "only": []string{"create"}}); sy.State != "done" {
+		t.Fatalf("the sync of create: %s %s %+v", sy.State, sy.Error, sy.Steps)
+	}
+	if got, _ := f.Get("1"); got.Title != "One" || len(f.All()) != 5 {
+		t.Fatalf("a sync of create left One as %q among %d issues: %v", got.Title, len(f.All()), f.Writes())
+	}
+	for _, w := range f.Writes() {
+		if n, _ := strconv.Atoi(w.Issue); w.Op != "create-issue" && n <= 3 {
+			t.Errorf("a sync of create wrote to an issue that was there: %+v", w)
+		}
+	}
+	wantCounts("the check after the creations", ran(t, a, map[string]any{"scope": "all", "dry_run": true}),
+		map[string]int{"pull-changes": 1, "send": 1})
+	onProject := len(p.Writes())
+
 	// a Project check, then a Project sync, stopped while the Project reads
 	for _, dry := range []bool{true, false} {
 		hold.Store(true)
@@ -166,7 +185,17 @@ func TestTheChosenSync(t *testing.T) {
 			t.Fatalf("dry run %v, stopped: %s %s", dry, r.State, r.Error)
 		}
 	}
-	if w := p.Writes(); len(w) != 0 {
-		t.Errorf("a stopped Project sync wrote %q", w)
+	if w := p.Writes(); len(w) != onProject {
+		t.Errorf("a stopped Project sync wrote %q", w[onProject:])
 	}
+
+	// the stopped sync ran the forges whole before the Project: what the
+	// two syncs left out went once, and nothing twice
+	if got, _ := f.Get("1"); got.Title != "One, here" || len(f.All()) != 5 {
+		t.Errorf("after the whole sync One is %q among %d issues", got.Title, len(f.All()))
+	}
+	if got := want[issuePage](t, a.do("GET", "/api/issues?filter=renamed", nil), 200); len(got.Items) != 1 {
+		t.Errorf("Two's new title not pulled: %+v", got.Items)
+	}
+	wantCounts("the last check", ran(t, a, map[string]any{"scope": "all", "dry_run": true}), map[string]int{})
 }
