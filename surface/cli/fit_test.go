@@ -288,4 +288,18 @@ func TestTheCo2Fit(t *testing.T) {
 	if strings.Contains(out, "config:") {
 		t.Errorf("the second check still names the fit:\n%s", out[max(0, len(out)-600):])
 	}
+
+	// the Project named again, as the page's "Write it in the file" does:
+	// the table is written whole, and the values unmapped by choice stay
+	b.Close()
+	if out, errs, code = run(t, "-C", dir, "project", "configure", "--owner", "o", "--project", "1"); code != 0 {
+		t.Fatalf("configure: %d\n%s\n%s", code, out, errs)
+	}
+	text, _ = os.ReadFile(file)
+	if b, err = app.Open(ctx, dir, app.Options{Who: true}); err != nil {
+		t.Fatalf("the file after configure: %v\n%s", err, text)
+	}
+	if gp, _ := b.Config.Tools.GithubProject.Get(); !slices.Equal(gp.Unmapped["category"], []string{"SPECS", "TEXT"}) {
+		t.Errorf("unmapped after configure %v", gp.Unmapped)
+	}
 }
