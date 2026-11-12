@@ -27,7 +27,7 @@ forge that can't be read is left out, told, and the others go on.
 Without the remote, the git steps are skipped. --git syncs with git
 alone: git board pull, then git board push. --check runs the same steps
 and writes nothing: a fetch and compare, the forges' dry run, the
-Project's check.
+Project's check. A check goes on past a failed fetch.
 
 --migrate <field> moves a field's values to the home its forge mappings
 now name, once a mapping changed and a sync ran: the old labels off the

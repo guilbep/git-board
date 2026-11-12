@@ -21,7 +21,8 @@ import (
 // [github-project] names one (ghproject).
 // The check (sync --check) is a fetch and compare, the forges' dry run on
 // a copy of the refs, and the Project's check: one report of what the
-// sync does, part by part (docs/prd/config-fit.md, Part 2).
+// sync does, part by part (docs/prd/config-fit.md, Part 2). A failed
+// fetch is told, and the check goes on: it writes nothing.
 
 // The steps.
 const (
@@ -124,7 +125,9 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 		}
 		step(s.name, "failed", NoCredentials(err.Error()))
 		errs = append(errs, fmt.Errorf("%s: %w", s.name, err))
-		if s.name == StepPull || ctx.Err() != nil {
+		// a check writes nothing: past a failed fetch it still says what
+		// the forges and the Project hold
+		if (s.name == StepPull && !w.DryRun) || ctx.Err() != nil {
 			for _, rest := range steps[i+1:] {
 				step(rest.name, "skipped", s.name+" failed")
 			}

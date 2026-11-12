@@ -614,7 +614,7 @@ sync is on, the GitHub Project's fields when `[github-project]` names one,
 then a git push, which numbers the issues origin has. A failed pull stops
 the steps after it; a failed forge or Project step is told, and the push
 still runs. `--check` runs the same steps writing nothing, and ends with
-a count of each part. `--only <parts>` runs some parts of the forges'
+a count of each part. A check goes on past a failed fetch. `--only <parts>` runs some parts of the forges'
 sync and leaves the others for the next one: `pull-changes` (the forge
 issues that changed), `pull-new` (the forge issues new here), `create`
 (the issues to create on a forge) and `send` (the changes to send). The
