@@ -613,8 +613,13 @@ Sync does: a git pull from the remote, the forge sync of every forge whose
 sync is on, the GitHub Project's fields when `[github-project]` names one,
 then a git push, which numbers the issues origin has. A failed pull stops
 the steps after it; a failed forge or Project step is told, and the push
-still runs. `--check` runs the same steps writing nothing; `--git` syncs
-with git alone, a pull then a push. With no path it syncs the current
+still runs. `--check` runs the same steps writing nothing, and ends with
+a count of each part. A check goes on past a failed fetch. `--only <parts>` runs some parts of the forges'
+sync and leaves the others for the next one: `pull-changes` (the forge
+issues that changed), `pull-new` (the forge issues new here), `create`
+(the issues to create on a forge) and `send` (the changes to send). The
+Project pulls with a pull part, and is written to with `send`. A
+release is published with `send`. `--git` syncs with git alone, a pull then a push. With no path it syncs the current
 directory; it goes on past a path that fails and reports every failure at
 the end. Each step has its own commands: `fetch`, `pull` and `push` (the
 git remote), `forge pull|push|sync` and `project pull|push|sync`
@@ -622,6 +627,7 @@ git remote), `forge pull|push|sync` and `project pull|push|sync`
 
 ```bash
 git board sync --check
+git board sync --only pull-changes,pull-new   # push nothing to the forges
 git board sync
 git board sync --git ../co2-calculator ../git-time
 ```
@@ -645,6 +651,29 @@ git board project sync --check
 git board project sync
 git board project resolve 2605 status --theirs   # or --ours
 ```
+
+`git board project fit` is for a team whose Project came first. It checks
+the Project and says what `.git-board.toml` lacks for it: a status the
+Project has and the file doesn't, the kind a Category names, a sprint's
+dates. It writes nothing without `--apply`.
+
+```bash
+git board project fit                    # the diff, and the questions
+git board project fit --apply            # write what needs no answer
+git board project fit --apply --map 'status:QA Validation=qa' --map category:TASK=feat
+git board project fit --apply --add-kind category:DATA --unmapped category:SPECS
+```
+
+A change git-board derives with no guess is in the diff. Another is a
+question, printed with the flag that settles it: `--map <field>:<the
+Project's name>=<value>`, `--add-kind category:<name>` (the Category is a
+new kind), or `--unmapped <field>:<name>` (the sync skips that value, and
+warns of nothing). With a terminal, `--apply` asks each open question. A
+question left open writes nothing. A change only adds: no option, kind,
+sprint or comment of the file is removed, and the order stays. If the
+file changed after the check, nothing is written. While the file lacks
+something, `project sync --check` and `sync --check` end with `config: 12
+changes clear 82 warnings: git board project fit`.
 
 ## `lint`: drift between the issues and the file
 

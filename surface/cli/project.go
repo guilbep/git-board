@@ -49,7 +49,7 @@ changes: a field changed on the Project waits for git board project pull.`),
 		newProjectWay("sync", ghproject.Both, "Take the Project's changes, and write git-board's",
 			`Both ways, as git board sync's Project step: the Project's changes reach
 the labels, git-board's reach the Project.`),
-		newProjectResolve(), newProjectConfigure(),
+		newProjectResolve(), newProjectConfigure(), newProjectFit(),
 	)
 	return cmd
 }
@@ -201,11 +201,14 @@ func printReport(out io.Writer, r ghproject.Report) {
 			fmt.Fprintf(out, "  ! conflict on %s: git-board %s, Project %s (%s)\n", k.Field, show(k.Local), show(k.Project), agreed)
 		}
 		for _, w := range c.Warnings {
-			fmt.Fprintf(out, "  ! %s\n", w)
+			fmt.Fprintf(out, "  ! %s\n", w.Text)
 		}
 	}
 	for _, u := range plan.Unmatched {
 		fmt.Fprintf(out, "unmatched #%d %s: %s\n", u.Number, u.Title, u.Reason)
+	}
+	for _, l := range plan.UnmappedLines() {
+		fmt.Fprintln(out, l)
 	}
 	n := plan.Counts()
 	fmt.Fprintf(out, "\nsummary: %d issue(s) matched, %d with label changes, %d Project write(s), %d conflict(s), %d warning(s), %d unmatched\n",
@@ -217,6 +220,9 @@ func printReport(out io.Writer, r ghproject.Report) {
 		fmt.Fprintln(out, "Writing to the Project also needs write = true under [github-project] in .git-board.toml.")
 	}
 	if !r.Applied {
+		if l := r.FitLine(); l != "" {
+			fmt.Fprintln(out, l)
+		}
 		return
 	}
 	fmt.Fprintln(out, "\napplied.")

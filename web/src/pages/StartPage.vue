@@ -51,7 +51,7 @@
           </p>
           <p v-else-if="goal === 'project'">
             The fields live in the columns of a GitHub Project.
-            <router-link to="/settings/project">Open Settings › Project</router-link> and name it: its owner and number.
+            <router-link to="/settings/sync">Open Settings › Sync</router-link> and name it: its owner and number.
           </p>
         </div>
 

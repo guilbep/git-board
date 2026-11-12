@@ -8,8 +8,7 @@
 // then what lives elsewhere, each saying where: where the board is kept,
 // in git config; the numbers in git; you in git config and this browser
 export const settingsTabs = [
-  { id: 'sync', label: 'Sync', group: 'The project file', via: 'remotes, forges' },
-  { id: 'project', label: 'GitHub Project', group: 'The project file', via: '[github-project]' },
+  { id: 'sync', label: 'Sync', group: 'The project file', via: 'remotes, forges, the Project' },
   { id: 'fields', label: 'Fields', group: 'The project file' },
   { id: 'labels', label: 'Labels', group: 'The project file' },
   { id: 'views', label: 'Views', group: 'The project file' },
@@ -29,11 +28,11 @@ export const settingsTabs = [
 
 export type SettingsTab = (typeof settingsTabs)[number]['id'];
 
-// old tabs' links: General held who you write as; Remotes and Forges are
-// one Sync, v1's GitHub Project and its Conflicts page the Project's tab; the Project file is a tab per section, the
-// fields first
+// old tabs' links: General held who you write as; Remotes, Forges and the
+// GitHub Project are one Sync, v1's Conflicts page with them; the Project
+// file is a tab per section, the fields first
 // Forge fields: where a field lives is edited on the field (docs/prd/fields-one-editor.md)
-const moved: Record<string, SettingsTab> = { overview: 'sync', general: 'you', remotes: 'sync', forges: 'sync', 'github-project': 'project', conflicts: 'project', 'project-file': 'fields', 'forge-fields': 'fields' };
+const moved: Record<string, SettingsTab> = { overview: 'sync', general: 'you', remotes: 'sync', forges: 'sync', project: 'sync', 'github-project': 'sync', conflicts: 'sync', 'project-file': 'fields', 'forge-fields': 'fields' };
 
 // a tab of an experimental feature (experimental.ts) shows while it is on:
 // on tells which are, all of them when not given

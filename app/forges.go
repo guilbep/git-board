@@ -294,20 +294,7 @@ func (b *Board) OpenForges(ctx context.Context, tables []forge.Table) ([]NamedFo
 		if !f.Sync {
 			continue
 		}
-		var x forge.Forge
-		var err error
-		switch f.Kind {
-		case "github":
-			api := ""
-			if f.Host == "github.com" {
-				api = GitHubAPI
-			}
-			x, err = github.New(ctx, github.Options{Project: f.Project, Host: f.Host, Login: f.Login, API: api})
-		case "gitlab":
-			x, err = gitlab.New(ctx, baseURL(f), f.Project, f.Login)
-		default:
-			err = fmt.Errorf("kind %q: github or gitlab", f.Kind)
-		}
+		x, err := OpenForge(ctx, f)
 		if err != nil {
 			return nil, fmt.Errorf("forge %s: %w", f.Name, err)
 		}
@@ -317,6 +304,23 @@ func (b *Board) OpenForges(ctx context.Context, tables []forge.Table) ([]NamedFo
 		return nil, errors.New("no forge has its sync on")
 	}
 	return out, nil
+}
+
+// OpenForge opens a forge project's issues through its adapter, with the
+// table's posting account's token, as OpenLabeler does. Tests replace it
+// with a fake.
+var OpenForge = func(ctx context.Context, f forge.Table) (forge.Forge, error) {
+	switch f.Kind {
+	case "github":
+		api := ""
+		if f.Host == "github.com" {
+			api = GitHubAPI
+		}
+		return github.New(ctx, github.Options{Project: f.Project, Host: f.Host, Login: f.Login, API: api})
+	case "gitlab":
+		return gitlab.New(ctx, baseURL(f), f.Project, f.Login)
+	}
+	return nil, fmt.Errorf("kind %q: github or gitlab", f.Kind)
 }
 
 // SyncsAssignees says whether the assignees live natively on the forge of
@@ -362,7 +366,30 @@ type ForgeRun struct {
 	// every write to a forge counted and answered without being made.
 	// Nothing changes, here or on a forge.
 	DryRun bool
-	See    func(SyncEvent) // nil hears nothing
+	// Only are the parts the run writes (Parts), nil every one: a part
+	// left out is left for the next run.
+	Only []Part
+	See  func(SyncEvent) // nil hears nothing
+}
+
+// Part is one part of what a forge run writes: pull-changes, pull-new,
+// create or send (docs/prd/config-fit.md, Part 2).
+type Part = issuesync.Part
+
+// Parts are the parts, in a run's order.
+var Parts = issuesync.Parts
+
+// ParseParts reads a list of parts, as sync --only takes it: "pull-new,send".
+func ParseParts(list []string) ([]Part, error) {
+	var out []Part
+	for _, s := range list {
+		p := Part(strings.TrimSpace(s))
+		if !slices.Contains(Parts, p) {
+			return nil, usage(fmt.Errorf("part %q: pull-changes, pull-new, create or send", s))
+		}
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 // MaxCreate is how many creations on one forge, in one run, need consent:
@@ -371,14 +398,19 @@ const MaxCreate = 50
 
 // SyncEvent is one thing a run did on one forge. Way is pull or push.
 // What is created, updated, linked, posted or pushed, with Issue the
-// issue's id; warning, waiting or left, with Line; held: the Ops
+// issue's id and Name its forge number and title; warning, waiting or left, with Line; held: the Ops
 // creations waiting for consent, Line saying why; progress: Done of
 // Total.
 type SyncEvent struct {
-	Forge, Way, What, Issue string
-	Ops                     int
-	Line                    string
-	Done, Total             int
+	Forge, Way, What, Issue, Name string
+	// Part is the part the event counts in: an issue pulled that changed
+	// (pull-changes), a new one pulled (pull-new), one created (create),
+	// one sent its changes (send); "" for any other. An issue created
+	// counts in create alone, the changes sent after it with it.
+	Part        Part
+	Ops         int
+	Line        string
+	Done, Total int
 }
 
 // Text says the event in words, its issue by name ("would create CO2-3
@@ -490,6 +522,7 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	names := map[string]string{}   // forge key -> name
 	ways := map[string]bsync.Way{} // forge key -> its table's way
 	ids := new(int)
+	posted := map[[2]string]bool{} // forge key, issue: created this run
 	var fs []forge.Forge
 	for _, f := range run.Forges {
 		names[f.Key()], ways[f.Key()] = f.Name, forgeWayOf(f.Way)
@@ -524,12 +557,20 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 			}
 			see(ev)
 		},
-		Did: func(key, what, id string, ops int) {
+		Only: run.Only,
+		Did: func(key, what, id, name string, ops int) {
 			w := "pull"
 			if what == "posted" || what == "pushed" || what == "restored" {
 				w = "push"
 			}
-			see(SyncEvent{Forge: names[key], Way: w, What: what, Issue: id, Ops: ops})
+			part := issuesync.PartOf(what)
+			if what == "posted" {
+				posted[[2]string{key, id}] = true
+			}
+			if what == "pushed" && posted[[2]string{key, id}] {
+				part = ""
+			}
+			see(SyncEvent{Forge: names[key], Way: w, What: what, Issue: id, Name: name, Ops: ops, Part: part})
 		},
 		Progress: func(key, way string, done, total int, name string) {
 			see(SyncEvent{Forge: names[key], Way: way, What: "progress", Done: done, Total: total, Line: name})
@@ -556,7 +597,9 @@ func (b *Board) SyncForges(ctx context.Context, way Way, run ForgeRun) (issuesyn
 	})
 	im := &issuesync.Mapper{Options: opt}
 	ms := []bsync.Mapper{im}
-	if len(cfg.Release.Binaries) > 0 && !forgeOnly { // v1 publishes the releases of binaries alone
+	// v1 publishes the releases of binaries alone; a release goes with
+	// send: a run without it pushes nothing to a forge
+	if len(cfg.Release.Binaries) > 0 && !forgeOnly && (run.Only == nil || slices.Contains(run.Only, issuesync.Send)) {
 		var raw []forge.Forge
 		for _, f := range run.Forges {
 			if forgeWayOf(f.Way) != bsync.Pull { // a release is published: a read-only mirror takes none

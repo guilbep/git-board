@@ -9,7 +9,7 @@ Your issues travel with git, like your code. Forges and the GitHub Project are m
 3. **The GitHub Project**, with `[github-project]`: its fields (status, priority, sprint, est. hours) as `ns:value` labels here, and back when `write = true`. Its conflicts are on the Conflicts page. Those labels stay off GitHub, the Project being their home there; GitLab, which has no Project, gets them as labels. Fields naming issues (`parent:`, `blocked-by:`) and `milestone:`, a forge's own, stay off every forge.
 4. **git push** to `origin`, which numbers the issues origin now has.
 
-A failed pull stops the steps after it. A forge or the Project that fails is told, and the push still runs: what the forge step linked must reach origin, or another clone creates it again. A forge that can't be read is left out of the run, told, and the others go on. Without an `origin`, the git steps are skipped.
+A failed pull stops the steps after it. A check writes nothing, so it goes on past a failed fetch. A forge or the Project that fails is told, and the push still runs: what the forge step linked must reach origin, or another clone creates it again. A forge that can't be read is left out of the run, told, and the others go on. Without an `origin`, the git steps are skipped.
 
 **Check** runs the same steps and writes nothing: a fetch from origin and a compare, the forges' dry run, the Project's check. **Sync** needs a clean check of the last 15 minutes, and asks first, with the check's counts. On one issue, in its panel: Send now and Refresh.
 

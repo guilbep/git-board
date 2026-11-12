@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/guilbep/git-board/domain/issues/issuesync"
 	"github.com/guilbep/git-board/tools/ghproject"
 
 	"github.com/guilbep/git-board/obs"
@@ -18,9 +19,10 @@ import (
 // a failed forge step is told, and the push still runs.
 // The GitHub Project's step runs the bridge both ways when
 // [github-project] names one (ghproject).
-// ponytail: the whole sync's dry run (sync --check: a fetch, the forges'
-// check over the fetched copies) is v1's still; forge … --check and
-// project … --check run.
+// The check (sync --check) is a fetch and compare, the forges' dry run on
+// a copy of the refs, and the Project's check: one report of what the
+// sync does, part by part (docs/prd/config-fit.md, Part 2). A failed
+// fetch is told, and the check goes on: it writes nothing.
 
 // The steps.
 const (
@@ -41,7 +43,13 @@ type Whole struct {
 	Forges func(context.Context) error
 	// NoProject skips the GitHub Project's step (sync --git).
 	NoProject bool
-	Step      func(name, state, note string)
+	// Only are the parts the sync writes, nil every one; the caller's
+	// Forges take them too. The Project pulls with a pull part, and is
+	// written to with send; create alone leaves it out (projectSide).
+	Only []Part
+	// Project hears the Project step's report, nil none.
+	Project func(ghproject.Report)
+	Step    func(name, state, note string)
 }
 
 // hasRemote says the repository has the remote.
@@ -81,9 +89,15 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 		{StepProject, "no [github-project] in .git-board.toml", nil},
 		{StepPush, noRemote, nil},
 	}
-	if gp, _ := b.Config.Tools.GithubProject.Get(); gp.Owner != "" && gp.Number != 0 && !w.NoProject {
+	side, ok := projectSide(w.Only)
+	if gp, _ := b.Config.Tools.GithubProject.Get(); gp.Owner != "" && gp.Number != 0 && !w.NoProject && !ok {
+		steps[2].skip = "create alone writes nothing to the Project"
+	} else if gp.Owner != "" && gp.Number != 0 && !w.NoProject {
 		steps[2].do = func(ctx context.Context) (string, error) {
-			r, err := b.ProjectRun(ctx, ghproject.Both, !w.DryRun, 0)
+			r, err := b.ProjectRun(ctx, side, !w.DryRun, 0)
+			if w.Project != nil && err == nil {
+				w.Project(r)
+			}
 			return ProjectNote(r), err
 		}
 	}
@@ -114,7 +128,9 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 		}
 		step(s.name, "failed", NoCredentials(err.Error()))
 		errs = append(errs, fmt.Errorf("%s: %w", s.name, err))
-		if s.name == StepPull || ctx.Err() != nil {
+		// a check writes nothing: past a failed fetch it still says what
+		// the forges and the Project hold
+		if (s.name == StepPull && !w.DryRun) || ctx.Err() != nil {
 			for _, rest := range steps[i+1:] {
 				step(rest.name, "skipped", s.name+" failed")
 			}
@@ -122,6 +138,24 @@ func (b *Board) SyncWhole(ctx context.Context, w Whole) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// projectSide is the Project's side for the parts a sync writes: its
+// labels with a pull part, the Project with send. A creation is no item
+// of the Project yet, so create writes nothing there: with create alone
+// the Project has no side, and ok is false.
+func projectSide(only []Part) (_ ghproject.Side, ok bool) {
+	pulls := only == nil || slices.Contains(only, issuesync.PullChanges) || slices.Contains(only, issuesync.PullNew)
+	pushes := only == nil || slices.Contains(only, issuesync.Send)
+	switch {
+	case pulls && pushes:
+		return ghproject.Both, true
+	case pulls:
+		return ghproject.Labels, true
+	case pushes:
+		return ghproject.OnGH, true
+	}
+	return "", false
 }
 
 var credentials = regexp.MustCompile(`://[^/\s@]+@`)

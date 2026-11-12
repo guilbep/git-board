@@ -602,6 +602,12 @@ push links by marker first:
    records that run's start instead (a quiet start), unless the project
    has no sync entity yet, as a first pull may hold back what it read.
 
+**Parts left for the next run.** A run can write some of its parts and
+leave the others: `pull-changes`, `pull-new`, `create` and `send` (`git
+board sync --only`). If a part is left out, the run records no `run`
+and no quiet start. It does not journal the issues of that part. The
+next run lists them again.
+
 **Going on after a cut.** The lock file also holds the run's journal:
 - its first line is the run's own, with its process id and start;
 - then comes a line for each forge issue the pull finished, naming the forge, the issue's id, and the start of the run that read it, marked `same` when its pull wrote nothing;

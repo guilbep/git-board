@@ -339,6 +339,20 @@ write = true
 | `owner` | string | none | The user or organization owning the Project. |
 | `number` | number | none | The Project's number, as in its address. |
 | `write` | true / false | false | Lets a sync write git-board's changes to the Project. Off, the Project is only read. |
+| `unmapped` | table | none | The Project's values to leave out, by field: `[github-project.unmapped]`, `category = ["SPECS"]`, `status = ["Icebox"]`. A sync skips them and warns of nothing. |
+
+The Project's `Category` fills an issue's kind: `FEAT` is the kind `feat`, in any case. A Category that is a kind in another word is named in `[fields.kind.aliases]`, `FIX = "bug"`: with plain-label kinds, an alias folds into one of `[branches] kinds`.
+
+```toml
+[fields.kind.aliases]
+FIX = "bug"
+DOC = "docs"
+
+[github-project.unmapped]
+category = ["SPECS", "TEXT"]
+```
+
+`git board project fit`, and Settings › Sync after a check, propose these keys for a Project that came before the file: the options a status lacks (with their name in `project` when it doesn't slug to the value), the aliases, and a `[[sprints.list]]` entry with its start date for each iteration ([`project fit`](cli.md#project-the-github-project)).
 
 git-board reads and writes the Project through GitHub's GraphQL API with the GitHub forge's token ([Forges › Tokens](forges.md#tokens)): it needs the `read:project` scope to read the Project, `project` to write it.
 

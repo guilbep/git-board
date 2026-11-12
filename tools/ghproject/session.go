@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -203,6 +205,9 @@ func Apply(ctx context.Context, b Board, p Project, plan Plan, c *Config, meta M
 	}
 	prefix := c.BasePrefix()
 	for _, ch := range plan.Changes {
+		if err := ctx.Err(); err != nil {
+			return skipped, err // stopped: the issues before it agree, and the next run records them
+		}
 		record := plan.Bases[ch.IssueID]
 		for _, e := range edits[ch.IssueID] {
 			if !c.Write {
@@ -326,6 +331,46 @@ type Report struct {
 	// Columns are the Project's fields, by name, with their type: where
 	// a field lives can say the Project has its column.
 	Columns map[string]string `json:"columns"`
+	// Fit is what the file lacks for the Project (docs/prd/config-fit.md);
+	// First says no matched issue has a base yet: the first check, before
+	// any sync. ConfigVersion is the file's version the check read, which
+	// writing the fit expects (the app's to fill).
+	Fit           []Proposal `json:"fit"`
+	First         bool       `json:"first"`
+	ConfigVersion string     `json:"config_version"`
+}
+
+// FitCounts are the proposals, and the warnings they clear once settled.
+func (r Report) FitCounts() (changes, clears int) {
+	for _, p := range r.Fit {
+		clears += p.Clears
+	}
+	return len(r.Fit), clears
+}
+
+// FitLine is the line a check ends with when the file doesn't fit the
+// Project; "" when it does.
+func (r Report) FitLine() string {
+	n, clears := r.FitCounts()
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("config: %s: git board project fit", FitWords(n, clears))
+}
+
+// FitWords is "12 changes clear 82 warnings", "1 change clears 3 warnings".
+func FitWords(changes, clears int) string {
+	plural := func(n int, word string) string {
+		if n == 1 {
+			return "1 " + word
+		}
+		return fmt.Sprintf("%d %ss", n, word)
+	}
+	verb := " clear "
+	if changes == 1 {
+		verb = " clears "
+	}
+	return plural(changes, "change") + verb + plural(clears, "warning")
 }
 
 // Counts are a plan's numbers, as the API answers them.
@@ -336,6 +381,20 @@ type Counts struct {
 	Conflicts     int `json:"conflicts"`
 	Warnings      int `json:"warnings"`
 	Unmatched     int `json:"unmatched"`
+}
+
+// UnmappedLines says the values the plan skipped by choice, a line a
+// field: "4 Category values unmapped by choice".
+func (p Plan) UnmappedLines() []string {
+	var out []string
+	for _, f := range slices.Sorted(maps.Keys(p.Unmapped)) {
+		s := "s"
+		if len(p.Unmapped[f]) == 1 {
+			s = ""
+		}
+		out = append(out, fmt.Sprintf("%d %s value%s unmapped by choice", len(p.Unmapped[f]), titleCase(f), s))
+	}
+	return out
 }
 
 // Counts counts the plan.
@@ -358,6 +417,10 @@ func Run(ctx context.Context, p Project, b Board, c *Config, limit int, side Sid
 		return Report{}, err
 	}
 	plan := s.Plan(c)
+	fit, first := Fit(s, plan, c), true
+	for _, b := range s.Bases {
+		first = first && len(b) == 0
+	}
 	switch side {
 	case Labels:
 		plan = plan.LabelsOnly()
@@ -365,7 +428,10 @@ func Run(ctx context.Context, p Project, b Board, c *Config, limit int, side Sid
 		plan = plan.ProjectOnly()
 	}
 	r := Report{Project: c.Name(), Title: s.Meta.Title, CheckedAt: time.Now().UTC(), Side: side, Write: c.Write, Truncated: s.Truncated,
-		Plan: plan, Items: len(s.Items), Columns: map[string]string{}}
+		Plan: plan, Items: len(s.Items), Columns: map[string]string{}, Fit: fit, First: first}
+	if r.Fit == nil {
+		r.Fit = []Proposal{}
+	}
 	for name, f := range s.Meta.Fields {
 		r.Columns[name] = f.Type
 	}

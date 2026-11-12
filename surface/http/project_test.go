@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guilbep/git-board/app"
 	"github.com/guilbep/git-board/forge"
@@ -83,8 +84,22 @@ type projectBody struct {
 	} `json:"places"`
 }
 
-// The bridge's routes: the status before any check, a check, an apply,
-// a conflict and its resolution, and where each field lives.
+// ran is a whole sync started with body, once it ended.
+func ran(t *testing.T, a *api, body map[string]any) Run {
+	t.Helper()
+	want[Run](t, a.do("POST", "/api/sync", body), 202)
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if st := want[syncRes](t, a.do("GET", "/api/sync", nil), 200); st.Run != nil && st.Run.State != "running" {
+			return *st.Run
+		}
+	}
+	t.Fatal("the run never ended")
+	return Run{}
+}
+
+// The bridge's routes: the status before any check, a check and a run
+// through the whole sync, a conflict and its resolution, and where each
+// field lives.
 func TestGithubProjectRoutes(t *testing.T) {
 	a, p := projectAPI(t, true)
 	st := want[projectBody](t, a.do("GET", "/api/github-project", nil), 200)
@@ -107,7 +122,8 @@ func TestGithubProjectRoutes(t *testing.T) {
 		t.Errorf("status's place: %+v in %+v", status, st.Places)
 	}
 
-	ck := want[projectBody](t, a.do("POST", "/api/github-project/check", map[string]any{}), 200)
+	ran(t, a, map[string]any{"scope": "all", "dry_run": true})
+	ck := want[projectBody](t, a.do("GET", "/api/github-project", nil), 200)
 	if ck.Last == nil || ck.Last.Applied || ck.Last.Counts.Matched != 2 || ck.Last.Counts.LabelChanges != 2 || ck.Last.Title != "o's Project" {
 		t.Fatalf("check: %+v", ck.Last)
 	}
@@ -122,7 +138,8 @@ func TestGithubProjectRoutes(t *testing.T) {
 			t.Errorf("prio, which the Project hasn't: %+v", pl)
 		}
 	}
-	ap := want[projectBody](t, a.do("POST", "/api/github-project/apply", map[string]any{"side": "labels"}), 200)
+	ran(t, a, map[string]any{"scope": "all", "only": []string{"pull-changes", "pull-new"}})
+	ap := want[projectBody](t, a.do("GET", "/api/github-project", nil), 200)
 	if !ap.Last.Applied || len(ap.Last.Changes) != 2 || ap.Last.Changes[0].Added[0] != "status:doing" {
 		t.Fatalf("apply: %+v", ap.Last)
 	}
@@ -137,7 +154,8 @@ func TestGithubProjectRoutes(t *testing.T) {
 	}
 	want[map[string]any](t, a.do("PATCH", "/api/issues/"+list.Items[0].ID, map[string]any{"labels": map[string]any{"add": []string{"status:done"}, "remove": []string{"status:doing"}}}), 200)
 	p.Edit("PVTI_1", func(it *projectfake.Item) { it.Values["Status"] = "Todo" })
-	ck = want[projectBody](t, a.do("POST", "/api/github-project/check", nil), 200)
+	ran(t, a, map[string]any{"scope": "all", "dry_run": true})
+	ck = want[projectBody](t, a.do("GET", "/api/github-project", nil), 200)
 	if len(ck.Last.Conflicts) != 1 || ck.Last.Conflicts[0].Local != "done" || ck.Last.Conflicts[0].Project != "todo" {
 		t.Fatalf("conflicts %+v", ck.Last.Conflicts)
 	}
@@ -156,7 +174,7 @@ func TestGithubProjectRoutes(t *testing.T) {
 	}{
 		{"/api/github-project/resolve", map[string]any{"issue": "1", "field": "status", "keep": "git-board"}, 404},
 		{"/api/github-project/resolve", map[string]any{"issue": "1", "field": "status", "keep": "mine"}, 400},
-		{"/api/github-project/apply", map[string]any{"side": "left"}, 400},
+		{"/api/sync", map[string]any{"scope": "all", "only": []string{"left"}}, 400},
 		{"/api/github-project/nope", map[string]any{}, 404},
 	} {
 		if res := a.do("POST", c.path, c.body); res.StatusCode != c.code {
@@ -165,8 +183,8 @@ func TestGithubProjectRoutes(t *testing.T) {
 	}
 }
 
-// Without [github-project], the status says so and an action is a
-// usage error.
+// Without [github-project], the status says so and a resolve is a usage
+// error.
 func TestGithubProjectNone(t *testing.T) {
 	t.Parallel()
 	dir, _ := newBoard(t)
@@ -175,8 +193,8 @@ func TestGithubProjectNone(t *testing.T) {
 	if st.Project != "" || st.Last != nil {
 		t.Errorf("status %+v", st)
 	}
-	if e := want[apiError](t, a.do("POST", "/api/github-project/check", nil), 400); !strings.Contains(e.Message, "github-project") {
-		t.Errorf("check: %+v", e)
+	if e := want[apiError](t, a.do("POST", "/api/github-project/resolve", map[string]any{"issue": "1", "field": "status", "keep": "project"}), 400); !strings.Contains(e.Message, "github-project") {
+		t.Errorf("resolve: %+v", e)
 	}
 }
 

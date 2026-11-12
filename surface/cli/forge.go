@@ -68,7 +68,7 @@ func newForgeWay(way app.Way, short, long string) *cobra.Command {
 					say("%s is read-only (way pull): nothing is pushed to it", t.Name)
 				}
 			}
-			if err := forgeWay(cmd, b.Board, way, app.ForgeRun{Forges: fs, AllowCreate: allowCreate, DryRun: check}, say); err != nil {
+			if err := forgeWay(cmd, b.Board, way, app.ForgeRun{Forges: fs, AllowCreate: allowCreate, DryRun: check}, say, nil); err != nil {
 				return err
 			}
 			if check {
@@ -84,11 +84,15 @@ func newForgeWay(way app.Way, short, long string) *cobra.Command {
 	return cmd
 }
 
-// forgeWay runs one way of the forge step, each event told in a line.
-func forgeWay(cmd *cobra.Command, b *app.Board, way app.Way, run app.ForgeRun, say func(format string, a ...any)) error {
+// forgeWay runs one way of the forge step, each event told in a line,
+// and heard by also, when it is not nil.
+func forgeWay(cmd *cobra.Command, b *app.Board, way app.Way, run app.ForgeRun, say func(format string, a ...any), also func(app.SyncEvent)) error {
 	run.See = func(e app.SyncEvent) {
 		if e.What == "progress" {
 			return
+		}
+		if also != nil {
+			also(e)
 		}
 		name := ""
 		if e.Issue != "" {

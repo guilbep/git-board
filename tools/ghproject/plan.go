@@ -39,8 +39,11 @@ type Config struct {
 	Write bool
 	// Holds are the fields the Project holds, declared or not:
 	// [github-project]'s fields (tools.GithubProject.Columns).
-	Holds  []string
-	Schema *issues.Schema
+	Holds []string
+	// Unmapped are the Project's values left out by choice, by field:
+	// [github-project.unmapped].
+	Unmapped map[string][]string
+	Schema   *issues.Schema
 	// Forge is the GitHub forge's table, its fields' mappings: the first
 	// GitHub one, else github.com's with none.
 	Forge forge.Table
@@ -165,6 +168,10 @@ func Decide(project, local, base string, hasBase bool) Decision {
 	}
 }
 
+// CategoryField names the Project's Category where a field is named: a
+// warning's, a proposal's, [github-project.unmapped]'s.
+const CategoryField = "category"
+
 // Item is one row of the Project.
 type Item = github.ProjectItem
 
@@ -180,18 +187,19 @@ type Meta struct {
 }
 
 // Field is a Project field: its id, its type, and its options or
-// iterations, by name, to their id.
+// iterations, by name, to their id; and as the Project lists them.
 type Field struct {
 	ID      string
 	Type    string // SINGLE_SELECT, ITERATION, NUMBER, DATE, TEXT…
 	Options map[string]string
+	Choices []github.ProjectChoice
 }
 
 // MetaOf is a Project's meta as GitHub answers it.
 func MetaOf(m github.ProjectMeta) Meta {
 	out := Meta{ID: m.ID, Title: m.Title, Fields: map[string]Field{}}
 	for _, f := range m.Fields {
-		pf := Field{ID: f.ID, Type: f.DataType, Options: map[string]string{}}
+		pf := Field{ID: f.ID, Type: f.DataType, Options: map[string]string{}, Choices: f.Choices}
 		for _, c := range f.Choices {
 			pf.Options[c.Name] = c.ID
 		}
@@ -282,9 +290,35 @@ type Change struct {
 	Number   int
 	Title    string
 	Fields   []FieldResult
-	Added    []string // every field's Added
-	Removed  []string // every field's Removed
-	Warnings []string // a value with no option, several labels of a field…
+	Added    []string  // every field's Added
+	Removed  []string  // every field's Removed
+	Warnings []Warning // a value with no option, several labels of a field…
+}
+
+// The kinds of a Warning.
+const (
+	WarnNoOption      = "no-option"      // the Project's value matches no option of the file
+	WarnNotAKind      = "not-a-kind"     // the Category is none of [branches] kinds
+	WarnSeveral       = "several"        // several labels of a single field
+	WarnNotOnProject  = "not-on-project" // git-board's value has no option on the Project
+	WarnNotAssignable = "not-assignable" // a login GitHub can't assign
+)
+
+// Warning is what a sync left alone on one issue: its kind, the field
+// and the value it is about, and the line a surface prints.
+type Warning struct {
+	Kind, Field, Value, Text string
+}
+
+func (w Warning) String() string { return w.Text }
+
+// Texts are the warnings' lines.
+func Texts(ws []Warning) []string {
+	out := make([]string, 0, len(ws))
+	for _, w := range ws {
+		out = append(out, w.Text)
+	}
+	return out
 }
 
 // Unmatched is an item that couldn't be matched: not an issue (a pull
@@ -307,6 +341,25 @@ type Plan struct {
 	// both sides agree on afterwards, where that changed.
 	Bases     map[string]map[string]string
 	Unmatched []Unmatched
+	// Unmapped are the Project's values this plan skipped by choice
+	// ([github-project.unmapped]), by field, each once.
+	Unmapped map[string][]string
+}
+
+// unmapped says the file leaves the Project's value of a field out, in
+// any case.
+func (c *Config) unmapped(field, value string) bool {
+	return slices.ContainsFunc(c.Unmapped[field], func(v string) bool { return strings.EqualFold(v, value) })
+}
+
+// skip records a value left out by choice.
+func (p *Plan) skip(field, value string) {
+	if p.Unmapped == nil {
+		p.Unmapped = map[string][]string{}
+	}
+	if !slices.Contains(p.Unmapped[field], value) {
+		p.Unmapped[field] = append(p.Unmapped[field], value)
+	}
 }
 
 // Issue is the board's side of one issue: its id, its GitHub issue, its
@@ -462,14 +515,18 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 			continue
 		}
 		raw := f.value(it)
+		if raw != "" && c.unmapped(f.name, raw) {
+			plan.skip(f.name, raw)
+			continue
+		}
 		p, ok := c.toLabel(pf, f.name, raw)
 		if !ok {
-			change.Warnings = append(change.Warnings, fmt.Sprintf("%s value %q from the Project has no matching option, field left alone", f.name, raw))
+			change.Warnings = append(change.Warnings, Warning{WarnNoOption, f.name, raw, fmt.Sprintf("%s value %q from the Project has no matching option, field left alone", f.name, raw)})
 			continue
 		}
 		l, ok := localValue(is.Labels, f.name)
 		if !ok {
-			change.Warnings = append(change.Warnings, fmt.Sprintf("several %s labels, field left alone", f.name))
+			change.Warnings = append(change.Warnings, Warning{WarnSeveral, f.name, "", fmt.Sprintf("several %s labels, field left alone", f.name)})
 			continue
 		}
 		base, hasBase := bases[f.name]
@@ -487,7 +544,7 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 		case TakeLocal:
 			kind, arg, ok := c.toProject(pf, f.name, l)
 			if !ok {
-				change.Warnings = append(change.Warnings, fmt.Sprintf("%s value %q has no option on the Project, not written", f.name, l))
+				change.Warnings = append(change.Warnings, Warning{WarnNotOnProject, f.name, l, fmt.Sprintf("%s value %q has no option on the Project, not written", f.name, l)})
 				continue
 			}
 			plan.Edits = append(plan.Edits, Edit{IssueID: is.ID, ItemID: it.ID, Number: it.Number,
@@ -515,7 +572,7 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 				return true
 			})
 			for _, login := range refused {
-				change.Warnings = append(change.Warnings, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(it.URL)))
+				change.Warnings = append(change.Warnings, Warning{WarnNotAssignable, "assignee", login, fmt.Sprintf("%s can't be assigned on GitHub (no access to %s), kept in git-board only", login, repoOf(it.URL))})
 				a.base = strings.Join(slices.DeleteFunc(strings.Split(a.base, ","), func(s string) bool { return s == login }), ",")
 			}
 		}
@@ -531,9 +588,14 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 		record("assignee", a.base)
 	}
 
-	res, warning := c.planKind(is.Labels, it.Labels, valueOf(it, "Category"))
+	category := valueOf(it, "Category")
+	if category != "" && c.unmapped(CategoryField, category) {
+		plan.skip(CategoryField, category)
+		category = ""
+	}
+	res, warning := c.planKind(is.Labels, it.Labels, category)
 	if warning != "" {
-		change.Warnings = append(change.Warnings, warning)
+		change.Warnings = append(change.Warnings, Warning{WarnNotAKind, CategoryField, valueOf(it, "Category"), warning})
 	}
 	if res.Field != "" {
 		change.Fields = append(change.Fields, res)
@@ -545,6 +607,23 @@ func syncIssue(plan *Plan, it Item, is Issue, bases map[string]string, meta Meta
 	if len(newBases) > 0 {
 		plan.Bases[is.ID] = newBases
 	}
+}
+
+// kindNamed is the kind a Category names, in any case: one of [branches]
+// kinds, else the kind [fields.kind.aliases] folds it into; "" for none.
+func (c *Config) kindNamed(category string) string {
+	for _, k := range slices.Sorted(maps.Keys(c.kinds())) {
+		if strings.EqualFold(k, category) {
+			return k
+		}
+	}
+	aliases := c.field("kind").Aliases
+	for _, a := range slices.Sorted(maps.Keys(aliases)) {
+		if _, ok := c.kinds()[aliases[a]]; ok && strings.EqualFold(a, category) {
+			return aliases[a]
+		}
+	}
+	return ""
 }
 
 // planKind fills an issue's kind from the Project's Category, the same
@@ -567,11 +646,8 @@ func (c *Config) planKind(current, onForge []string, category string) (FieldResu
 	var warning string
 	if c.kindOf(current) == "" && c.kindOf(onForge) == "" {
 		warning = fmt.Sprintf("category value %q is none of [branches] kinds, skipped", category)
-		for _, k := range slices.Sorted(maps.Keys(c.kinds())) {
-			if strings.EqualFold(k, category) {
-				res.Value, res.Added, warning = k, []string{c.label("kind", k)}, ""
-				break
-			}
+		if k := c.kindNamed(category); k != "" {
+			res.Value, res.Added, warning = k, []string{c.label("kind", k)}, ""
 		}
 	}
 	if len(res.Added)+len(res.Removed) == 0 {

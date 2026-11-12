@@ -100,7 +100,7 @@ func TestForkMirrorJoins(t *testing.T) {
 			fs = []forge.Forge{b, a}
 		}
 		var joined int
-		r, err := Pull(t.Context(), s, Options{Did: func(_, what, _ string, _ int) {
+		r, err := Pull(t.Context(), s, Options{Did: func(_, what, _, _ string, _ int) {
 			if what == "joined" {
 				joined++
 			}

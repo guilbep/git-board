@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -28,16 +29,21 @@ type Run struct {
 	Scope     string    `json:"scope"` // forges or all
 	Way       string    `json:"way"`   // sync, pull or push
 	DryRun    bool      `json:"dry_run"`
+	Only      []string  `json:"only"` // the parts it writes, empty for every one
 	StartedAt time.Time `json:"started_at"`
 	EndedAt   time.Time `json:"ended_at,omitzero"`
 	State     string    `json:"state"` // running, done, failed, stopped
 	Steps     []Step    `json:"steps"`
 	Tallies   []Tally   `json:"tallies"`
 	Report    *report   `json:"report,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	told      time.Time // the last count told
-	stop      context.CancelFunc
-	stopped   bool // asked to stop (DELETE /api/sync)
+	// Parts are the issues of each part (pull-changes, pull-new, create,
+	// send), every one: a check's lists, which the choice of parts reads.
+	// GET /api/sync answers them; the progress events, the tallies alone.
+	Parts   map[string][]Step `json:"parts"`
+	Error   string            `json:"error,omitempty"`
+	told    time.Time         // the last count told
+	stop    context.CancelFunc
+	stopped bool // asked to stop (DELETE /api/sync)
 }
 
 // Step is one thing a run did: a whole sync's step (pull, forges,
@@ -52,6 +58,8 @@ type Step struct {
 	Line  string `json:"line,omitempty"`
 	Done  int    `json:"done,omitempty"`
 	Total int    `json:"total,omitempty"`
+	Part  string `json:"part,omitempty"`  // an issue's part, for one it counts in
+	Title string `json:"title,omitempty"` // the issue's forge number and title
 }
 
 // Tally is how many of one thing a run did on one forge, one way: a
@@ -179,6 +187,10 @@ func (s *Server) lastRun() *Run {
 	r := *s.run
 	r.Steps = slices.Clone(r.Steps)
 	r.Tallies = cloneTallies(r.Tallies)
+	r.Parts = maps.Clone(r.Parts)
+	for k, v := range r.Parts {
+		r.Parts[k] = slices.Clone(v)
+	}
 	return &r
 }
 
@@ -197,6 +209,9 @@ type syncReq struct {
 	DryRun      bool     `json:"dry_run"`
 	AllowCreate bool     `json:"allow_create"`
 	Remote      string   `json:"remote"`
+	// Only are the parts the run writes (app.Parts), empty for every one:
+	// a part left out is left for the next sync.
+	Only []string `json:"only"`
 }
 
 // startSync starts a run, which goes on after the request: it holds a
@@ -228,8 +243,12 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 		return Reply{}, invalid("scope", fmt.Errorf("scope %q: forges or all", r.Scope))
 	case r.Way != "sync" && r.Way != "pull" && r.Way != "push":
 		return Reply{}, invalid("way", fmt.Errorf("way %q: both (or sync), pull or push", r.Way))
-	case r.Scope == "all" && (r.Way != "sync" || r.DryRun):
-		return Reply{}, invalid("way", errors.New("a whole sync goes both ways, and has no dry run: scope forges has"))
+	case r.Scope == "all" && r.Way != "sync":
+		return Reply{}, invalid("way", errors.New("a whole sync goes both ways: --only chooses its parts"))
+	}
+	only, err := app.ParseParts(r.Only)
+	if err != nil {
+		return Reply{}, invalid("only", err)
 	}
 	if board(ctx).Syncing() { // this server's run, the CLI's, or another server's
 		return Reply{}, &app.Error{Class: app.Busy, Err: errors.New("a sync runs: try again once it ends")}
@@ -244,7 +263,8 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 	// the run's context: the server's, not the request's (it answered), cut
 	// by DELETE /api/sync
 	runCtx, stop := context.WithCancel(context.WithValue(s.base, logKey{}, s.log))
-	run := &Run{ID: strconv.Itoa(s.runs), Scope: r.Scope, Way: r.Way, DryRun: r.DryRun, StartedAt: time.Now(), State: "running", Steps: []Step{}, Tallies: []Tally{}, stop: stop}
+	run := &Run{ID: strconv.Itoa(s.runs), Scope: r.Scope, Way: r.Way, DryRun: r.DryRun, Only: nonNil(r.Only), StartedAt: time.Now(), State: "running",
+		Steps: []Step{}, Tallies: []Tally{}, Parts: map[string][]Step{}, stop: stop}
 	s.run = run
 	started := *run // the reply's: the run's own goes on changing as it runs
 	s.runMu.Unlock()
@@ -258,7 +278,7 @@ func (s *Server) startSync(ctx context.Context, r syncReq) (Reply, error) {
 		ctx := context.WithValue(runCtx, clientKey{}, by)
 		ctx, end := obs.Start(obs.Carry(ctx, asked), "sync run", obs.String("scope", run.Scope), obs.String("way", run.Way), obs.Bool("dry_run", run.DryRun))
 		s.log.Info("sync started", "run", run.ID, "scope", run.Scope, "way", run.Way, "dry_run", run.DryRun)
-		rep, err := s.runSync(ctx, h.b, run, r)
+		rep, err := s.runSync(ctx, h.b, run, r, only)
 		end(err)
 		s.runMu.Lock()
 		run.EndedAt, run.State = time.Now(), "done"
@@ -302,6 +322,9 @@ func (s *Server) step(ctx context.Context, run *Run, st Step) {
 		if tallied(st) {
 			run.tally(st)
 		}
+		if st.Part != "" {
+			run.Parts[st.Part] = append(run.Parts[st.Part], st)
+		}
 		now := time.Now()
 		last := st.What == "progress" && st.Done >= st.Total
 		if now.Sub(run.told) < progressEvery && !last {
@@ -331,18 +354,22 @@ func (s *Server) step(ctx context.Context, run *Run, st Step) {
 	s.publish(ctx, e)
 }
 
-func (s *Server) runSync(ctx context.Context, b *app.Board, run *Run, r syncReq) (*report, error) {
+func (s *Server) runSync(ctx context.Context, b *app.Board, run *Run, r syncReq, only []app.Part) (*report, error) {
 	var mu sync.Mutex
 	var rep *report
 	see := func(e app.SyncEvent) {
-		s.step(ctx, run, Step{Forge: e.Forge, Way: e.Way, What: e.What, Issue: e.Issue, Line: e.Line, Done: e.Done, Total: e.Total})
+		if e.What == "held" { // how many: the creations a check counts, left for consent
+			e.Line = e.Text(r.DryRun, "")
+		}
+		s.step(ctx, run, Step{Forge: e.Forge, Way: e.Way, What: e.What, Issue: e.Issue, Line: e.Line, Done: e.Done, Total: e.Total,
+			Part: string(e.Part), Title: e.Name})
 	}
 	forges := func(ctx context.Context, tables []forge.Table) error {
 		fs, err := b.OpenForges(ctx, tables)
 		if err != nil {
 			return err
 		}
-		got, err := b.SyncForges(ctx, app.Way(r.Way), app.ForgeRun{Forges: fs, AllowCreate: r.AllowCreate, DryRun: r.DryRun, See: see})
+		got, err := b.SyncForges(ctx, app.Way(r.Way), app.ForgeRun{Forges: fs, AllowCreate: r.AllowCreate, DryRun: r.DryRun, Only: only, See: see})
 		mu.Lock()
 		rep = &report{Created: got.Created, Updated: got.Updated, Unchanged: got.Unchanged, Posted: got.Posted, Pushed: got.Pushed, Restored: got.Restored}
 		mu.Unlock()
@@ -365,7 +392,8 @@ func (s *Server) runSync(ctx context.Context, b *app.Board, run *Run, r syncReq)
 		}
 		return rep, forges(ctx, tables)
 	}
-	w := app.Whole{Remote: cmpString(r.Remote, "origin"), Step: func(name, state, note string) {
+	// the Project's check or run is the one its page shows, and fits from
+	w := app.Whole{Remote: cmpString(r.Remote, "origin"), DryRun: r.DryRun, Only: only, Project: s.project.keep, Step: func(name, state, note string) {
 		s.step(ctx, run, Step{Name: name, State: state, Line: note})
 	}}
 	if slices.ContainsFunc(tables, func(t forge.Table) bool { return t.Sync }) {

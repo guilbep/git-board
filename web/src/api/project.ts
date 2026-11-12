@@ -1,7 +1,7 @@
 // The GitHub Project bridge (docs/rewrite/api.md, routes 52 and 53): its
-// last run, kept by the server, and where each field lives; a check, a
-// run one side or both, a conflict resolved. Only an action reads the
-// Project.
+// last check or run, kept by the server, and where each field lives; a
+// conflict resolved, the file fitted. The Project is checked and run by
+// the whole sync (POST /api/sync, scope all), which Stop stops.
 import { get, send } from './http.ts';
 
 export interface ProjectConflict {
@@ -27,6 +27,19 @@ export interface ProjectChange {
   warnings: string[];
 }
 
+// a change the check proposes to .git-board.toml (docs/prd/config-fit.md):
+// ticked, git-board derived it; else a question, with the answers it takes
+export interface FitProposal {
+  id: string; // field:name, as an answer names it
+  field: string;
+  name: string; // the Project's name
+  ticked: boolean;
+  choices: string[] | null; // map=<value>, add-kind, unmapped
+  clears: number; // the warnings it clears
+  says: string;
+  note?: string;
+}
+
 export interface ProjectRun {
   project: string;
   title: string;
@@ -42,6 +55,9 @@ export interface ProjectRun {
   conflicts: ProjectConflict[];
   unmatched: { number: number; url: string; title: string; reason: string; not_an_issue: boolean }[];
   changes: ProjectChange[];
+  fit: FitProposal[]; // what the file lacks for the Project
+  first: boolean; // no issue has a sync base yet: the first check
+  unmapped_by_choice: string[];
 }
 
 // where a field lives on a forge: its target, its Project column, and
@@ -77,13 +93,21 @@ export function configureProject(owner: string, number: number): Promise<Project
   return send('PUT', '/api/github-project', { body: { owner, number } });
 }
 
-export function checkProject(): Promise<ProjectStatus> {
-  return send('POST', '/api/github-project/check', { body: {} });
+// what a fit wrote, or would: the file's diff, and the questions left
+export interface Fitted {
+  diff: string;
+  changes: number;
+  clears: number;
+  open: FitProposal[];
+  written: boolean;
 }
 
-// side: labels is git board project pull, project its push, both its sync
-export function applyProject(side: 'labels' | 'project' | 'both'): Promise<ProjectStatus> {
-  return send('POST', '/api/github-project/apply', { body: { side } });
+// the last check's proposals written to .git-board.toml: those take
+// names, the questions settled by answers (by proposal id); dryRun
+// answers the diff alone. Written, the check it fitted from is dropped
+// (last is null): the next Check reads the new file.
+export function fitProject(take: string[], answers: Record<string, string>, dryRun = false): Promise<ProjectStatus & { fitted: Fitted }> {
+  return send('POST', '/api/github-project/fit', { body: { take, answers }, query: { dry_run: dryRun ? 1 : undefined } });
 }
 
 // issue: owner/repo#n, its number alone when one repository has it

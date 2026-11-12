@@ -70,7 +70,7 @@ func (c *Config) Project() (*ghproject.Config, error) {
 	if len(probs) > 0 {
 		return nil, usage(probs[0].Err)
 	}
-	return &ghproject.Config{Owner: gp.Owner, Number: gp.Number, Write: gp.Write, Holds: gp.Columns(), Schema: c.Schema, Forge: c.githubForge()}, nil
+	return &ghproject.Config{Owner: gp.Owner, Number: gp.Number, Write: gp.Write, Holds: gp.Columns(), Unmapped: gp.Unmapped, Schema: c.Schema, Forge: c.githubForge()}, nil
 }
 
 // projectSession is the bridge opened: its config, the Project, the board.
@@ -107,7 +107,9 @@ func (b *Board) ProjectRun(ctx context.Context, side ghproject.Side, apply bool,
 	if err != nil {
 		return ghproject.Report{}, err
 	}
-	return ghproject.Run(ctx, p, ghproject.Service{S: b.Issues}, c, cmp.Or(limit, ghproject.DefaultLimit), side, apply)
+	r, err := ghproject.Run(ctx, p, ghproject.Service{S: b.Issues}, c, cmp.Or(limit, ghproject.DefaultLimit), side, apply)
+	r.ConfigVersion = TextVersion(b.Config.File.Source())
+	return r, err
 }
 
 // ProjectResolve keeps one side of a conflict: git-board's value written
@@ -176,6 +178,13 @@ func ConfigureProject(dir string, gp tools.GithubProject, owner string, number i
 		if gp.Write && strings.EqualFold(gp.Owner, owner) && gp.Number == number {
 			t["write"] = true
 		}
+		if len(gp.Unmapped) > 0 { // the table is written whole: what it doesn't name goes
+			um := map[string]any{}
+			for f, vs := range gp.Unmapped {
+				um[f] = slices.Clone(vs)
+			}
+			t["unmapped"] = um
+		}
 		table = t
 	}
 	_, err := SetConfigKeys(dir, map[string]any{"github-project": table}, "", false)
@@ -204,6 +213,10 @@ func ProjectNote(r ghproject.Report) string {
 	}
 	if r.Truncated {
 		parts = append(parts, fmt.Sprintf("only the first %d items read", r.Items))
+	}
+	// a check says what the file lacks for the Project
+	if l := r.FitLine(); l != "" && !r.Applied {
+		parts = append(parts, l)
 	}
 	return strings.Join(parts, ", ")
 }

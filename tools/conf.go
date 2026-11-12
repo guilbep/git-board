@@ -20,6 +20,10 @@ type GithubProject struct {
 	// configure writes them; a table without the key holds
 	// DefaultProjectFields, and the Project page says so.
 	Fields []string `toml:"fields"`
+	// Unmapped are the Project's values the team chose to leave out, by
+	// field (category for the Category): a sync skips them, and warns of
+	// nothing.
+	Unmapped map[string][]string `toml:"unmapped"`
 }
 
 // DefaultProjectFields are the columns a Project holds when its table

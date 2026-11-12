@@ -72,8 +72,14 @@ type Options struct {
 	// project named by its key: "created" and "updated" with the number of
 	// operations pulled, "linked" for a forge issue found by its marker or
 	// its origin, "joined" for a mirror the fork posted, "posted" and
-	// "pushed". Nil hears nothing.
-	Did func(forge, what, issue string, ops int)
+	// "pushed". name is the issue's forge number and title, "#12 Export
+	// CSV", as the run holds them. Nil hears nothing.
+	Did func(forge, what, issue, name string, ops int)
+	// Only are the parts the run writes (Part): nil is every part. A part
+	// left out is left for the next run: its issues are not written, not
+	// journaled as read, and the run records no run, so the next one lists
+	// them again.
+	Only []Part
 	// Ways is each forge's own way, by its key ([forges.<name>] way, ADR
 	// 0022): a pull-only forge is written to never, and a push-only one, a
 	// backup, is read from only to put the board's values back there. A
@@ -97,6 +103,36 @@ type Options struct {
 	// The run goes on with the others. Nil returns them all, joined, as
 	// the run's error, after the others are synced.
 	Left func(key string, why error)
+}
+
+// Part is one part of what a run writes, which a person can leave for the
+// next run (docs/prd/config-fit.md, Part 2).
+type Part string
+
+// The parts: the forge issues that changed, pulled into their issues; the
+// forge issues new to the board, pulled as issues; the issues created on
+// a forge; the changes sent to the forge issues linked.
+const (
+	PullChanges Part = "pull-changes"
+	PullNew     Part = "pull-new"
+	Create      Part = "create"
+	Send        Part = "send"
+)
+
+// Parts are the parts, in a run's order.
+var Parts = []Part{PullChanges, PullNew, Create, Send}
+
+// PartOf is the part a Did's what counts in, "" for none.
+func PartOf(what string) Part {
+	return map[string]Part{"updated": PullChanges, "created": PullNew, "posted": Create, "pushed": Send}[what]
+}
+
+// runs says the run writes part.
+func (o Options) runs(part Part) bool { return o.Only == nil || slices.Contains(o.Only, part) }
+
+// every says the run writes every part.
+func (o Options) every() bool {
+	return !slices.ContainsFunc(Parts, func(p Part) bool { return !o.runs(p) })
 }
 
 // Report counts what a run did. Created, Updated and Unchanged count the
@@ -284,8 +320,8 @@ func start(ctx context.Context, s *kernel.Board, opt Options, forges []forge.For
 			}
 		}
 	}
-	if !pull || !push || opt.Issue != "" {
-		return r.report, nil
+	if !pull || !push || opt.Issue != "" || !opt.every() {
+		return r.report, nil // a part left out: the next run lists its issues again
 	}
 	var recorded []string
 	defer func() { j.Drop(recorded) }() // listed from this run's start next time: what the journal says of them is older
@@ -342,9 +378,17 @@ func (r *run) oldestFirst() []string {
 }
 
 func (r *run) did(key, what, id string, ops int) {
-	if r.opt.Did != nil {
-		r.opt.Did(key, what, id, ops)
+	if r.opt.Did == nil {
+		return
 	}
+	name := ""
+	if is := r.issues[id]; is != nil {
+		name = is.Title
+	}
+	if n := r.stateOf(key).link[id].Number; n != "" {
+		name = "#" + n + " " + name
+	}
+	r.opt.Did(key, what, id, name, ops)
 }
 
 func (r *run) warn(msg string) {
@@ -674,6 +718,9 @@ func (r *run) pullOne(p *project, fi forge.Issue, final bool) (reached, wrote bo
 		r.later = append(r.later, listed{p, fi})
 		return false, false, nil
 	case "new":
+		if !r.opt.runs(PullNew) {
+			return false, false, nil // left for the next run
+		}
 		id, err := r.pullNew(p, fi)
 		if err != nil {
 			return false, false, err
@@ -689,6 +736,9 @@ func (r *run) pullOne(p *project, fi forge.Issue, final bool) (reached, wrote bo
 		// brings it back, and nothing goes either way (docs/adr/0019)
 		r.report.Unchanged++
 		return true, false, nil
+	}
+	if !r.opt.runs(PullChanges) {
+		return false, false, nil // left for the next run
 	}
 	wrote, _, pulled, err := r.reconcile(p, id, fi, true, false)
 	if err != nil {
@@ -944,10 +994,11 @@ func (r *run) pushTo(p *project) error {
 	}
 	var todo []*Issue
 	for _, id := range ids {
-		if is, ok := r.issues[id]; ok && r.mayCreate(p, is) {
+		if is, ok := r.issues[id]; ok && r.opt.runs(Create) && r.mayCreate(p, is) {
 			todo = append(todo, is)
 		}
 	}
+	created := map[string]bool{} // what follows a creation is the create's
 	done, total := 0, len(ids)
 	if len(todo) > 0 && (r.opt.Create == nil || r.opt.Create(p.key, len(todo), p.first)) {
 		total += len(todo)
@@ -957,9 +1008,13 @@ func (r *run) pushTo(p *project) error {
 			if err := r.create(p, is); err != nil {
 				return err
 			}
+			created[is.ID] = true
 		}
 	}
 	for _, id := range ids {
+		if !r.opt.runs(Send) && !created[id] {
+			continue // the linked issues' changes are left for the next run
+		}
 		done++
 		if is, ok := r.issues[id]; ok {
 			r.progress(p.key, "push", done, total, p.st.link[id].Number, is.Title)
@@ -988,7 +1043,7 @@ func (r *run) pushTo(p *project) error {
 			fi = got
 			p.listed[fi.ID] = fi
 		}
-		_, pushed, _, err := r.reconcile(p, id, fi, p.pull, true)
+		_, pushed, _, err := r.reconcile(p, id, fi, p.pull && r.opt.runs(PullChanges), true)
 		switch {
 		case pushed && p.putBack[id]:
 			r.report.Restored++
