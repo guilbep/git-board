@@ -29,7 +29,7 @@ export function runWords(r: ProjectRun): string {
 export function fitLine(r: Pick<ProjectRun, 'fit'>): string {
   if (!r.fit.length) return '';
   const clears = r.fit.reduce((n, p) => n + p.clears, 0);
-  return `The file and the Project disagree: ${plural(r.fit.length, 'change')} clear ${plural(clears, 'warning')}.`;
+  return `The file and the Project disagree: ${plural(r.fit.length, 'change')} ${r.fit.length === 1 ? 'clears' : 'clear'} ${plural(clears, 'warning')}.`;
 }
 
 // an answer of a question, as its menu says it

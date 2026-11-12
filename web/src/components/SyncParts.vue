@@ -18,7 +18,7 @@
       </details>
     </div>
     <p v-for="(h, i) in held" :key="i" class="gb-hint">{{ h }}</p>
-    <p class="gb-hint">A part you leave out is left for the next sync. Leave out both sends to push nothing to the forges.</p>
+    <p class="gb-hint">A part you leave out is left for the next sync. Leave out the creations and the changes to send, and Sync pushes nothing to the forges.</p>
   </fieldset>
 </template>
 

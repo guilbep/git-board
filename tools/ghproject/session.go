@@ -358,7 +358,7 @@ func (r Report) FitLine() string {
 	return fmt.Sprintf("config: %s: git board project fit", FitWords(n, clears))
 }
 
-// FitWords is "12 changes clear 82 warnings".
+// FitWords is "12 changes clear 82 warnings", "1 change clears 3 warnings".
 func FitWords(changes, clears int) string {
 	plural := func(n int, word string) string {
 		if n == 1 {
@@ -366,7 +366,11 @@ func FitWords(changes, clears int) string {
 		}
 		return fmt.Sprintf("%d %ss", n, word)
 	}
-	return plural(changes, "change") + " clear " + plural(clears, "warning")
+	verb := " clear "
+	if changes == 1 {
+		verb = " clears "
+	}
+	return plural(changes, "change") + verb + plural(clears, "warning")
 }
 
 // Counts are a plan's numbers, as the API answers them.
