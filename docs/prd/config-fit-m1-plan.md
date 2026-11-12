@@ -98,6 +98,10 @@ The PRD now says them.
     an alias. Any other is a question.
   - **An iteration.** Each one with a start date and no
     `[[sprints.list]]` entry, by date, with the slug its issues carry.
+  - **An issue not pulled yet.** `Fit` plans each issue of the Project
+    that the board lacks, and counts its warnings. The first check of an
+    empty board gives the same proposals. An issue of another repository
+    than the forge table's does not count.
 - `Config.Answer(p, answer)`: `map=<value>`, `add-kind`, `unmapped`.
 - `Report.Fit`, `Report.First` and `Report.FitLine`, filled by `Run`.
 
@@ -154,24 +158,33 @@ The PRD now says them.
 
 `TestTheCo2Fit`, in `surface/cli/fit_test.go`, through `projectfake`.
 
-- The board: 80 issues with a Category and no kind, one on `Tests
+- The forge: 80 issues with a Category and no kind, one on `Tests
   Metier`, one on `Comité Spécialisé`, and one off the Project. The last
   three carry `status:tests-metier`, `status:comite` and `status:qa`.
-- The file: the default file, with `[github-project]`.
+- The file: the default file, with a `[forges.gh]` table and
+  `[github-project]`.
 - It checks these, in order:
-  1. The check has 82 warnings and ends with `config: 12 changes clear
+  1. With no issue on the board, `sync --check` counts 83 new issues
+     and ends with `config: 12 changes clear 82 warnings`. Eight
+     proposals are ticked and four are asked.
+  2. Without `[github-project]`, `sync --only pull-new` pulls the 83
+     issues with their status labels, and writes nothing to the forge.
+     The next `sync --check` counts nothing in any part.
+  3. The check has 82 warnings and ends with `config: 12 changes clear
      82 warnings: git board project fit`.
-  2. The twelve proposals, six ticked and six asked, with what each
+  4. The twelve proposals, six ticked and six asked, with what each
      clears.
-  3. `project fit` prints the diff and the questions, and the file is
+  5. `project fit` prints the diff and the questions, and the file is
      byte for byte the same.
-  4. A fit on a file that moved after the check is refused as stale.
-  5. `project fit --apply` with the six answers writes twelve changes.
-  6. Every line of the old file is in the new one, in order. The
+  6. A fit on a file that moved after the check is refused as stale.
+  7. `project fit --apply` with the six answers writes twelve changes.
+  8. Every line of the old file is in the new one, in order. The
      statuses, the kinds, the aliases, the sprints, the unmapped values
      and the views read as expected.
-  7. The second check has no warning, and says `2 Category values
+  9. The second check has no warning, and says `2 Category values
      unmapped by choice`.
+  10. `project configure` writes the table again. The unmapped values
+      stay, and the file still loads.
 
 ## Cut
 
@@ -223,10 +236,33 @@ The PRD now says them.
    to the forge or to the Project.
 3. A second check still counts the change to pull, the creations and
    the change to send.
-4. A Project check and a Project sync each stop on `DELETE /api/sync`.
-   Nothing is written to the Project.
+4. A sync with `only: [create]` creates the two issues. It writes to no
+   issue that the forge already has. The next check counts no creation.
+5. A sync with `only: [send]` sends the change. The title changed on the
+   forge stays as the forge has it, and the next check still counts it.
+6. A Project check and a Project sync each stop on `DELETE /api/sync`.
+   Nothing more is written to the Project.
+7. The stopped sync ran the forges whole. The forge still has five
+   issues, and a last check counts nothing in any part.
+
+### After the review
+
+- **A release goes with `send`.** The release mapper ran whatever the
+  parts were. It now runs with `send` alone.
+- **A check goes on past a failed fetch.** `SyncWhole` stops after a
+  failed pull in a sync alone.
+- **The parts picked go with their check.** `SyncSettings.vue` sends
+  `only` while the whole check shows its boxes. A new check ticks every
+  part again.
+- **Check and Sync wait for the status.** Before `GET /api/sync`
+  answered, a click did nothing.
+- **The browser.** `make web-e2e` runs, with `project.spec.ts` on the
+  page's own Check. A manual pass covered the check, the fit's Apply,
+  the choice of parts, Sync and Stop.
 
 ### Not exercised
 
-- The web page never ran in a browser. `web/e2e/project.spec.ts` was
-  changed for the new page, and `make web-e2e` was not run.
+- No test runs a release with `--only`. The rule is one line in
+  `app.SyncForges`.
+- The manual pass served the parts, the Sync and the Stop from a mocked
+  `/api/sync`. The e2e fake GitHub answers no issue.

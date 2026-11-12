@@ -70,6 +70,21 @@ On co2 the fit gives twelve proposals. Six are ticked: `tests-metier`,
 FIX, DOC and three iterations. Six are asked: Comité Spécialisé, QA
 Validation, SPECS, TASK, DATA and TEXT.
 
+### A board with no issue yet
+
+A new team's first check runs before any pull, so the board matches
+nothing on the Project. The fit still gives its proposals. **(call)**
+
+- An issue of the Project that the board does not hold yet counts with
+  the warnings its pull brings. The first check says "12 changes clear
+  82 warnings" too.
+- That issue brings no stray value. The pull leaves the labels of a
+  field the Project holds on the forge. Each option is then ticked with
+  `Slug(name)`. On an empty board, co2's fit ticks eight proposals and
+  asks four.
+- If the file names a GitHub forge's repository, an issue of another
+  repository does not count. A pull never brings it.
+
 ## Part 2: the first sync, chosen
 
 Built after Part 1. **(user)** for the three needs, **(call)** for the
@@ -110,8 +125,15 @@ shape.
   count. The page shows that count under the parts, with no issues.
 - **The first check of a board with no issue matches nothing on the
   Project.** The forges' check runs on a copy, and the Project's check
-  reads the board. Pull the new issues first, then check again: the
-  Project's changes show then.
+  reads the board. The proposals show all the same (Part 1, "A board
+  with no issue yet"). The Project's changes show after a pull of the
+  new issues and a second check.
+- **A check goes on past a failed fetch.** A failed git pull stops a
+  sync. A check writes nothing, so it still reads the forges and the
+  Project. The Project has no check of its own any more, and a board
+  with no reachable `origin` needs this one.
+- **Check and Sync wait for the page's status.** Before the status
+  loads, a click did nothing. The two buttons are now off until then.
 
 ## Not in this PRD
 
@@ -127,13 +149,19 @@ shape.
 
 Part 2 has one test, `TestTheChosenSync`. It checks a board through the
 forge fake and `projectfake`, then syncs the new issues alone. A second
-check still counts the other parts. A Project check and a Project sync
-then stop, and nothing is written to the Project.
+check still counts the other parts. A sync of `create` alone writes to
+no issue that the forge already has. A sync of `send` alone leaves a
+change made on the forge as it is. A Project check and a Project sync
+then stop, and nothing is written to the Project. The stopped sync ran
+the forges whole, so a last check counts nothing in any part.
 
 Part 1 has one test, the co2 case end to end, through `projectfake`. The Project
 has the nine statuses, the six Categories and three dated iterations.
-The file is the default file. The test checks the twelve proposals, then
-applies them with the six questions answered, then asserts four things:
+The file is the default file. The test starts as a new team does, with
+no issue on the board: `sync --check` counts 83 new issues and names the
+twelve proposals. `sync --only pull-new` then pulls them, and writes
+nothing to the forge. The test checks the twelve proposals again, then
+applies them with the six questions answered, then asserts five things:
 
 - Every option, kind, sprint, view and comment of the old file is in the
   new file, in order.
@@ -141,3 +169,5 @@ applies them with the six questions answered, then asserts four things:
   choice".
 - A write on a file that moved after the check is refused as stale.
 - `git board project fit` without `--apply` writes nothing.
+- `git board project configure` after the fit keeps the unmapped values,
+  and the file still loads.
