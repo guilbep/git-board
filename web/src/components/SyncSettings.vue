@@ -99,7 +99,7 @@
 
     <div class="sy-run">
       <button type="button" class="epfl-btn epfl-btn-secondary" :disabled="starting || running" @click="start({ scope: 'all', dry_run: true, remote, allow_create: allowCreate })">{{ running && run?.dry_run ? 'Checking…' : 'Check' }}</button>
-      <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting || running || !parts.length" @click="confirming = true">{{ running && !run?.dry_run ? 'Syncing…' : 'Sync' }}</button>
+      <button type="button" class="epfl-btn epfl-btn-primary" :disabled="starting || running || only?.length === 0" @click="confirming = true">{{ running && !run?.dry_run ? 'Syncing…' : 'Sync' }}</button>
       <button v-if="running" type="button" class="epfl-btn epfl-btn-secondary" :disabled="stopping" @click="stop">{{ stopping ? 'Stopping…' : 'Stop' }}</button>
       <span class="sy-note">Check says what Sync would do with the forges and the Project, part by part, and writes nothing. Sync pulls, syncs the forges and the Project, and pushes.</span>
     </div>
@@ -156,7 +156,7 @@
           <ul class="gb-plain-list">
             <li><span><b>git pull from {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
             <li v-for="f in forges.filter((x) => x.sync)" :key="f.name"><span><b>{{ f.name }}</b>: {{ wayWords(f.way) }}</span></li>
-            <li v-if="onlyOf(parts)"><span><b>Only</b>: {{ parts.join(', ') }}. The other parts are left for the next sync.</span></li>
+            <li v-if="only"><span><b>Only</b>: {{ only.join(', ') }}. The other parts are left for the next sync.</span></li>
             <li><span><b>git push to {{ remote }}</b>{{ kept ? `: skipped, ${kept}` : '' }}</span></li>
           </ul>
           <p class="gb-hint">{{ allowCreate ? 'Issues are created on a forge never synced with, or 50 or more at once.' : 'No issue is created on a forge never synced with, nor 50 or more at once: tick “Create issues” first.' }} A failed pull stops the sync; a forge that fails is told, and the push still runs. It goes on if you leave this page.</p>
@@ -342,6 +342,7 @@ async function start(r: SyncRequest) {
   starting.value = true;
   startError.value = '';
   try {
+    if (r.dry_run) parts.value = syncParts.map((p) => p.id); // a new check, every part ticked
     if (st.value) st.value = { ...st.value, run: await startSync(r) };
   } catch (e) {
     startError.value = message(e);
@@ -362,13 +363,14 @@ async function stop() {
     stopping.value = false;
   }
 }
-// the parts Sync runs, every one until a whole check let the person pick
+// the parts Sync runs: those picked under the whole check shown, every
+// one (undefined) without it. A choice doesn't outlive its check's boxes.
 const parts = ref<SyncPart[]>(syncParts.map((p) => p.id));
 const wholeCheck = computed(() => run.value?.scope === 'all' && run.value.dry_run && run.value.state === 'done');
+const only = computed(() => (wholeCheck.value ? onlyOf(parts.value) : undefined));
 async function runReal() {
   confirming.value = false;
-  const only = onlyOf(parts.value);
-  await start({ scope: 'all', remote, allow_create: allowCreate.value, ...(only ? { only } : {}) });
+  await start({ scope: 'all', remote, allow_create: allowCreate.value, ...(only.value ? { only: only.value } : {}) });
 }
 
 // a run started or ended, here or elsewhere: the status again
